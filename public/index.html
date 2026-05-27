@@ -479,7 +479,7 @@ async function apiFetch(method,path,body){
 
 function fmt(n){if(n===null||n===undefined||n==='')return'—';n=Number(n);if(isNaN(n))return'—';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return String(Math.round(n));}
 function kdBdg(v){if(v==null)return'<span class="bdg b-na">N/A</span>';const n=Number(v);if(n<30)return`<span class="bdg b-easy">KD ${n}</span>`;if(n<60)return`<span class="bdg b-med">KD ${n}</span>`;return`<span class="bdg b-hard">KD ${n}</span>`;}
-function drBdg(v){if(v==null)return'<span class="bdg b-na">DR —</span>';const n=Math.round(Number(v));if(n>=70)return`<span class="bdg b-green">DR ${n}</span>`;if(n>=40)return`<span class="bdg b-med">DR ${n}</span>`;return`<span class="bdg b-na">DR ${n}</span>`;}
+function drBdg(v){if(v==null)return'<span class="bdg b-na">权威 —</span>';const n=Math.round(Number(v));if(n>=200)return`<span class="bdg b-green">权威 ${n}</span>`;if(n>=50)return`<span class="bdg b-med">权威 ${n}</span>`;return`<span class="bdg b-na">权威 ${n}</span>`;}
 function spark(arr){if(!arr||!arr.length)return'—';const max=Math.max(...arr)||1;return'<div class="spark">'+arr.map((v,i)=>{const h=Math.max(2,Math.round((v/max)*16));const c=i>0&&v>arr[i-1]?'up':i>0&&v<arr[i-1]?'dn':'';return`<div class="sb ${c}" style="height:${h}px"></div>`}).join('')+'</div>';}
 
 function setProg(id,pct,lbl){const pw=document.getElementById(id+'-pw');if(pw){pw.style.display='block';document.getElementById(id+'-pf').style.width=pct+'%';if(lbl)document.getElementById(id+'-pl').textContent=lbl;}}
@@ -605,7 +605,7 @@ function renderMySites(){
   S.mySites.map((s,i)=>`<div class="site-card">
     <div class="site-favicon">${s.domain.charAt(0).toUpperCase()}</div>
     <div class="site-info" onclick="viewSite('${s.domain}')" style="flex:1;cursor:pointer">
-      <div class="site-name">${s.domain}</div>
+      <div class="site-name">${s.domain.replace(/\/$/,'')}</div>
       <div class="site-url">${s.fetched?'更新于 '+s.fetched:'尚未获取'}</div>
       <div class="site-metrics">
         <span class="site-metric">DR <strong>${s.dr!=null?Math.round(s.dr):'—'}</strong></span>
@@ -633,10 +633,11 @@ async function addMySite(){
 
 async function refreshSite(idx){
   const s=S.mySites[idx];
+  const cleanDomain=s.domain.replace(/^https?:\/\//,'').replace(/\/$/,'');
   try{
     const [bkData,ovData]=await Promise.all([
-      apiFetch('POST','/api/dataforseo/backlinks/summary/live',[{target:s.domain,include_subdomains:true}]),
-      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',[{target:s.domain,location_code:2840,language_code:'en'}])
+      apiFetch('POST','/api/dataforseo/backlinks/summary/live',[{target:cleanDomain,include_subdomains:true}]),
+      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',[{target:cleanDomain,location_code:2840,language_code:'en'}])
     ]);
     // FIX: just grab first result, no strict target matching
     (bkData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{s.dr=r.rank;s.backlinks=r.backlinks;s.ref_domains=r.referring_domains;s.ref_ips=r.referring_ips;}));
@@ -784,7 +785,7 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords
     </div>
   </div>`;}
   let h=noDataWarn+`<div style="display:flex;align-items:center;margin-bottom:16px"><span style="font-size:13px;color:var(--text2)">${domain}</span>${cacheBadge}<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="invalidateSiteCache('${domain}')">🔄 重新查询</button></div><div class="grid-4">
-    <div class="metric-card"><div class="metric-label">域名权重 DR</div><div class="metric-val">${bk.rank!=null?Math.round(bk.rank):'—'}</div><div class="metric-sub">DataForSEO 评分 0–100</div></div>
+    <div class="metric-card"><div class="metric-label">域名权重 DR</div><div class="metric-val">${bk.rank!=null?Math.round(bk.rank):'—'}</div><div class="metric-sub">DataForSEO 权威分（值越大越强）</div></div>
     <div class="metric-card"><div class="metric-label">引用域名数</div><div class="metric-val"><span class="link" onclick="showReferringDomains('${domain}')">${fmt(bk.referring_domains)}</span></div><div class="metric-sub">点击查看详情</div></div>
     <div class="metric-card"><div class="metric-label">总外链数</div><div class="metric-val"><span class="link" onclick="showBacklinks('${domain}')">${fmt(bk.backlinks)}</span></div><div class="metric-sub">点击查看详情</div></div>
     <div class="metric-card"><div class="metric-label">A 记录 IP</div><div class="metric-val" style="font-size:13px;word-break:break-all">${aRecords&&aRecords.length?aRecords[0]:'—'}</div><div class="metric-sub">${aRecords&&aRecords.length>1?aRecords.slice(1).join(', '):'域名所在服务器IP'}</div></div>
@@ -972,10 +973,10 @@ async function runKw(){
       document.getElementById('kw-btn').disabled=false;
       return;
     }
-    const sugPayload=kws.map(k=>({keyword:k,location_code:loc,language_code:'en',include_seed_keyword:true,limit:20}));
+    const sugPayload=kws.map(k=>({keyword:k,location_code:loc,language_code:'en',include_seed_keyword:true,limit:50}));
     const sugData=await apiFetch('POST','/api/dataforseo/'+(SE_SUG[se]||SE_SUG.google),sugPayload);
     setProg('kw',55,'获取问题词...');
-    const qPayload=kws.map(k=>({keywords:[k],location_code:loc,language_code:'en',limit:15,filters:['keyword','like','%how%','or','keyword','like','%what%','or','keyword','like','%why%','or','keyword','like','%which%']}));
+    const qPayload=kws.map(k=>({keywords:[k],location_code:loc,language_code:'en',limit:40,filters:['keyword','like','%how%','or','keyword','like','%what%','or','keyword','like','%why%','or','keyword','like','%which%','or','keyword','like','%when%','or','keyword','like','%where%','or','keyword','like','%who%','or','keyword','like','%can%','or','keyword','like','%does%','or','keyword','like','%is %']}));
     let questData={tasks:[]};
     try{questData=await apiFetch('POST','/api/dataforseo/'+(SE_IDEAS[se]||SE_IDEAS.google),qPayload);}catch(e){}
     setProg('kw',85,'整理数据...');
@@ -1096,7 +1097,7 @@ async function openKwDetail(kw){
   const flag=LOC_FLAGS[loc]||'🌐';
   try{
     const [sugData,relData]=await Promise.all([
-      apiFetch('POST','/api/dataforseo/'+(SE_SUG[se]||SE_SUG.google),[{keyword:kw,location_code:loc,language_code:'en',include_seed_keyword:true,limit:30}]),
+      apiFetch('POST','/api/dataforseo/'+(SE_SUG[se]||SE_SUG.google),[{keyword:kw,location_code:loc,language_code:'en',include_seed_keyword:true,limit:100}]),
       apiFetch('POST','/api/dataforseo/dataforseo_labs/google/related_keywords/live',[{keyword:kw,location_code:loc,language_code:'en',limit:20}]).catch(()=>({tasks:[]}))
     ]);
     const sugs=[],rels=[];const seenS=new Set(),seenR=new Set();
