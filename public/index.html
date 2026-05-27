@@ -177,6 +177,12 @@ textarea{resize:vertical;line-height:1.7}
     <div class="nav-label">外链</div>
     <div class="nav-item" onclick="nav('backlinks',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>外链分析</div>
   </div>
+  <div class="nav-section">
+    <div class="nav-label">工具</div>
+    <div class="nav-item" onclick="nav('batch',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>批量域名分析
+    </div>
+  </div>
   <div class="sidebar-footer">
     <div class="api-status" onclick="openApiModal()"><div class="api-dot" id="api-dot"></div><span id="api-status-text">点击配置 API</span></div>
     <div style="margin-top:6px;padding:6px 10px;font-size:11px;color:var(--text3);display:flex;align-items:center;justify-content:space-between">
@@ -284,6 +290,24 @@ textarea{resize:vertical;line-height:1.7}
       <button class="btn btn-primary" onclick="runDebug()">测试外链 API</button>
       <button class="btn btn-ghost" onclick="runDebugLabs()">测试 Labs API</button>
     </div>
+
+    <!-- BATCH ANALYSIS PAGE -->
+    <div class="page" id="page-batch">
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">批量域名分析 <span style="font-size:11px;color:var(--text3);font-weight:400">（最多200个，每域名约 $0.003）</span></div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">每行输入一个域名，适合筛选 Guest Post 资源。分析完成后可一键导出 CSV。</p>
+        <textarea id="batch-input" placeholder="example.com&#10;blog.io&#10;industry-site.net&#10;（每行一个，最多200个）" style="width:100%;min-height:120px;font-size:13px" oninput="updateBatchCnt()"></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;flex-wrap:wrap;gap:8px">
+          <span id="batch-cnt" style="font-size:12px;color:var(--text3)">0 个域名，预计费用 $0.000</span>
+          <button class="btn btn-primary" id="batch-btn" onclick="runBatch()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>开始批量分析
+          </button>
+        </div>
+        <div class="prog-wrap" id="batch-pw"><div class="prog-bar"><div class="prog-fill" id="batch-pf"></div></div><div class="prog-lbl" id="batch-pl"></div></div>
+      </div>
+      <div id="batch-res"></div>
+    </div>
+
   </div>
 </div>
 
@@ -408,8 +432,8 @@ function updateCacheStat() {
   if (el) el.textContent = '缓存: ' + stats.valid + ' 条';
 }
 
-const pageTitles={dashboard:'仪表盘','site-explorer':'站点分析','my-sites':'我的站点','keyword-explorer':'关键词分析','kw-detail':'关键词详情','backlinks':'外链分析'};
-const pageSubs={dashboard:'概览','site-explorer':'分析任意域名的 DR · 流量 · 关键词 · 外链 · DNS','my-sites':'监控你的站点','keyword-explorer':'搜索量 · KD · CPC · 相关词 · 问题词','kw-detail':'关键词深度分析','backlinks':'外链 · 引用域名'};
+const pageTitles={dashboard:'仪表盘',batch:'批量域名分析','site-explorer':'站点分析','my-sites':'我的站点','keyword-explorer':'关键词分析','kw-detail':'关键词详情','backlinks':'外链分析'};
+const pageSubs={dashboard:'概览',batch:'一次分析最多200个域名 · 适合筛选 Guest Post 资源','site-explorer':'分析任意域名的 DR · 流量 · 关键词 · 外链 · DNS','my-sites':'监控你的站点','keyword-explorer':'搜索量 · KD · CPC · 相关词 · 问题词','kw-detail':'关键词深度分析','backlinks':'外链 · 引用域名'};
 
 function nav(id,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -1389,6 +1413,147 @@ async function runDebugLabs() {
   } catch(e) {
     document.getElementById('debug-body').innerHTML = `<div class="alert alert-err">调用失败: ${e.message}</div>`;
   }
+}
+
+/* ===== BATCH DOMAIN ANALYSIS ===== */
+let batchData = [];
+
+function updateBatchCnt(){
+  const lines = document.getElementById('batch-input').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  const n = Math.min(lines.length, 200);
+  const cost = (n * 0.003).toFixed(3);
+  const el = document.getElementById('batch-cnt');
+  el.textContent = n + ' 个域名，预计费用 $' + cost;
+  el.style.color = lines.length > 200 ? 'var(--amber)' : 'var(--text3)';
+}
+
+async function runBatch(){
+  const domains = document.getElementById('batch-input').value
+    .split('\n').map(l=>l.trim().replace(/^https?:\/\//,'').replace(/\/$/,''))
+    .filter(Boolean).slice(0,20);
+  if(!domains.length){ document.getElementById('batch-res').innerHTML='<div class="alert alert-err">请输入至少一个域名</div>'; return; }
+  if(!S.login||!S.pass){ openApiModal(); return; }
+
+  document.getElementById('batch-btn').disabled = true;
+  document.getElementById('batch-res').innerHTML = '<div class="loading"><span class="spin"></span>正在分析 '+domains.length+' 个域名...</div>';
+  document.getElementById('batch-pw').style.display = 'block';
+  document.getElementById('batch-pf').style.width = '5%';
+  document.getElementById('batch-pl').textContent = '发送请求...';
+
+  try{
+    // Check cache for each domain
+    const cached = {}, toFetch = [];
+    domains.forEach(d => {
+      const c = cacheGet(cacheKey('batch', d));
+      if(c) cached[d] = c;
+      else toFetch.push(d);
+    });
+
+    let bkMap = {}, ovMap = {};
+
+    if(toFetch.length){
+      document.getElementById('batch-pf').style.width = '20%';
+      document.getElementById('batch-pl').textContent = '获取外链数据 ('+toFetch.length+'个)...';
+
+      // Chunk into batches of 50 to avoid API limits
+      const CHUNK = 50;
+      const chunks = [];
+      for(let i=0;i<toFetch.length;i+=CHUNK) chunks.push(toFetch.slice(i,i+CHUNK));
+      let done=0;
+      for(const chunk of chunks){
+        document.getElementById('batch-pl').textContent = `处理中 ${done+chunk.length}/${toFetch.length}...`;
+        document.getElementById('batch-pf').style.width = (20 + 60*(done/toFetch.length)) + '%';
+        const [bkData, ovData] = await Promise.all([
+          apiFetch('POST','/api/dataforseo/backlinks/summary/live',
+            chunk.map(d=>({target:d,include_subdomains:true}))).catch(()=>({tasks:[]})),
+          apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',
+            chunk.map(d=>({target:d,location_code:2840,language_code:'en'}))).catch(()=>({tasks:[]}))
+        ]);
+        (bkData.tasks||[]).forEach((t,i)=>{
+          (t.result||[]).forEach(r=>{ bkMap[chunk[i]] = {rank:r.rank, ref_domains:r.referring_domains, backlinks:r.backlinks, ref_ips:r.referring_ips}; });
+        });
+        (ovData.tasks||[]).forEach(t=>{
+          const tgt=t.data&&t.data.target||'';
+          (t.result||[]).forEach(r=>{
+            const item=r.items&&r.items[0];
+            if(item&&item.metrics) ovMap[tgt]={etv:item.metrics.organic&&item.metrics.organic.etv,kws:item.metrics.organic&&item.metrics.organic.count};
+          });
+        });
+        done+=chunk.length;
+      }
+
+      document.getElementById('batch-pf').style.width = '85%';
+      document.getElementById('batch-pl').textContent = '处理数据...';
+
+      // Cache each domain result
+      toFetch.forEach(d=>{
+        const row={bk:bkMap[d]||{},ov:ovMap[d]||{}};
+        cacheSet(cacheKey('batch',d), row);
+      });
+      updateCacheStat();
+    }
+
+    document.getElementById('batch-pf').style.width = '90%';
+    document.getElementById('batch-pl').textContent = '生成结果...';
+
+    // Build final rows (merge cache + fresh)
+    batchData = domains.map(d=>{
+      let bk={}, ov={};
+      if(cached[d]){ bk=cached[d].bk||{}; ov=cached[d].ov||{}; }
+      else { bk=bkMap[d]||{}; ov=ovMap[d]||{}; }
+      return {domain:d, dr:bk.rank, ref_domains:bk.ref_domains, backlinks:bk.backlinks, kws:ov.kws, etv:ov.etv, cached:!!cached[d]};
+    });
+
+    document.getElementById('batch-pf').style.width = '100%';
+    renderBatchResults(batchData);
+  }catch(e){
+    document.getElementById('batch-res').innerHTML = `<div class="alert alert-err">⚠ ${e.message}</div>`;
+  }finally{
+    document.getElementById('batch-btn').disabled = false;
+    setTimeout(()=>{ document.getElementById('batch-pw').style.display='none'; }, 800);
+  }
+}
+
+function renderBatchResults(rows){
+  if(!rows.length){ document.getElementById('batch-res').innerHTML='<div class="loading">无结果</div>'; return; }
+
+  const hasAny = rows.some(r=>r.dr!=null||r.kws!=null);
+  let h = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <span style="font-size:14px;font-weight:600">${rows.length} 个域名 <span style="font-size:11px;color:var(--green);font-weight:400">${rows.filter(r=>r.cached).length > 0 ? '（'+rows.filter(r=>r.cached).length+'个来自缓存，节省了费用）' : ''}</span></span>
+    <button class="btn btn-ghost btn-sm" onclick="exportBatchCsv()">↓ 导出 CSV</button>
+  </div>
+  <div class="table-wrap"><table><thead><tr>
+    <th style="min-width:180px">域名</th>
+    <th>DR</th>
+    <th>引用域名数</th>
+    <th>总外链数</th>
+    <th>Organic 关键词</th>
+    <th>预估月流量</th>
+  </tr></thead><tbody>`;
+
+  rows.forEach(r=>{
+    const cachedBadge = r.cached ? '<span style="font-size:10px;color:var(--green);margin-left:4px">💾</span>' : '';
+    h+=`<tr>
+      <td class="td-dm">
+        <span class="link" onclick="document.getElementById('se-input').value='${r.domain}';nav('site-explorer',null);setTimeout(runSiteExplorer,100)">${r.domain}</span>
+        ${cachedBadge}
+      </td>
+      <td>${drBdg(r.dr)}</td>
+      <td><span class="link" onclick="showReferringDomains('${r.domain}')">${fmt(r.ref_domains)}</span></td>
+      <td><span class="link" onclick="showBacklinks('${r.domain}')">${fmt(r.backlinks)}</span></td>
+      <td><span class="link" onclick="showOrganicKws('${r.domain}',0,0)">${fmt(r.kws)}</span></td>
+      <td>${fmt(r.etv)}</td>
+    </tr>`;
+  });
+  h += '</tbody></table></div>';
+  document.getElementById('batch-res').innerHTML = h;
+}
+
+function exportBatchCsv(){
+  if(!batchData.length){ alert('无数据'); return; }
+  dlCsv('域名,DR,引用域名数,总外链数,Organic关键词,预估月流量\n'+
+    batchData.map(r=>`${r.domain},${r.dr||''},${r.ref_domains||''},${r.backlinks||''},${r.kws||''},${r.etv||''}`).join('\n'),
+    'batch_domains.csv');
 }
 
 </script>
