@@ -1312,7 +1312,8 @@ async function showOrganicKws(domain,offset,locCode){
             // Update dropdown options
             var sel=document.getElementById('kw-loc-modal');
             if(sel){
-              var opts='<option value="0"'+(locCode===0?' selected':'')+'>\u5168\u90e8\u4e3b\u8981\u5e02\u573a\uff08\u6982\u89c8\uff09</option>';
+              var totalAllCount=Object.keys(locCounts).reduce(function(s,k){return s+locCounts[k];},0);
+    var opts='<option value="0"'+(locCode===0?' selected':'')+'>全球'+(totalAllCount?' ('+totalAllCount+')':'')+'</option>';
               allLocs.forEach(function(loc2){var cnt=locCounts[loc2];opts+='<option value="'+loc2+'"'+(locCode===loc2?' selected':'')+'>'+(LOC_NAME[loc2]||loc2)+(cnt?' ('+cnt+')':'')+'</option>';});
               sel.innerHTML=opts;
             }
@@ -1326,7 +1327,7 @@ async function showOrganicKws(domain,offset,locCode){
     MP.kws={domain:domain,offset:offset,total:total,items:pageItems,allItems:allLoaded,locCode:locCode,locCounts:locCounts};
     var hasMore=!isAllMode&&(offset+pageItems.length<total);
 
-    var opts='<option value="0"'+(locCode===0?' selected':'')+'>全部主要市场（概览）</option>';
+    var tot2=Object.keys(locCounts).reduce(function(s,k){return s+locCounts[k];},0);var opts='<option value="0"'+(locCode===0?' selected':'')+'>全球'+(tot2?' ('+tot2+')':'')+'</option>';
     allLocs.forEach(function(loc){var cnt=locCounts[loc];opts+='<option value="'+loc+'"'+(locCode===loc?' selected':'')+'>'+(LOC_NAME[loc]||loc)+(cnt?' ('+cnt+')':'')+'</option>';});
 
     var rows='';
