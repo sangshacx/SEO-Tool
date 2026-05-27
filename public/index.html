@@ -511,8 +511,12 @@ async function runSiteExplorer(){
 }
 
 function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData){
+  const hasBacklinkData=bk&&(bk.rank!=null||bk.referring_domains!=null||bk.backlinks!=null);
+  const hasOvData=ov&&(ov.etv!=null||ov.kws!=null);
   // Metrics row
-  let h=`<div class="grid-4">
+  let noDataWarn='';
+  if(!hasBacklinkData&&!hasOvData){noDataWarn=`<div class="alert alert-info" style="margin-bottom:16px">⚠ 该域名在数据库中暂无记录，可能是新站或流量极低的站点。请尝试查询其他域名（如 ahrefs.com）验证工具是否正常。</div>`;}
+  let h=noDataWarn+`<div class="grid-4">
     <div class="metric-card"><div class="metric-label">域名权重 DR</div><div class="metric-val">${bk.rank!=null?Math.round(bk.rank):'—'}</div><div class="metric-sub">DataForSEO 评分 0–100</div></div>
     <div class="metric-card"><div class="metric-label">引用域名数</div><div class="metric-val"><span class="link" onclick="showReferringDomains('${domain}')">${fmt(bk.referring_domains)}</span></div><div class="metric-sub">点击查看详情</div></div>
     <div class="metric-card"><div class="metric-label">总外链数</div><div class="metric-val"><span class="link" onclick="showBacklinks('${domain}')">${fmt(bk.backlinks)}</span></div><div class="metric-sub">点击查看详情</div></div>
@@ -598,6 +602,57 @@ function switchSTab(id,el,cls){
   el.closest('.stabs').querySelectorAll('.stab').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
   const target=document.getElementById(id);if(target)target.classList.add('active');
+}
+
+
+/* BACKLINKS PAGE */
+async function runBacklinks(){
+  const domain=document.getElementById('bl-input').value.trim().replace(/^https?:\/\//,'').replace(/\/$/,'');
+  if(!domain){document.getElementById('bl-res').innerHTML='<div class="alert alert-err" style="margin-top:12px">⚠ 请输入域名</div>';return;}
+  document.getElementById('bl-res').innerHTML='<div class="loading"><span class="spin"></span>加载外链数据...</div>';
+  setProg('bl',10,'发送请求...');
+  try{
+    const [bkData,rdData]=await Promise.all([
+      apiFetch('POST','/api/dataforseo/backlinks/backlinks/live',[{target:domain,limit:20,order_by:['rank,desc'],mode:'as_is',include_subdomains:true}]),
+      apiFetch('POST','/api/dataforseo/backlinks/referring_domains/live',[{target:domain,limit:20,order_by:['rank,desc'],include_subdomains:true}])
+    ]);
+    setProg('bl',80,'处理数据...');
+    const bkItems=[],rdItems=[];
+    (bkData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{bkItems.push(...(r.items||[]));}));
+    (rdData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{rdItems.push(...(r.items||[]));}));
+    let h=`<div class="stabs">
+      <button class="stab active" onclick="switchSTab('bl-bk',this,'bl-stab')">外链列表 (${bkItems.length})</button>
+      <button class="stab" onclick="switchSTab('bl-rd',this,'bl-stab')">引用域名 (${rdItems.length})</button>
+    </div>
+    <div id="bl-bk" class="bl-stab stab-content active">`;
+    if(bkItems.length){
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:12px;color:var(--text3)">${bkItems.length} 条外链</span><button class="btn btn-ghost btn-sm" onclick="exportBkCsv()">↓ 导出 CSV</button></div>`;
+      h+=`<div class="table-wrap"><table><thead><tr><th style="min-width:200px">来源页面</th><th style="min-width:160px">目标页面</th><th>锚文本</th><th>DR</th><th>类型</th><th>首次发现</th></tr></thead><tbody>`;
+      bkItems.forEach(item=>{const fromUrl=item.url_from||'';const df=item.dofollow?'<span class="bdg b-green">dofollow</span>':'<span class="bdg b-na">nofollow</span>';const date=item.first_seen?item.first_seen.split('T')[0]:'—';h+=`<tr><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${fromUrl}" target="_blank" class="link">${fromUrl.replace(/^https?:\/\//,'').slice(0,50)}</a></td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text3)">${(item.url_to||'').replace(/^https?:\/\//,'').slice(0,40)}</td><td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.anchor||'—'}</td><td>${drBdg(item.rank)}</td><td>${df}</td><td style="font-size:12px;color:var(--text3)">${date}</td></tr>`;});
+      h+='</tbody></table></div>';
+      window._blItems=bkItems;
+    }else h+='<div class="empty-state"><p>暂无外链数据</p></div>';
+    h+=`</div><div id="bl-rd" class="bl-stab stab-content">`;
+    if(rdItems.length){
+      h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:12px;color:var(--text3)">${rdItems.length} 个引用域名</span><button class="btn btn-ghost btn-sm" onclick="exportRdCsv()">↓ 导出 CSV</button></div>`;
+      h+=`<div class="table-wrap"><table><thead><tr><th>引用域名</th><th>DR</th><th>引用域名数</th><th>总外链数</th></tr></thead><tbody>`;
+      rdItems.forEach(r=>{h+=`<tr><td class="td-dm"><span class="link" onclick="document.getElementById(\'bl-input\').value=\'${r.domain||''}\';runBacklinks()">${r.domain||'—'}</span></td><td>${drBdg(r.rank)}</td><td>${fmt(r.referring_domains)}</td><td>${fmt(r.backlinks)}</td></tr>`;});
+      h+='</tbody></table></div>';
+      window._rdItems=rdItems;
+    }else h+='<div class="empty-state"><p>暂无引用域名数据</p></div>';
+    h+='</div>';
+    document.getElementById('bl-res').innerHTML=h;
+  }catch(e){document.getElementById('bl-res').innerHTML='';document.getElementById('bl-res').innerHTML=`<div class="alert alert-err">⚠ ${e.message}</div>`;}
+  finally{hideProg('bl');}
+}
+
+function exportBkCsv(){
+  if(!window._blItems||!window._blItems.length){alert('无数据');return;}
+  dlCsv('来源URL,目标URL,锚文本,DR,dofollow\n'+window._blItems.map(i=>`"${i.url_from||''}","${i.url_to||''}","${i.anchor||''}",${i.rank||''},${i.dofollow||false}`).join('\n'),'backlinks.csv');
+}
+function exportRdCsv(){
+  if(!window._rdItems||!window._rdItems.length){alert('无数据');return;}
+  dlCsv('域名,DR,引用域名数,总外链数\n'+window._rdItems.map(i=>`${i.domain||''},${i.rank||''},${i.referring_domains||''},${i.backlinks||''}`).join('\n'),'referring_domains.csv');
 }
 
 /* KEYWORD EXPLORER */
