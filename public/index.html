@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEO 分析工具</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--bg2:#1a1d27;--bg3:#22263a;--border:#2e3347;
+  --text:#e8eaf0;--text2:#8b93a8;--text3:#5a6070;
+  --green:#4ade80;--green2:#166534;--green-bg:#052e16;
+  --amber:#fbbf24;--amber-bg:#451a03;
+  --red:#f87171;--red-bg:#450a0a;
+  --blue:#60a5fa;--blue-bg:#1e3a5f;
+  --accent:#4ade80;--accent2:#22c55e;
+  --rad:10px;--rad-sm:6px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.app{max-width:1100px;margin:0 auto;padding:2rem 1.5rem}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2.5rem;padding-bottom:1.5rem;border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:12px}
+.logo-icon{width:38px;height:38px;background:var(--accent);border-radius:9px;display:flex;align-items:center;justify-content:center}
+.logo-icon svg{width:20px;height:20px;stroke:#000;fill:none;stroke-width:2.5}
+.logo h1{font-size:18px;font-weight:600}
+.logo p{font-size:12px;color:var(--text2);margin-top:1px}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:4px 11px;border-radius:20px;font-weight:500}
+.badge-off{background:var(--amber-bg);color:var(--amber);border:1px solid #92400e}
+.badge-on{background:var(--green-bg);color:var(--green);border:1px solid var(--green2)}
+.cred-box{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rad);padding:1.25rem 1.5rem;margin-bottom:2rem}
+.cred-box h3{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:1rem}
+.cred-row{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end}
+.fg label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px}
+input,select,textarea{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rad-sm);color:var(--text);padding:9px 12px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+input::placeholder,textarea::placeholder{color:var(--text3)}
+select option{background:var(--bg3)}
+textarea{resize:vertical;min-height:110px;line-height:1.7}
+.btn{padding:9px 18px;border:none;border-radius:var(--rad-sm);cursor:pointer;font-size:13px;font-family:inherit;font-weight:500;transition:all .15s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px}
+.btn-primary{background:var(--accent);color:#000}
+.btn-primary:hover{background:var(--accent2)}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:hover{border-color:var(--text2);color:var(--text)}
+.btn-ghost:disabled{opacity:.4;cursor:not-allowed}
+.btn-sm{padding:6px 12px;font-size:12px}
+.note{font-size:12px;color:var(--text3);margin-top:10px}
+.tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:1.5rem}
+.tab{padding:10px 20px;background:none;border:none;border-bottom:2px solid transparent;color:var(--text2);cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:-1px;display:flex;align-items:center;gap:7px;transition:all .15s}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:hover:not(.active){color:var(--text)}
+.sec{display:none}.sec.active{display:block}
+.qbox{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rad);padding:1.25rem 1.5rem;margin-bottom:1.5rem}
+.qbox h3{font-size:14px;font-weight:600;margin-bottom:.5rem}
+.qbox p{font-size:12px;color:var(--text2);margin-bottom:1rem;line-height:1.5}
+.qfoot{display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cnt{font-size:12px;color:var(--text3)}
+.cnt.warn{color:var(--amber)}
+.prog-wrap{margin-top:10px;display:none}
+.prog-bar{height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.prog-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s;width:0%}
+.prog-lbl{font-size:11px;color:var(--text3);margin-top:4px}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:1.25rem}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rad);padding:.9rem 1rem}
+.stat-card .lbl{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.stat-card .val{font-size:22px;font-weight:600}
+.stat-card .sub{font-size:11px;color:var(--text3);margin-top:2px}
+.res-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem}
+.res-hd h4{font-size:14px;font-weight:600}
+.res-hd span{font-size:12px;color:var(--text2)}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--rad)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;padding:10px 14px;background:var(--bg3);color:var(--text2);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,.02)}
+.kw{font-weight:500;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dm{font-weight:500;color:var(--blue);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bdg{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.b-easy{background:var(--green-bg);color:var(--green);border:1px solid var(--green2)}
+.b-med{background:var(--amber-bg);color:var(--amber);border:1px solid #92400e}
+.b-hard{background:var(--red-bg);color:var(--red);border:1px solid #7f1d1d}
+.b-na{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+.spark{display:inline-flex;align-items:flex-end;gap:2px;height:20px;vertical-align:middle}
+.sb{width:6px;background:var(--border);border-radius:2px;min-height:3px}
+.sb.up{background:var(--green)}.sb.dn{background:var(--red)}
+.alert{padding:12px 16px;border-radius:var(--rad-sm);font-size:13px;margin-top:1rem;display:flex;align-items:flex-start;gap:8px;line-height:1.5}
+.alert-err{background:var(--red-bg);color:var(--red);border:1px solid #7f1d1d}
+.alert-ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green2)}
+.loading{text-align:center;padding:2.5rem;color:var(--text2);font-size:14px}
+.spin{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-3px;margin-right:7px}
+@keyframes spin{to{transform:rotate(360deg)}}
+footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border);text-align:center;font-size:12px;color:var(--text3)}
+@media(max-width:680px){.cred-row{grid-template-columns:1fr}.app{padding:1rem}header{flex-direction:column;align-items:flex-start;gap:.75rem}}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    </div>
+    <div>
+      <h1>SEO 分析工具</h1>
+      <p>关键词 · 域名 · 外链 · 批量查询</p>
+    </div>
+  </div>
+  <span class="badge badge-off" id="conn-badge">● 未连接</span>
+</header>
+
+<div class="cred-box">
+  <h3>🔑 DataForSEO API 登录信息</h3>
+  <div class="cred-row">
+    <div class="fg">
+      <label>Login（注册邮箱）</label>
+      <input type="email" id="api-login" placeholder="your@email.com" oninput="onCredInput()">
+    </div>
+    <div class="fg">
+      <label>Password（API 密码）</label>
+      <input type="password" id="api-pass" placeholder="API Password" oninput="onCredInput()">
+    </div>
+    <button class="btn btn-ghost" id="test-btn" onclick="testConn()">测试连接</button>
+  </div>
+  <p class="note">还没有账号？<a href="https://dataforseo.com" target="_blank">前往 DataForSEO 注册</a>，注册赠 $1 测试额度。密码保存在本地，不上传任何第三方。</p>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('kw',this)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    关键词分析
+  </button>
+  <button class="tab" onclick="switchTab('dm',this)">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+    域名 / Guest Post
+  </button>
+</div>
+
+<!-- Keyword Section -->
+<div id="sec-kw" class="sec active">
+  <div class="qbox">
+    <h3>关键词批量分析</h3>
+    <p>每行输入一个关键词，最多 20 个。查询月均搜索量、竞争难度、CPC 和近期趋势。</p>
+    <textarea id="kw-input" placeholder="solar panel&#10;led strip lights&#10;custom packaging&#10;outdoor furniture&#10;stainless steel pipe" oninput="updateKwCnt()"></textarea>
+    <div class="qfoot">
+      <div class="controls">
+        <select id="kw-loc" style="width:155px">
+          <option value="2840">🇺🇸 美国 (US)</option>
+          <option value="2826">🇬🇧 英国 (UK)</option>
+          <option value="2276">🇩🇪 德国 (DE)</option>
+          <option value="2250">🇫🇷 法国 (FR)</option>
+          <option value="2036">🇦🇺 澳大利亚 (AU)</option>
+          <option value="2124">🇨🇦 加拿大 (CA)</option>
+          <option value="2392">🇯🇵 日本 (JP)</option>
+          <option value="2356">🇮🇳 印度 (IN)</option>
+          <option value="2076">🇧🇷 巴西 (BR)</option>
+          <option value="2528">🇳🇱 荷兰 (NL)</option>
+          <option value="2380">🇮🇹 意大利 (IT)</option>
+          <option value="2724">🇪🇸 西班牙 (ES)</option>
+        </select>
+        <span class="cnt" id="kw-cnt">0 个关键词</span>
+      </div>
+      <button class="btn btn-primary" id="kw-btn" onclick="runKw()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        开始查询
+      </button>
+    </div>
+    <div class="prog-wrap" id="kw-pw"><div class="prog-bar"><div class="prog-fill" id="kw-pf"></div></div><div class="prog-lbl" id="kw-pl">准备中...</div></div>
+  </div>
+  <div id="kw-res"></div>
+</div>
+
+<!-- Domain Section -->
+<div id="sec-dm" class="sec">
+  <div class="qbox">
+    <h3>域名批量分析（Guest Post 筛选）</h3>
+    <p>每行输入一个域名，最多 20 个，不需要加 https://。分析域名权重、外链数、Organic 关键词数、预估流量，帮助快速判断 Guest Post 价值。</p>
+    <textarea id="dm-input" placeholder="example.com&#10;techblog.io&#10;industry-news.net" oninput="updateDmCnt()"></textarea>
+    <div class="qfoot">
+      <span class="cnt" id="dm-cnt">0 个域名</span>
+      <button class="btn btn-primary" id="dm-btn" onclick="runDm()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        开始查询
+      </button>
+    </div>
+    <div class="prog-wrap" id="dm-pw"><div class="prog-bar"><div class="prog-fill" id="dm-pf"></div></div><div class="prog-lbl" id="dm-pl">准备中...</div></div>
+  </div>
+  <div id="dm-res"></div>
+</div>
+
+<footer>数据来源 <a href="https://dataforseo.com" target="_blank">DataForSEO API</a></footer>
+</div>
+
+<script>
+let kwData=[], dmData=[];
+
+function getLogin(){return document.getElementById('api-login').value.trim()}
+function getPass(){return document.getElementById('api-pass').value.trim()}
+function hasAuth(){return getLogin()&&getPass()}
+
+function onCredInput(){
+  const b=document.getElementById('conn-badge');
+  if(hasAuth()){b.className='badge badge-off';b.textContent='● 未验证';}
+  else{b.className='badge badge-off';b.textContent='● 未连接';}
+}
+
+async function testConn(){
+  if(!hasAuth()){alert('请先填写 Login 和 Password');return;}
+  const btn=document.getElementById('test-btn');
+  btn.disabled=true;btn.textContent='测试中...';
+  try{
+    const r=await apiFetch('GET','/api/test',null);
+    if(r.status_code===20000){
+      const b=document.getElementById('conn-badge');
+      const bal=r.tasks&&r.tasks[0]&&r.tasks[0].result&&r.tasks[0].result[0]&&r.tasks[0].result[0].money;
+      b.className='badge badge-on';
+      b.textContent=bal?`✓ 余额 $${(bal.balance||0).toFixed(2)}`:'✓ 连接成功';
+    }else{
+      alert('API 错误: '+(r.status_message||JSON.stringify(r)));
+    }
+  }catch(e){alert('连接失败: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='测试连接';}
+}
+
+async function apiFetch(method, path, body){
+  const opts={method,headers:{'Content-Type':'application/json','login':getLogin(),'password':getPass()}};
+  if(body) opts.body=JSON.stringify(body);
+  const r=await fetch(path,opts);
+  if(!r.ok){const t=await r.text();throw new Error(`HTTP ${r.status}: ${t.slice(0,200)}`);}
+  return r.json();
+}
+
+function switchTab(name,el){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('sec-'+name).classList.add('active');
+}
+
+function getLines(id){return document.getElementById(id).value.split('\n').map(l=>l.trim()).filter(Boolean)}
+function updateKwCnt(){const n=getLines('kw-input').length;const e=document.getElementById('kw-cnt');e.textContent=n+' 个关键词'+(n>20?' (超出，只查前20)':'');e.className='cnt'+(n>20?' warn':'');}
+function updateDmCnt(){const n=getLines('dm-input').length;const e=document.getElementById('dm-cnt');e.textContent=n+' 个域名'+(n>20?' (超出，只查前20)':'');e.className='cnt'+(n>20?' warn':'');}
+
+function setProg(id,pct,lbl){document.getElementById(id+'-pw').style.display='block';document.getElementById(id+'-pf').style.width=pct+'%';if(lbl)document.getElementById(id+'-pl').textContent=lbl;}
+function hideProg(id){setTimeout(()=>{document.getElementById(id+'-pw').style.display='none';document.getElementById(id+'-pf').style.width='0%';},900);}
+
+function fmt(n){if(n===null||n===undefined||n==='')return'—';n=Number(n);if(isNaN(n))return'—';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return String(Math.round(n));}
+
+function kdBadge(v){
+  if(v===null||v===undefined)return'<span class="bdg b-na">N/A</span>';
+  const n=Number(v);
+  if(n<30)return`<span class="bdg b-easy">简单 ${n}</span>`;
+  if(n<60)return`<span class="bdg b-med">中等 ${n}</span>`;
+  return`<span class="bdg b-hard">困难 ${n}</span>`;
+}
+function drBadge(v){
+  if(v===null||v===undefined)return'<span class="bdg b-na">N/A</span>';
+  const n=Math.round(Number(v));
+  if(n>=70)return`<span class="bdg b-easy">DR ${n} 高</span>`;
+  if(n>=40)return`<span class="bdg b-med">DR ${n} 中</span>`;
+  return`<span class="bdg b-hard">DR ${n} 低</span>`;
+}
+function sparkline(arr){
+  if(!arr||!arr.length)return'—';
+  const max=Math.max(...arr)||1;
+  return'<div class="spark">'+arr.map((v,i)=>{const h=Math.max(3,Math.round((v/max)*18));const c=i>0&&v>arr[i-1]?'up':i>0&&v<arr[i-1]?'dn':'';return`<div class="sb ${c}" style="height:${h}px" title="${fmt(v)}"></div>`}).join('')+'</div>';
+}
+function showErr(id,msg){document.getElementById(id).insertAdjacentHTML('beforeend',`<div class="alert alert-err"><span>⚠ ${msg}</span></div>`);}
+
+async function runKw(){
+  if(!hasAuth()){showErr('kw-res','请先填写 API 登录信息');return;}
+  const kws=getLines('kw-input').slice(0,20);
+  if(!kws.length){showErr('kw-res','请输入至少一个关键词');return;}
+  const loc=parseInt(document.getElementById('kw-loc').value);
+  document.getElementById('kw-btn').disabled=true;
+  document.getElementById('kw-res').innerHTML='<div class="loading"><span class="spin"></span>正在查询 '+kws.length+' 个关键词...</div>';
+  setProg('kw',10,'发送请求...');
+  try{
+    const payload=kws.map(k=>({keyword:k,location_code:loc,language_code:'en'}));
+    const data=await apiFetch('POST','/api/dataforseo/keywords_data/google_ads/search_volume/live',payload);
+    setProg('kw',70,'处理数据...');
+    if(data.status_code!==20000)throw new Error(data.status_message||'API 错误');
+    const rows=[];
+    (data.tasks||[]).forEach(t=>(t.result||[]).forEach(item=>{
+      rows.push({kw:item.keyword,sv:item.search_volume,comp:item.competition_index,cpc:item.cpc,trend:(item.monthly_searches||[]).slice(-6).map(m=>m.search_volume)});
+    }));
+    kwData=rows;setProg('kw',100,'完成');renderKw(rows);
+  }catch(e){document.getElementById('kw-res').innerHTML='';showErr('kw-res',e.message);}
+  finally{document.getElementById('kw-btn').disabled=false;hideProg('kw');}
+}
+
+function renderKw(rows){
+  if(!rows.length){document.getElementById('kw-res').innerHTML='<div class="loading">未返回数据</div>';return;}
+  const totalSv=rows.reduce((s,r)=>s+(r.sv||0),0);
+  const validComp=rows.filter(r=>r.comp!=null);
+  const avgComp=validComp.length?Math.round(validComp.reduce((s,r)=>s+r.comp,0)/validComp.length):0;
+  let h=`<div class="stats-row">
+    <div class="stat-card"><div class="lbl">关键词数量</div><div class="val">${rows.length}</div><div class="sub">已查询</div></div>
+    <div class="stat-card"><div class="lbl">总搜索量</div><div class="val">${fmt(totalSv)}</div><div class="sub">月均合计</div></div>
+    <div class="stat-card"><div class="lbl">平均竞争度</div><div class="val">${avgComp||'—'}</div><div class="sub">0–100</div></div>
+  </div>
+  <div class="res-hd"><h4>查询结果</h4><div style="display:flex;gap:8px;align-items:center"><span>${rows.length} 条</span><button class="btn btn-ghost btn-sm" onclick="exportCsv('kw')">↓ 导出 CSV</button></div></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th style="min-width:180px">关键词</th><th style="min-width:90px">月均搜索量</th><th style="min-width:100px">竞争难度</th><th style="min-width:80px">CPC ($)</th><th style="min-width:140px">近6月趋势</th></tr></thead>
+    <tbody>`;
+  rows.forEach(r=>{h+=`<tr><td class="kw" title="${r.kw}">${r.kw}</td><td>${fmt(r.sv)}</td><td>${kdBadge(r.comp)}</td><td>${r.cpc?'$'+Number(r.cpc).toFixed(2):'—'}</td><td>${sparkline(r.trend)}</td></tr>`;});
+  h+='</tbody></table></div>';
+  document.getElementById('kw-res').innerHTML=h;
+}
+
+async function runDm(){
+  if(!hasAuth()){showErr('dm-res','请先填写 API 登录信息');return;}
+  const domains=getLines('dm-input').map(d=>d.replace(/^https?:\/\//,'')).slice(0,20);
+  if(!domains.length){showErr('dm-res','请输入至少一个域名');return;}
+  document.getElementById('dm-btn').disabled=true;
+  document.getElementById('dm-res').innerHTML='<div class="loading"><span class="spin"></span>正在分析 '+domains.length+' 个域名...</div>';
+  setProg('dm',10,'发送请求...');
+  try{
+    const [bkData,ovData]=await Promise.all([
+      apiFetch('POST','/api/dataforseo/backlinks/summary/live',domains.map(d=>({target:d,include_subdomains:true}))),
+      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',domains.map(d=>({target:d,location_code:2840,language_code:'en'})))
+    ]);
+    setProg('dm',70,'处理数据...');
+    const bkMap={},ovMap={};
+    (bkData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{bkMap[r.target]={rank:r.rank,ref_domains:r.referring_domains,backlinks:r.backlinks,ref_ips:r.referring_ips};}));
+    (ovData.tasks||[]).forEach(t=>{
+      const tgt=t.data&&t.data.target||'';
+      (t.result||[]).forEach(r=>{const item=r.items&&r.items[0];if(item&&item.metrics){ovMap[tgt]={etv:item.metrics.organic&&item.metrics.organic.etv,kws:item.metrics.organic&&item.metrics.organic.count};}});
+    });
+    const rows=domains.map(d=>({domain:d,dr:bkMap[d]?bkMap[d].rank:null,ref_domains:bkMap[d]?bkMap[d].ref_domains:null,backlinks:bkMap[d]?bkMap[d].backlinks:null,ref_ips:bkMap[d]?bkMap[d].ref_ips:null,traffic:ovMap[d]?ovMap[d].etv:null,organic_kws:ovMap[d]?ovMap[d].kws:null}));
+    dmData=rows;setProg('dm',100,'完成');renderDm(rows);
+  }catch(e){document.getElementById('dm-res').innerHTML='';showErr('dm-res',e.message);}
+  finally{document.getElementById('dm-btn').disabled=false;hideProg('dm');}
+}
+
+function renderDm(rows){
+  if(!rows.length){document.getElementById('dm-res').innerHTML='<div class="loading">未返回数据</div>';return;}
+  let h=`<div class="res-hd"><h4>域名分析结果</h4><div style="display:flex;gap:8px;align-items:center"><span>${rows.length} 条</span><button class="btn btn-ghost btn-sm" onclick="exportCsv('dm')">↓ 导出 CSV</button></div></div>
+  <div class="table-wrap"><table>
+    <thead><tr><th style="min-width:165px">域名</th><th style="min-width:90px">域名权重 DR</th><th style="min-width:100px">引用域名数</th><th style="min-width:90px">总外链数</th><th style="min-width:110px">Organic 关键词</th><th style="min-width:100px">预估月流量</th><th style="min-width:90px">引用 IP 数</th></tr></thead>
+    <tbody>`;
+  rows.forEach(r=>{h+=`<tr><td class="dm" title="${r.domain}">${r.domain}</td><td>${drBadge(r.dr)}</td><td>${fmt(r.ref_domains)}</td><td>${fmt(r.backlinks)}</td><td>${fmt(r.organic_kws)}</td><td>${fmt(r.traffic)}</td><td>${fmt(r.ref_ips)}</td></tr>`;});
+  h+='</tbody></table></div>';
+  document.getElementById('dm-res').innerHTML=h;
+}
+
+function exportCsv(type){
+  let csv,name;
+  if(type==='kw'){
+    csv='关键词,月均搜索量,竞争难度,CPC(USD)\n'+kwData.map(r=>`"${r.kw}",${r.sv||''},${r.comp||''},${r.cpc||''}`).join('\n');name='keywords.csv';
+  }else{
+    csv='域名,DR,引用域名数,总外链数,Organic关键词,预估月流量,引用IP数\n'+dmData.map(r=>`${r.domain},${r.dr||''},${r.ref_domains||''},${r.backlinks||''},${r.organic_kws||''},${r.traffic||''},${r.ref_ips||''}`).join('\n');name='domains.csv';
+  }
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
