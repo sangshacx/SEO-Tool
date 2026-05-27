@@ -149,6 +149,7 @@ textarea{resize:vertical;line-height:1.7}
 .dns-record strong{color:var(--text);font-weight:500}
 /* Overview sections */
 .overview-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px}
+.chart-wrap svg text{user-select:none}
 @media(max-width:900px){.overview-grid{grid-template-columns:1fr}.grid-4{grid-template-columns:repeat(2,1fr)}.dns-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -361,33 +362,82 @@ document.getElementById('modal').addEventListener('click',e=>{if(e.target===docu
 document.getElementById('api-modal').addEventListener('click',e=>{if(e.target===document.getElementById('api-modal'))closeApiModal();});
 
 /* SVG Line Chart */
-function svgLineChart(data,labels,color,width,height){
-  if(!data||!data.length)return'';
-  const pad={t:10,r:10,b:24,l:42};
-  const W=width-pad.l-pad.r,H=height-pad.t-pad.b;
-  const max=Math.max(...data)||1,min=0;
-  const pts=data.map((v,i)=>{const x=pad.l+(i/(data.length-1||1))*W;const y=pad.t+H-(((v-min)/(max-min))*H);return[x,y];});
-  const poly=pts.map(([x,y])=>`${x},${y}`).join(' ');
-  const fillPts=`${pad.l},${pad.t+H} `+poly+` ${pad.l+W},${pad.t+H}`;
-  // Y axis labels
-  const yLabels=[0,Math.round(max/2),max].map((v,i)=>{const y=pad.t+H-(i*H/2);return`<text x="${pad.l-6}" y="${y+4}" text-anchor="end" font-size="10" fill="#4e5d78">${fmt(v)}</text>`;}).join('');
-  // X axis labels (show every other)
-  const xLabels=labels.filter((_,i)=>i===0||i===labels.length-1||i===Math.floor(labels.length/2)).map((_,ii)=>{
-    const idx=ii===0?0:ii===1?Math.floor(labels.length/2):labels.length-1;
-    const x=pad.l+(idx/(data.length-1||1))*W;
-    return`<text x="${x}" y="${pad.t+H+16}" text-anchor="middle" font-size="10" fill="#4e5d78">${labels[idx]||''}</text>`;
-  }).join('');
-  return`<svg width="${width}" height="${height}" style="width:100%;height:${height}px">
-    <defs><linearGradient id="cg${color.replace('#','')}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${color}" stop-opacity="0.3"/>
+function svgLineChart(data,labels,color,W2,H2){
+  if(!data||data.length<2)return'<div style="text-align:center;padding:20px;font-size:12px;color:var(--text3)">数据不足</div>';
+  const pad={t:14,r:16,b:32,l:52};
+  const W=W2-pad.l-pad.r,H=H2-pad.t-pad.b;
+  const maxV=Math.max(...data)||1,minV=0;
+  const pts=data.map((v,i)=>{
+    const x=pad.l+(i/(data.length-1))*W;
+    const y=pad.t+H-((v-minV)/(maxV-minV))*H;
+    return[x,y];
+  });
+  const poly=pts.map(([x,y])=>x+','+y).join(' ');
+  const fillPts=pad.l+','+(pad.t+H)+' '+poly+' '+(pad.l+W)+','+(pad.t+H);
+  // Y axis: 5 ticks
+  const yTicks=5;
+  let yAxis='';
+  for(let i=0;i<=yTicks;i++){
+    const v=Math.round((maxV/yTicks)*i);
+    const y=pad.t+H-((v/maxV)*H);
+    const lbl=v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'K':String(v);
+    yAxis+=`<line x1="${pad.l}" y1="${y}" x2="${pad.l+W}" y2="${y}" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>`;
+    yAxis+=`<text x="${pad.l-6}" y="${y+4}" text-anchor="end" font-size="10" fill="#4e5d78" font-family="sans-serif">${lbl}</text>`;
+  }
+  // X axis: up to 8 labels evenly spaced
+  let xAxis='';
+  const maxLabels=8;
+  const step=Math.max(1,Math.floor(labels.length/maxLabels));
+  for(let i=0;i<labels.length;i+=step){
+    const x=pad.l+(i/(data.length-1))*W;
+    xAxis+=`<text x="${x}" y="${pad.t+H+20}" text-anchor="middle" font-size="10" fill="#4e5d78" font-family="sans-serif">${labels[i]||''}</text>`;
+  }
+  // Hover points
+  let circles=pts.map(([x,y],i)=>`<circle cx="${x}" cy="${y}" r="3" fill="${color}" opacity="0" class="chart-pt"><title>${labels[i]||''}: ${data[i]}</title></circle>`).join('');
+  // Last point always visible
+  const [lx,ly]=pts[pts.length-1];
+  circles+=`<circle cx="${lx}" cy="${ly}" r="4" fill="${color}"/>`;
+  return`<svg viewBox="0 0 ${W2} ${H2}" style="width:100%;height:${H2}px;display:block" xmlns="http://www.w3.org/2000/svg">
+    <style>.chart-pt:hover{opacity:1;r:5}</style>
+    <defs><linearGradient id="g${color.replace('#','')}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${color}" stop-opacity="0.25"/>
       <stop offset="100%" stop-color="${color}" stop-opacity="0.02"/>
     </linearGradient></defs>
-    <polygon points="${fillPts}" fill="url(#cg${color.replace('#','')})" />
-    <polyline points="${poly}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    ${pts.map(([x,y],i)=>i===pts.length-1?`<circle cx="${x}" cy="${y}" r="3" fill="${color}"/>`:'').join('')}
-    ${yLabels}${xLabels}
+    ${yAxis}
+    <polygon points="${fillPts}" fill="url(#g${color.replace('#','')})"/>
+    <polyline points="${poly}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
+    ${circles}${xAxis}
   </svg>`;
 }
+
+
+function sliceHist(items,months){
+  if(!months||months===0)return items;
+  return items.slice(-months);
+}
+function renderTrafficChart(items,months){
+  const sl=sliceHist(items,months);
+  const dates=sl.map(i=>(i.date||'').slice(0,7));
+  const vals=sl.map(i=>i.metrics&&i.metrics.organic&&i.metrics.organic.etv||0);
+  return svgLineChart(vals,dates,'#3b82f6',700,150);
+}
+function renderKwsChart(items,months){
+  const sl=sliceHist(items,months);
+  const dates=sl.map(i=>(i.date||'').slice(0,7));
+  const vals=sl.map(i=>i.metrics&&i.metrics.organic&&i.metrics.organic.count||0);
+  return svgLineChart(vals,dates,'#22c55e',300,150);
+}
+function updateCharts(months,btn){
+  const items=window._histItems||[];
+  if(!items.length)return;
+  document.querySelectorAll('#chart-range-btns .stab').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const ct=document.getElementById('chart-traffic');
+  const ck=document.getElementById('chart-kws');
+  if(ct)ct.innerHTML='<div class="chart-title">📈 月度流量趋势</div>'+renderTrafficChart(items,months);
+  if(ck)ck.innerHTML='<div class="chart-title">🔑 关键词数量趋势</div>'+renderKwsChart(items,months);
+}
+
 
 function parseKwItem(item){
   const kd=item.keyword_data||item;
@@ -548,18 +598,25 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData){
   </div>`;
 
   // Historical charts
+  window._histItems=histItems;
   if(histItems.length>1){
-    const dates=histItems.map(i=>{const d=i.date||'';return d.slice(0,7);});
-    const traffic=histItems.map(i=>i.metrics&&i.metrics.organic&&i.metrics.organic.etv||0);
-    const kws=histItems.map(i=>i.metrics&&i.metrics.organic&&i.metrics.organic.count||0);
-    h+=`<div class="overview-grid">
-      <div class="chart-wrap">
-        <div class="chart-title">📈 流量趋势（近期月度变化）</div>
-        ${svgLineChart(traffic,dates,'#3b82f6',700,130)}
+    h+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <span style="font-size:13px;font-weight:600">📊 历史趋势</span>
+      <div style="display:flex;gap:4px;flex-wrap:wrap" id="chart-range-btns">
+        <button class="stab active" onclick="updateCharts(6,this)">6个月</button>
+        <button class="stab" onclick="updateCharts(12,this)">1年</button>
+        <button class="stab" onclick="updateCharts(24,this)">2年</button>
+        <button class="stab" onclick="updateCharts(0,this)">全部</button>
       </div>
-      <div class="chart-wrap">
+    </div>
+    <div class="overview-grid" id="chart-grid">
+      <div class="chart-wrap" id="chart-traffic">
+        <div class="chart-title">📈 月度流量趋势</div>
+        ${renderTrafficChart(histItems,6)}
+      </div>
+      <div class="chart-wrap" id="chart-kws">
         <div class="chart-title">🔑 关键词数量趋势</div>
-        ${svgLineChart(kws,dates,'#22c55e',300,130)}
+        ${renderKwsChart(histItems,6)}
       </div>
     </div>`;
   }
