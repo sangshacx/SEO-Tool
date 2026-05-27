@@ -470,7 +470,7 @@ document.getElementById('api-modal').addEventListener('click',e=>{if(e.target===
 /* SVG Line Chart */
 function svgLineChart(data,labels,color,W2,H2){
   if(!data||data.length<2)return'<div style="text-align:center;padding:20px;font-size:12px;color:var(--text3)">数据不足</div>';
-  const pad={t:14,r:16,b:32,l:52};
+  const pad={t:14,r:20,b:36,l:58};
   const W=W2-pad.l-pad.r,H=H2-pad.t-pad.b;
   const maxV=Math.max(...data)||1,minV=0;
   const pts=data.map((v,i)=>{
@@ -535,13 +535,17 @@ function renderKwsChart(items,months){
 }
 function updateCharts(months,btn){
   const items=window._histItems||[];
-  if(!items.length)return;
+  if(!items.length){console.log('No hist items');return;}
   document.querySelectorAll('#chart-range-btns .stab').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+  if(btn)btn.classList.add('active');
+  const sl=sliceHist(items,months);
+  const dates=sl.map(i=>(i.date||'').slice(0,7));
+  const traffic=sl.map(i=>(i.metrics&&i.metrics.organic&&i.metrics.organic.etv)||0);
+  const kws=sl.map(i=>(i.metrics&&i.metrics.organic&&i.metrics.organic.count)||0);
   const ct=document.getElementById('chart-traffic');
   const ck=document.getElementById('chart-kws');
-  if(ct)ct.innerHTML='<div class="chart-title">📈 月度流量趋势</div>'+renderTrafficChart(items,months);
-  if(ck)ck.innerHTML='<div class="chart-title">🔑 关键词数量趋势</div>'+renderKwsChart(items,months);
+  if(ct)ct.innerHTML='<div class="chart-title" style="font-size:12px;color:var(--text2);margin-bottom:8px">📈 月度流量趋势</div>'+svgLineChart(traffic,dates,'#3b82f6',680,145);
+  if(ck)ck.innerHTML='<div class="chart-title" style="font-size:12px;color:var(--text2);margin-bottom:8px">🔑 关键词数量趋势</div>'+svgLineChart(kws,dates,'#22c55e',300,145);
 }
 
 
@@ -1134,80 +1138,49 @@ async function showBacklinks(domain,offset){
 
 async function showOrganicKws(domain,offset,locCode){
   offset=offset||0;
-  locCode=locCode||0; // 0 = all major markets
+  locCode=locCode||0;
   if(offset===0){
     openModal('Organic 关键词 — '+domain);
-    MP.kws={domain,offset:0,total:0,items:[],locCode};
-    // Show country selector first
-    document.getElementById('modal-body').innerHTML=`
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-        <span style="font-size:12px;color:var(--text2)">查询市场：</span>
-        <select id="kw-loc-modal" style="height:32px;font-size:12px" onchange="showOrganicKws('${domain}',0,parseInt(this.value))">
-          <option value="0" ${locCode===0?'selected':''}>🌍 全部主要市场</option>
-          <option value="2840" ${locCode===2840?'selected':''}>🇺🇸 美国</option>
-          <option value="2826" ${locCode===2826?'selected':''}>🇬🇧 英国</option>
-          <option value="2276" ${locCode===2276?'selected':''}>🇩🇪 德国</option>
-          <option value="2250" ${locCode===2250?'selected':''}>🇫🇷 法国</option>
-          <option value="2036" ${locCode===2036?'selected':''}>🇦🇺 澳大利亚</option>
-          <option value="2124" ${locCode===2124?'selected':''}>🇨🇦 加拿大</option>
-          <option value="2392" ${locCode===2392?'selected':''}>🇯🇵 日本</option>
-          <option value="2356" ${locCode===2356?'selected':''}>🇮🇳 印度</option>
-          <option value="2076" ${locCode===2076?'selected':''}>🇧🇷 巴西</option>
-          <option value="2724" ${locCode===2724?'selected':''}>🇪🇸 西班牙</option>
-          <option value="2380" ${locCode===2380?'selected':''}>🇮🇹 意大利</option>
-          <option value="2528" ${locCode===2528?'selected':''}>🇳🇱 荷兰</option>
-          <option value="2616" ${locCode===2616?'selected':''}>🇵🇱 波兰</option>
-          <option value="2752" ${locCode===2752?'selected':''}>🇸🇪 瑞典</option>
-          <option value="2578" ${locCode===2578?'selected':''}>🇳🇴 挪威</option>
-          <option value="2208" ${locCode===2208?'selected':''}>🇩🇰 丹麦</option>
-          <option value="2710" ${locCode===2710?'selected':''}>🇿🇦 南非</option>
-          <option value="2484" ${locCode===2484?'selected':''}>🇲🇽 墨西哥</option>
-          <option value="2682" ${locCode===2682?'selected':''}>🇸🇦 沙特</option>
-          <option value="2784" ${locCode===2784?'selected':''}>🇦🇪 阿联酋</option>
-        </select>
-        <span style="font-size:11px;color:var(--text3)">选择市场后自动查询</span>
-      </div>
-      <div class="loading"><span class="spin"></span>加载中...</div>`;
+    MP.kws={domain,offset:0,total:0,items:[],locCode,locCounts:{}};
   } else {
-    document.getElementById('modal-body').querySelector('.loading') && (document.getElementById('modal-body').innerHTML='<div class="loading"><span class="spin"></span>加载中...</div>');
+    document.getElementById('modal-body').innerHTML='<div class="loading"><span class="spin"></span>加载中...</div>';
   }
   try{
-    // Major markets for "all" mode
-    const allLocs=[2840,2826,2276,2250,2036,2124,2392,2356,2076,2724,2380,2528];
+    const allLocs=[2840,2826,2276,2250,2036,2124,2392,2356,2076,2724,2380,2528,2616,2752,2578,2208,2710,2484,2682,2784];
     const locsToQuery=locCode===0?allLocs:[locCode];
-    const PAGE=25;
+    const PAGE=100;
+    let allItems=[],total=0,locCounts=MP.kws.locCounts||{};
 
-    // Parallel queries for all selected locations, with offset only for single-loc mode
-    let allItems=[];
-    let total=0;
     if(locCode===0){
-      // Query top locations in parallel, no offset in all-markets mode
       const responses=await Promise.all(locsToQuery.map(loc=>
         apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{
-          target:domain,location_code:loc,language_code:'en',limit:10,
+          target:domain,location_code:loc,language_code:'en',limit:15,
           order_by:['keyword_data.keyword_info.search_volume,desc']
         }]).catch(()=>({tasks:[]}))
       ));
       const seen=new Set();
+      locCounts={};
       responses.forEach((data,li)=>{
         const loc=locsToQuery[li];
+        let cnt=0;
         (data.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{
+          cnt+=(r.items||[]).length;
           (r.items||[]).forEach(item=>{
-            // tag each item with location
             item._loc=loc;
             const kw=(item.keyword_data||{}).keyword||'';
             const key=kw+'_'+loc;
             if(!seen.has(key)){seen.add(key);allItems.push(item);}
           });
         }));
+        if(cnt>0)locCounts[loc]=cnt;
       });
-      // Sort by search volume desc
       allItems.sort((a,b)=>{
         const svA=(a.keyword_data&&a.keyword_data.keyword_info&&a.keyword_data.keyword_info.search_volume)||0;
         const svB=(b.keyword_data&&b.keyword_data.keyword_info&&b.keyword_data.keyword_info.search_volume)||0;
         return svB-svA;
       });
       total=allItems.length;
+      MP.kws.locCounts=locCounts;
     } else {
       const kwData2=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{
         target:domain,location_code:locCode,language_code:'en',limit:PAGE,offset,
@@ -1217,62 +1190,69 @@ async function showOrganicKws(domain,offset,locCode){
         allItems.push(...(r.items||[]).map(item=>{item._loc=locCode;return item;}));
         total=r.total_count||allItems.length;
       }));
+      locCounts=MP.kws.locCounts||{};
     }
 
-    MP.kws={domain,offset,total,items:allItems,locCode};
-    const pages=Math.ceil(total/PAGE),curPage=Math.floor(offset/PAGE);
-    const isAllMode=locCode===0;
+    MP.kws={domain,offset,total,items:allItems,locCode,locCounts};
 
-    // Rebuild with selector preserved
+    const LOC_MAP={2840:'🇺🇸 美国',2826:'🇬🇧 英国',2276:'🇩🇪 德国',2250:'🇫🇷 法国',2036:'🇦🇺 澳大利亚',2124:'🇨🇦 加拿大',2392:'🇯🇵 日本',2356:'🇮🇳 印度',2076:'🇧🇷 巴西',2724:'🇪🇸 西班牙',2380:'🇮🇹 意大利',2528:'🇳🇱 荷兰',2616:'🇵🇱 波兰',2752:'🇸🇪 瑞典',2578:'🇳🇴 挪威',2208:'🇩🇰 丹麦',2710:'🇿🇦 南非',2484:'🇲🇽 墨西哥',2682:'🇸🇦 沙特',2784:'🇦🇪 阿联酋'};
+    const LOC_SHORT={2840:'US',2826:'UK',2276:'DE',2250:'FR',2036:'AU',2124:'CA',2392:'JP',2356:'IN',2076:'BR',2724:'ES',2380:'IT',2528:'NL',2616:'PL',2752:'SE',2578:'NO',2208:'DK',2710:'ZA',2484:'MX',2682:'SA',2784:'AE'};
+
+    function locOption(code,label,cur,counts){
+      const cnt=counts[code];
+      const cntStr=cnt?` (${cnt})`:' ';
+      return`<option value="${code}" ${cur===code?'selected':''}>${label}${cnt?` (${cnt})`:''}</option>`;
+    }
+
+    const isAllMode=locCode===0;
+    const pages=Math.ceil(total/PAGE),curPage=Math.floor(offset/PAGE);
+
     let h=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:12px;color:var(--text2)">查询市场：</span>
         <select id="kw-loc-modal" style="height:32px;font-size:12px" onchange="showOrganicKws('${domain}',0,parseInt(this.value))">
           <option value="0" ${locCode===0?'selected':''}>🌍 全部主要市场</option>
-          <option value="2840" ${locCode===2840?'selected':''}>🇺🇸 美国</option>
-          <option value="2826" ${locCode===2826?'selected':''}>🇬🇧 英国</option>
-          <option value="2276" ${locCode===2276?'selected':''}>🇩🇪 德国</option>
-          <option value="2250" ${locCode===2250?'selected':''}>🇫🇷 法国</option>
-          <option value="2036" ${locCode===2036?'selected':''}>🇦🇺 澳大利亚</option>
-          <option value="2124" ${locCode===2124?'selected':''}>🇨🇦 加拿大</option>
-          <option value="2392" ${locCode===2392?'selected':''}>🇯🇵 日本</option>
-          <option value="2356" ${locCode===2356?'selected':''}>🇮🇳 印度</option>
-          <option value="2076" ${locCode===2076?'selected':''}>🇧🇷 巴西</option>
-          <option value="2724" ${locCode===2724?'selected':''}>🇪🇸 西班牙</option>
-          <option value="2380" ${locCode===2380?'selected':''}>🇮🇹 意大利</option>
-          <option value="2528" ${locCode===2528?'selected':''}>🇳🇱 荷兰</option>
-          <option value="2616" ${locCode===2616?'selected':''}>🇵🇱 波兰</option>
-          <option value="2752" ${locCode===2752?'selected':''}>🇸🇪 瑞典</option>
-          <option value="2578" ${locCode===2578?'selected':''}>🇳🇴 挪威</option>
-          <option value="2208" ${locCode===2208?'selected':''}>🇩🇰 丹麦</option>
-          <option value="2710" ${locCode===2710?'selected':''}>🇿🇦 南非</option>
-          <option value="2484" ${locCode===2484?'selected':''}>🇲🇽 墨西哥</option>
-          <option value="2682" ${locCode===2682?'selected':''}>🇸🇦 沙特</option>
-          <option value="2784" ${locCode===2784?'selected':''}>🇦🇪 阿联酋</option>
+          ${allLocs.map(loc=>`<option value="${loc}" ${locCode===loc?'selected':''}>${LOC_MAP[loc]||loc}${locCounts[loc]?' ('+locCounts[loc]+')':''}</option>`).join('')}
         </select>
       </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <span style="font-size:12px;color:var(--text3)">${isAllMode?'全部市场 '+total+' 条':('共 '+total+' 个，第 '+(curPage+1)+'/'+(pages||1)+' 页')}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:var(--text3)">${isAllMode?total+' 条（全部市场）':('共 '+total+' 条，第 '+(curPage+1)+'/'+(pages||1)+' 页')}</span>
         <button class="btn btn-ghost btn-sm" onclick="exportModalData('kws')">↓ 导出 CSV</button>
       </div>
     </div>
     <div class="table-wrap"><table><thead><tr>
-      <th style="min-width:200px">关键词</th><th>月均搜索量</th><th>难度 KD</th><th>CPC</th><th>排名</th><th>市场</th><th style="min-width:160px">排名页面</th>
+      <th style="min-width:180px">关键词</th>
+      <th>月均搜索量</th>
+      <th>带来流量</th>
+      <th>难度 KD</th>
+      <th>CPC</th>
+      <th>排名</th>
+      <th>市场</th>
+      <th style="min-width:140px">排名页面</th>
     </tr></thead><tbody>`;
-
-    const LOC_MAP={2840:'🇺🇸 US',2826:'🇬🇧 UK',2276:'🇩🇪 DE',2250:'🇫🇷 FR',2036:'🇦🇺 AU',2124:'🇨🇦 CA',2392:'🇯🇵 JP',2356:'🇮🇳 IN',2076:'🇧🇷 BR',2724:'🇪🇸 ES',2380:'🇮🇹 IT',2528:'🇳🇱 NL',2616:'🇵🇱 PL',2752:'🇸🇪 SE',2578:'🇳🇴 NO',2208:'🇩🇰 DK',2710:'🇿🇦 ZA',2484:'🇲🇽 MX',2682:'🇸🇦 SA',2784:'🇦🇪 AE'};
 
     allItems.forEach(item=>{
       const kd2=item.keyword_data||{};const ki=kd2.keyword_info||{};const kp=kd2.keyword_properties||{};
       const ranked=item.ranked_serp_element&&item.ranked_serp_element.serp_item;
-      const pos=ranked&&ranked.rank_absolute||'—';const url=ranked&&ranked.relative_url||'—';
+      const pos=ranked&&ranked.rank_absolute||'—';
+      const url=ranked&&ranked.relative_url||'—';
+      const etv=ranked&&ranked.etv!=null?Math.round(ranked.etv):null;
       const itemLoc=item._loc||locCode||2840;
-      const locLabel=LOC_MAP[itemLoc]||('🌐 '+itemLoc);
-      h+=`<tr><td class="td-kw" title="${kd2.keyword||''}">${kd2.keyword||'—'}</td><td>${fmt(ki.search_volume)}</td><td>${kdBdg(kp.keyword_difficulty)}</td><td>${ki.cpc?'$'+Number(ki.cpc).toFixed(2):'—'}</td><td>${pos}</td><td style="white-space:nowrap;font-size:12px">${locLabel}</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text3)">${url}</td></tr>`;
+      const locShort=LOC_SHORT[itemLoc]||String(itemLoc);
+      const locLabel=(LOC_MAP[itemLoc]||locShort).slice(0,10);
+      h+=`<tr>
+        <td class="td-kw" title="${kd2.keyword||''}">${kd2.keyword||'—'}</td>
+        <td>${fmt(ki.search_volume)}</td>
+        <td style="color:var(--green)">${etv!=null?etv:'—'}</td>
+        <td>${kdBdg(kp.keyword_difficulty)}</td>
+        <td>${ki.cpc?'$'+Number(ki.cpc).toFixed(2):'—'}</td>
+        <td>${pos}</td>
+        <td style="white-space:nowrap;font-size:11px">${locLabel}</td>
+        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text3)">${url}</td>
+      </tr>`;
     });
     h+='</tbody></table></div>';
 
-    // Pagination only for single-market mode
     if(!isAllMode&&pages>1){
       h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
         <span style="font-size:12px;color:var(--text3)">${offset+1}–${Math.min(offset+PAGE,total)} / ${total}</span>
@@ -1282,8 +1262,7 @@ async function showOrganicKws(domain,offset,locCode){
         </div>
       </div>`;
     }
-
-    if(!allItems.length) h+='<div class="empty-state" style="padding:1.5rem"><p>该市场暂无排名数据</p></div>';
+    if(!allItems.length) h+='<div class="empty-state" style="padding:1rem"><p>该市场暂无排名数据</p></div>';
     document.getElementById('modal-body').innerHTML=h;
   }catch(e){document.getElementById('modal-body').innerHTML=`<div class="alert alert-err">⚠ ${e.message}</div>`;}
 }
