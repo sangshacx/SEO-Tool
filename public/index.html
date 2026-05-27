@@ -1416,134 +1416,121 @@ async function runDebugLabs() {
 }
 
 /* ===== BATCH DOMAIN ANALYSIS ===== */
-let batchData = [];
+var batchData = [];
 
 function updateBatchCnt(){
-  const lines = document.getElementById('batch-input').value.split('\n').map(l=>l.trim()).filter(Boolean);
-  const n = Math.min(lines.length, 200);
-  const cost = (n * 0.003).toFixed(3);
-  const el = document.getElementById('batch-cnt');
-  el.textContent = n + ' 个域名，预计费用 $' + cost;
-  el.style.color = lines.length > 200 ? 'var(--amber)' : 'var(--text3)';
+  var lines = document.getElementById('batch-input').value.split('\n').map(function(l){return l.trim();}).filter(Boolean);
+  var n = Math.min(lines.length, 200);
+  var cost = (n * 0.003).toFixed(3);
+  var el = document.getElementById('batch-cnt');
+  if(el){ el.textContent = n + ' 个域名，预计费用 $' + cost; el.style.color = lines.length > 200 ? 'var(--amber)' : 'var(--text3)'; }
 }
 
 async function runBatch(){
-  const domains = document.getElementById('batch-input').value
-    .split('\n').map(l=>l.trim().replace(/^https?:\/\//,'').replace(/\/$/,''))
-    .filter(Boolean).slice(0,20);
-  if(!domains.length){ document.getElementById('batch-res').innerHTML='<div class="alert alert-err">请输入至少一个域名</div>'; return; }
+  var raw = document.getElementById('batch-input').value.split('\n')
+    .map(function(l){ return l.trim().replace(/^https?:\/\//,'').replace(/\/$/,''); })
+    .filter(Boolean).slice(0,200);
+  if(!raw.length){ document.getElementById('batch-res').innerHTML='<div class="alert alert-err">请输入至少一个域名</div>'; return; }
   if(!S.login||!S.pass){ openApiModal(); return; }
 
   document.getElementById('batch-btn').disabled = true;
-  document.getElementById('batch-res').innerHTML = '<div class="loading"><span class="spin"></span>正在分析 '+domains.length+' 个域名...</div>';
+  document.getElementById('batch-res').innerHTML = '<div class="loading"><span class="spin"></span>正在分析 '+raw.length+' 个域名...</div>';
   document.getElementById('batch-pw').style.display = 'block';
   document.getElementById('batch-pf').style.width = '5%';
-  document.getElementById('batch-pl').textContent = '发送请求...';
+  document.getElementById('batch-pl').textContent = '准备中...';
 
   try{
-    // Check cache for each domain
-    const cached = {}, toFetch = [];
-    domains.forEach(d => {
-      const c = cacheGet(cacheKey('batch', d));
-      if(c) cached[d] = c;
-      else toFetch.push(d);
+    var cached = {}, toFetch = [];
+    raw.forEach(function(d){
+      var c = cacheGet(cacheKey('batch', d));
+      if(c) cached[d] = c; else toFetch.push(d);
     });
 
-    let bkMap = {}, ovMap = {};
+    var bkMap = {}, ovMap = {};
 
     if(toFetch.length){
-      document.getElementById('batch-pf').style.width = '20%';
-      document.getElementById('batch-pl').textContent = '获取外链数据 ('+toFetch.length+'个)...';
+      var CHUNK = 50;
+      var total = toFetch.length;
+      var done = 0;
+      var i = 0;
+      while(i < toFetch.length){
+        var chunk = toFetch.slice(i, i + CHUNK);
+        document.getElementById('batch-pl').textContent = '处理中 ' + (done+chunk.length) + '/' + total + '...';
+        document.getElementById('batch-pf').style.width = (10 + 75*(done/total)) + '%';
 
-      // Chunk into batches of 50 to avoid API limits
-      const CHUNK = 50;
-      const chunks = [];
-      for(let i=0;i<toFetch.length;i+=CHUNK) chunks.push(toFetch.slice(i,i+CHUNK));
-      let done=0;
-      for(const chunk of chunks){
-        document.getElementById('batch-pl').textContent = `处理中 ${done+chunk.length}/${toFetch.length}...`;
-        document.getElementById('batch-pf').style.width = (20 + 60*(done/toFetch.length)) + '%';
-        const [bkData, ovData] = await Promise.all([
+        var results = await Promise.all([
           apiFetch('POST','/api/dataforseo/backlinks/summary/live',
-            chunk.map(d=>({target:d,include_subdomains:true}))).catch(()=>({tasks:[]})),
+            chunk.map(function(d){ return {target:d,include_subdomains:true}; })).catch(function(){ return {tasks:[]}; }),
           apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',
-            chunk.map(d=>({target:d,location_code:2840,language_code:'en'}))).catch(()=>({tasks:[]}))
+            chunk.map(function(d){ return {target:d,location_code:2840,language_code:'en'}; })).catch(function(){ return {tasks:[]}; })
         ]);
-        (bkData.tasks||[]).forEach((t,i)=>{
-          (t.result||[]).forEach(r=>{ bkMap[chunk[i]] = {rank:r.rank, ref_domains:r.referring_domains, backlinks:r.backlinks, ref_ips:r.referring_ips}; });
-        });
-        (ovData.tasks||[]).forEach(t=>{
-          const tgt=t.data&&t.data.target||'';
-          (t.result||[]).forEach(r=>{
-            const item=r.items&&r.items[0];
-            if(item&&item.metrics) ovMap[tgt]={etv:item.metrics.organic&&item.metrics.organic.etv,kws:item.metrics.organic&&item.metrics.organic.count};
+        var bkData = results[0], ovData = results[1];
+
+        bkData.tasks && bkData.tasks.forEach(function(t, ti){
+          t.result && t.result.forEach(function(r){
+            bkMap[chunk[ti]] = {rank:r.rank, ref_domains:r.referring_domains, backlinks:r.backlinks};
           });
         });
-        done+=chunk.length;
+        ovData.tasks && ovData.tasks.forEach(function(t){
+          var tgt = t.data && t.data.target || '';
+          t.result && t.result.forEach(function(r){
+            var item = r.items && r.items[0];
+            if(item && item.metrics) ovMap[tgt] = {etv:item.metrics.organic&&item.metrics.organic.etv, kws:item.metrics.organic&&item.metrics.organic.count};
+          });
+        });
+
+        done += chunk.length;
+        i += CHUNK;
       }
 
-      document.getElementById('batch-pf').style.width = '85%';
-      document.getElementById('batch-pl').textContent = '处理数据...';
-
-      // Cache each domain result
-      toFetch.forEach(d=>{
-        const row={bk:bkMap[d]||{},ov:ovMap[d]||{}};
-        cacheSet(cacheKey('batch',d), row);
+      toFetch.forEach(function(d){
+        cacheSet(cacheKey('batch',d), {bk:bkMap[d]||{}, ov:ovMap[d]||{}});
       });
       updateCacheStat();
     }
 
-    document.getElementById('batch-pf').style.width = '90%';
+    document.getElementById('batch-pf').style.width = '95%';
     document.getElementById('batch-pl').textContent = '生成结果...';
 
-    // Build final rows (merge cache + fresh)
-    batchData = domains.map(d=>{
-      let bk={}, ov={};
-      if(cached[d]){ bk=cached[d].bk||{}; ov=cached[d].ov||{}; }
-      else { bk=bkMap[d]||{}; ov=ovMap[d]||{}; }
-      return {domain:d, dr:bk.rank, ref_domains:bk.ref_domains, backlinks:bk.backlinks, kws:ov.kws, etv:ov.etv, cached:!!cached[d]};
+    batchData = raw.map(function(d){
+      var bk = {}, ov = {};
+      if(cached[d]){ bk = cached[d].bk||{}; ov = cached[d].ov||{}; }
+      else { bk = bkMap[d]||{}; ov = ovMap[d]||{}; }
+      return {domain:d, dr:bk.rank, ref_domains:bk.ref_domains, backlinks:bk.backlinks, kws:ov.kws, etv:ov.etv, wasCached:!!cached[d]};
     });
 
-    document.getElementById('batch-pf').style.width = '100%';
     renderBatchResults(batchData);
   }catch(e){
-    document.getElementById('batch-res').innerHTML = `<div class="alert alert-err">⚠ ${e.message}</div>`;
+    document.getElementById('batch-res').innerHTML = '<div class="alert alert-err">\u26a0 ' + e.message + '</div>';
   }finally{
     document.getElementById('batch-btn').disabled = false;
-    setTimeout(()=>{ document.getElementById('batch-pw').style.display='none'; }, 800);
+    setTimeout(function(){ document.getElementById('batch-pw').style.display='none'; }, 800);
   }
 }
 
 function renderBatchResults(rows){
   if(!rows.length){ document.getElementById('batch-res').innerHTML='<div class="loading">无结果</div>'; return; }
+  var cachedCount = rows.filter(function(r){ return r.wasCached; }).length;
+  var h = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    + '<span style="font-size:14px;font-weight:600">' + rows.length + ' 个域名'
+    + (cachedCount > 0 ? ' <span style="font-size:11px;color:var(--green);font-weight:400">（' + cachedCount + '个来自缓存，节省了费用）</span>' : '')
+    + '</span>'
+    + '<button class="btn btn-ghost btn-sm" onclick="exportBatchCsv()">\u2193 导出 CSV</button>'
+    + '</div>'
+    + '<div class="table-wrap"><table><thead><tr>'
+    + '<th style="min-width:180px">域名</th><th>DR</th><th>引用域名数</th><th>总外链数</th><th>Organic 关键词</th><th>预估月流量</th>'
+    + '</tr></thead><tbody>';
 
-  const hasAny = rows.some(r=>r.dr!=null||r.kws!=null);
-  let h = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-    <span style="font-size:14px;font-weight:600">${rows.length} 个域名 <span style="font-size:11px;color:var(--green);font-weight:400">${rows.filter(r=>r.cached).length > 0 ? '（'+rows.filter(r=>r.cached).length+'个来自缓存，节省了费用）' : ''}</span></span>
-    <button class="btn btn-ghost btn-sm" onclick="exportBatchCsv()">↓ 导出 CSV</button>
-  </div>
-  <div class="table-wrap"><table><thead><tr>
-    <th style="min-width:180px">域名</th>
-    <th>DR</th>
-    <th>引用域名数</th>
-    <th>总外链数</th>
-    <th>Organic 关键词</th>
-    <th>预估月流量</th>
-  </tr></thead><tbody>`;
-
-  rows.forEach(r=>{
-    const cachedBadge = r.cached ? '<span style="font-size:10px;color:var(--green);margin-left:4px">💾</span>' : '';
-    h+=`<tr>
-      <td class="td-dm">
-        <span class="link" onclick="document.getElementById('se-input').value='${r.domain}';nav('site-explorer',null);setTimeout(runSiteExplorer,100)">${r.domain}</span>
-        ${cachedBadge}
-      </td>
-      <td>${drBdg(r.dr)}</td>
-      <td><span class="link" onclick="showReferringDomains('${r.domain}')">${fmt(r.ref_domains)}</span></td>
-      <td><span class="link" onclick="showBacklinks('${r.domain}')">${fmt(r.backlinks)}</span></td>
-      <td><span class="link" onclick="showOrganicKws('${r.domain}',0,0)">${fmt(r.kws)}</span></td>
-      <td>${fmt(r.etv)}</td>
-    </tr>`;
+  rows.forEach(function(r){
+    var cachedBadge = r.wasCached ? '<span style="font-size:10px;color:var(--green);margin-left:4px">\ud83d\udcbe</span>' : '';
+    h += '<tr>'
+      + '<td class="td-dm"><span class="link" onclick="document.getElementById(\'se-input\').value=\'' + r.domain + '\';nav(\'site-explorer\',null);setTimeout(runSiteExplorer,100)">' + r.domain + '</span>' + cachedBadge + '</td>'
+      + '<td>' + drBdg(r.dr) + '</td>'
+      + '<td><span class="link" onclick="showReferringDomains(\'' + r.domain + '\')">' + fmt(r.ref_domains) + '</span></td>'
+      + '<td><span class="link" onclick="showBacklinks(\'' + r.domain + '\')">' + fmt(r.backlinks) + '</span></td>'
+      + '<td><span class="link" onclick="showOrganicKws(\'' + r.domain + '\',0,0)">' + fmt(r.kws) + '</span></td>'
+      + '<td>' + fmt(r.etv) + '</td>'
+      + '</tr>';
   });
   h += '</tbody></table></div>';
   document.getElementById('batch-res').innerHTML = h;
@@ -1551,11 +1538,10 @@ function renderBatchResults(rows){
 
 function exportBatchCsv(){
   if(!batchData.length){ alert('无数据'); return; }
-  dlCsv('域名,DR,引用域名数,总外链数,Organic关键词,预估月流量\n'+
-    batchData.map(r=>`${r.domain},${r.dr||''},${r.ref_domains||''},${r.backlinks||''},${r.kws||''},${r.etv||''}`).join('\n'),
+  dlCsv('域名,DR,引用域名数,总外链数,Organic关键词,预估月流量\n'
+    + batchData.map(function(r){ return r.domain+','+(r.dr||'')+','+(r.ref_domains||'')+','+(r.backlinks||'')+','+(r.kws||'')+','+(r.etv||''); }).join('\n'),
     'batch_domains.csv');
 }
-
 </script>
 </body>
 </html>
