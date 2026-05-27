@@ -230,6 +230,10 @@ textarea{resize:vertical;line-height:1.7}
       <div style="display:flex;gap:8px;margin-bottom:20px;align-items:flex-start">
         <textarea id="kw-input" placeholder="每行一个关键词，最多20个&#10;gearbox&#10;industrial gearbox&#10;waterproof connector" style="flex:1;min-height:90px;max-height:160px"></textarea>
         <div style="display:flex;flex-direction:column;gap:8px">
+          <select id="kw-se" style="width:110px">
+            <option value="google">🔍 Google</option>
+            <option value="bing">🔎 Bing</option>
+          </select>
           <select id="kw-loc" style="width:148px">
             <option value="2840">🇺🇸 美国</option><option value="2826">🇬🇧 英国</option><option value="2276">🇩🇪 德国</option>
             <option value="2250">🇫🇷 法国</option><option value="2036">🇦🇺 澳大利亚</option><option value="2124">🇨🇦 加拿大</option>
@@ -597,23 +601,27 @@ function switchSTab(id,el,cls){
 }
 
 /* KEYWORD EXPLORER */
+const LOC_FLAGS={2840:'🇺🇸',2826:'🇬🇧',2276:'🇩🇪',2250:'🇫🇷',2036:'🇦🇺',2124:'🇨🇦',2392:'🇯🇵',2356:'🇮🇳',2076:'🇧🇷',2528:'🇳🇱',2380:'🇮🇹',2724:'🇪🇸'};
+const SE_SUG={google:'dataforseo_labs/google/keyword_suggestions/live',bing:'dataforseo_labs/bing/keyword_suggestions/live'};
+const SE_IDEAS={google:'dataforseo_labs/google/keyword_ideas/live',bing:'dataforseo_labs/bing/keyword_ideas/live'};
+
 async function runKw(){
   const kws=document.getElementById('kw-input').value.split('\n').map(l=>l.trim()).filter(Boolean).slice(0,20);
   if(!kws.length){showErr('kw-res','请输入关键词');return;}
   const loc=parseInt(document.getElementById('kw-loc').value);
+  const se=document.getElementById('kw-se').value||'google';
   document.getElementById('kw-btn').disabled=true;
-  document.getElementById('kw-res').innerHTML='<div class="loading"><span class="spin"></span>查询中...</div>';
+  document.getElementById('kw-res').innerHTML='<div class="loading"><span class="spin"></span>查询中 ('+se.toUpperCase()+')...</div>';
   setProg('kw',10,'获取关键词数据...');
   try{
     const sugPayload=kws.map(k=>({keyword:k,location_code:loc,language_code:'en',include_seed_keyword:true,limit:20}));
-    const sugData=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/keyword_suggestions/live',sugPayload);
+    const sugData=await apiFetch('POST','/api/dataforseo/'+(SE_SUG[se]||SE_SUG.google),sugPayload);
     setProg('kw',55,'获取问题词...');
     const qPayload=kws.map(k=>({keywords:[k],location_code:loc,language_code:'en',limit:15,filters:['keyword','like','%how%','or','keyword','like','%what%','or','keyword','like','%why%','or','keyword','like','%which%']}));
     let questData={tasks:[]};
-    try{questData=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/keyword_ideas/live',qPayload);}catch(e){}
+    try{questData=await apiFetch('POST','/api/dataforseo/'+(SE_IDEAS[se]||SE_IDEAS.google),qPayload);}catch(e){}
     setProg('kw',85,'整理数据...');
     if(sugData.status_code!==20000) throw new Error(sugData.status_message||'API错误');
-
     const main=[],rel=[],q=[];
     const inputSet=new Set(kws.map(k=>k.toLowerCase())),seen=new Set(),seenQ=new Set(),parentMap={};
     (sugData.tasks||[]).forEach((t,ti)=>{
@@ -633,7 +641,7 @@ async function runKw(){
     main.sort((a,b)=>{const ai=inputSet.has((a.kw||'').toLowerCase())?1:0,bi=inputSet.has((b.kw||'').toLowerCase())?1:0;return bi-ai||(b.sv||0)-(a.sv||0);});
     rel.sort((a,b)=>(b.sv||0)-(a.sv||0));q.sort((a,b)=>(b.sv||0)-(a.sv||0));
     S.kwResults={main,rel,q};S.kwParentMap=parentMap;S.kwInputSet=inputSet;S.sessionKws+=main.length;updateDash();
-    setProg('kw',100,'完成');renderKwResults(main,rel,q,parentMap,inputSet);
+    setProg('kw',100,'完成');renderKwResults(main,rel,q,parentMap,inputSet,se,loc);
   }catch(e){document.getElementById('kw-res').innerHTML='';showErr('kw-res',e.message);}
   finally{document.getElementById('kw-btn').disabled=false;hideProg('kw');}
 }
@@ -641,20 +649,57 @@ async function runKw(){
 function kwRow(r,showPT,parentMap,inputSet){
   const isSeed=inputSet&&inputSet.has((r.kw||'').toLowerCase());
   const pt=showPT&&parentMap&&parentMap[(r.kw||'').toLowerCase()]?`<span class="pt-badge">${parentMap[(r.kw||'').toLowerCase()]}</span>`:'—';
-  const kwCell=`<span class="link" onclick="openKwDetail('${(r.kw||'').replace(/'/g,"\\'").replace(/"/g,'&quot;')}')">${isSeed?`<strong>${r.kw}</strong>`:r.kw||'—'}</span>`;
+  const kwCell=`<span class="link" onclick="openKwDetail('${(r.kw||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${isSeed?`<strong>${r.kw}</strong>`:r.kw||'—'}</span>`;
   return`<tr><td class="td-kw" title="${r.kw||''}">${kwCell}</td><td>${fmt(r.sv)}</td><td>${kdBdg(r.kd)}</td><td>${r.cpc?'$'+Number(r.cpc).toFixed(2):'—'}</td><td>${spark(r.trend)}</td>${showPT?`<td>${pt}</td>`:''}</tr>`;
 }
 
-function kwTable(rows,showPT,parentMap,inputSet){
-  if(!rows.length)return'<div class="empty-state"><p>暂无数据</p></div>';
-  const ptCol=showPT?'<th style="min-width:150px">Parent Topic</th>':'';
-  return`<div class="table-wrap"><table><thead><tr><th style="min-width:210px">关键词</th><th>月均搜索量</th><th>难度</th><th>CPC</th><th style="min-width:110px">近6月趋势</th>${ptCol}</tr></thead><tbody>${rows.map(r=>kwRow(r,showPT,parentMap,inputSet)).join('')}</tbody></table></div>`;
+function kwTable(rows,showPT,parentMap,inputSet,pageSize,page){
+  if(!rows||!rows.length)return'<div class="empty-state"><p>暂无数据</p></div>';
+  const ps=pageSize||50,pg=page||0;
+  const total=rows.length,pages=Math.ceil(total/ps);
+  const slice=rows.slice(pg*ps,(pg+1)*ps);
+  const ptCol=showPT?'<th style="min-width:140px">Parent Topic</th>':'';
+  let h=`<div class="table-wrap"><table><thead><tr><th style="min-width:210px">关键词</th><th>月均搜索量</th><th>难度</th><th>CPC</th><th style="min-width:110px">近6月趋势</th>${ptCol}</tr></thead><tbody>${slice.map(r=>kwRow(r,showPT,parentMap,inputSet)).join('')}</tbody></table></div>`;
+  if(pages>1){
+    const tblId='kwtbl_'+Math.random().toString(36).slice(2,7);
+    h+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:0 4px">
+      <span style="font-size:12px;color:var(--text3)">第 ${pg+1} / ${pages} 页，共 ${total} 条</span>
+      <div style="display:flex;gap:6px">
+        ${pg>0?`<button class="btn btn-ghost btn-sm" onclick="reRenderKwTable(this,${pg-1})">← 上一页</button>`:''}
+        ${pg<pages-1?`<button class="btn btn-ghost btn-sm" onclick="reRenderKwTable(this,${pg+1})">下一页 →</button>`:''}
+      </div>
+    </div>`;
+  }
+  return h;
 }
 
-function renderKwResults(main,rel,q,parentMap,inputSet){
-  const totalSv=main.reduce((s,r)=>s+(r.sv||0),0);
+// Store rows for pagination re-render
+const _kwTableData={};
+function kwTablePaged(rows,showPT,parentMap,inputSet,containerId){
+  _kwTableData[containerId]={rows,showPT,parentMap,inputSet};
+  return kwTable(rows,showPT,parentMap,inputSet,50,0);
+}
+function reRenderKwTable(btn,newPage){
+  const container=btn.closest('[data-kwtbl]')||btn.closest('.stab-content');
+  if(!container)return;
+  const id=container.id;
+  const d=_kwTableData[id];
+  if(!d)return;
+  container.innerHTML=kwTable(d.rows,d.showPT,d.parentMap,d.inputSet,50,newPage);
+}
+
+function renderKwResults(main,rel,q,parentMap,inputSet,se,loc){
+  const flag=LOC_FLAGS[loc]||'🌐';
+  const seLabel={google:'Google',bing:'Bing'}[se]||se;
   const vk=main.filter(r=>r.kd!=null);const avgKd=vk.length?Math.round(vk.reduce((s,r)=>s+r.kd,0)/vk.length):0;
-  let h=`<div class="grid-4" style="margin-bottom:16px">
+  _kwTableData['kwr-main']={rows:main,showPT:true,parentMap,inputSet};
+  _kwTableData['kwr-q']={rows:q,showPT:false,parentMap:null,inputSet:null};
+  _kwTableData['kwr-rel']={rows:rel,showPT:false,parentMap:null,inputSet:null};
+  let h=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <span class="bdg b-blue">${seLabel}</span>
+    <span class="bdg b-na">${flag}</span>
+  </div>
+  <div class="grid-4" style="margin-bottom:16px">
     <div class="metric-card"><div class="metric-label">主要关键词</div><div class="metric-val">${main.length}</div></div>
     <div class="metric-card"><div class="metric-label">问题词</div><div class="metric-val">${q.length}</div></div>
     <div class="metric-card"><div class="metric-label">扩展词</div><div class="metric-val">${rel.length}</div></div>
@@ -666,11 +711,11 @@ function renderKwResults(main,rel,q,parentMap,inputSet){
       <button class="stab" onclick="switchSTab('kwr-q',this,'kwr-stab')">相关问题 (${q.length})</button>
       <button class="stab" onclick="switchSTab('kwr-rel',this,'kwr-stab')">扩展相关词 (${rel.length})</button>
     </div>
-    <button class="btn btn-ghost btn-sm" onclick="exportAllKwCsv()">↓ 导出 CSV</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportAllKwCsv()">↓ 导出全部 CSV</button>
   </div>
-  <div id="kwr-main" class="kwr-stab stab-content active">${kwTable(main,true,parentMap,inputSet)}</div>
-  <div id="kwr-q" class="kwr-stab stab-content">${kwTable(q,false,null,null)}</div>
-  <div id="kwr-rel" class="kwr-stab stab-content">${kwTable(rel,false,null,null)}</div>`;
+  <div id="kwr-main" class="kwr-stab stab-content active">${kwTable(main,true,parentMap,inputSet,50,0)}</div>
+  <div id="kwr-q" class="kwr-stab stab-content">${kwTable(q,false,null,null,50,0)}</div>
+  <div id="kwr-rel" class="kwr-stab stab-content">${kwTable(rel,false,null,null,50,0)}</div>`;
   document.getElementById('kw-res').innerHTML=h;
 }
 
@@ -683,9 +728,11 @@ async function openKwDetail(kw){
   nav('kw-detail',null);
   document.getElementById('kw-detail-body').innerHTML='<div class="loading"><span class="spin"></span>加载关键词详情...</div>';
   const loc=parseInt(document.getElementById('kw-loc').value)||2840;
+  const se=document.getElementById('kw-se').value||'google';
+  const flag=LOC_FLAGS[loc]||'🌐';
   try{
     const [sugData,relData]=await Promise.all([
-      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/keyword_suggestions/live',[{keyword:kw,location_code:loc,language_code:'en',include_seed_keyword:true,limit:30}]),
+      apiFetch('POST','/api/dataforseo/'+(SE_SUG[se]||SE_SUG.google),[{keyword:kw,location_code:loc,language_code:'en',include_seed_keyword:true,limit:30}]),
       apiFetch('POST','/api/dataforseo/dataforseo_labs/google/related_keywords/live',[{keyword:kw,location_code:loc,language_code:'en',limit:20}]).catch(()=>({tasks:[]}))
     ]);
     const sugs=[],rels=[];const seenS=new Set(),seenR=new Set();
@@ -696,13 +743,12 @@ async function openKwDetail(kw){
     }));
     (relData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{(r.items||[]).forEach(item=>{const row=parseKwItem(item.keyword_data||item);if(row.kw&&!seenR.has(row.kw)){seenR.add(row.kw);rels.push(row);}});}));
     sugs.sort((a,b)=>(b.sv||0)-(a.sv||0));rels.sort((a,b)=>(b.sv||0)-(a.sv||0));
-
     const trendSvg=seedInfo.trend.length>1?svgLineChart(seedInfo.trend,seedInfo.trend.map((_,i)=>'M'+(i+1)),'#3b82f6',400,90):'';
-
     let h=`<div style="margin-bottom:24px">
       <h2 style="font-size:22px;font-weight:700;margin-bottom:12px">${kw}</h2>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
         ${kdBdg(seedInfo.kd)}<span class="bdg b-blue">搜索量 ${fmt(seedInfo.sv)}</span><span class="bdg b-na">CPC $${Number(seedInfo.cpc||0).toFixed(2)}</span>
+        <span class="bdg b-purple">{{se_label}}</span><span class="bdg b-na">${flag}</span>
       </div>
       ${trendSvg?`<div class="chart-wrap" style="max-width:420px"><div class="chart-title">月度搜索量趋势</div>${trendSvg}</div>`:''}
     </div>
@@ -711,98 +757,131 @@ async function openKwDetail(kw){
         <button class="stab active" onclick="switchSTab('kd-sug',this,'kd-stab')">建议词 (${sugs.length})</button>
         <button class="stab" onclick="switchSTab('kd-rel',this,'kd-stab')">相关搜索 (${rels.length})</button>
       </div>
+      <button class="btn btn-ghost btn-sm" onclick="dlCsv('关键词,月均搜索量,KD,CPC\\n'+[...document.querySelectorAll(\'#kd-sug td:first-child\')].map(td=>td.textContent).join('\\n'),'kw_detail.csv')">↓ 导出 CSV</button>
     </div>
-    <div id="kd-sug" class="kd-stab stab-content active">${kwTable(sugs,false,null,null)}</div>
-    <div id="kd-rel" class="kd-stab stab-content">${kwTable(rels,false,null,null)}</div>`;
+    <div id="kd-sug" class="kd-stab stab-content active">${kwTable(sugs,false,null,null,50,0)}</div>
+    <div id="kd-rel" class="kd-stab stab-content">${kwTable(rels,false,null,null,50,0)}</div>`;
+    h=h.replace('{{se_label}}',{google:'Google',bing:'Bing'}[se]||se);
     document.getElementById('kw-detail-body').innerHTML=h;
+    _kwTableData['kd-sug']={rows:sugs,showPT:false,parentMap:null,inputSet:null};
+    _kwTableData['kd-rel']={rows:rels,showPT:false,parentMap:null,inputSet:null};
   }catch(e){document.getElementById('kw-detail-body').innerHTML=`<div class="alert alert-err">⚠ ${e.message}</div>`;}
 }
 
-/* BACKLINKS */
-async function runBacklinks(){
-  const domain=document.getElementById('bl-input').value.trim().replace(/^https?:\/\//,'').replace(/\/$/,'');
-  if(!domain){showErr('bl-res','请输入域名');return;}
-  document.getElementById('bl-res').innerHTML='<div class="loading"><span class="spin"></span>加载外链数据...</div>';
-  setProg('bl',10,'发送请求...');
-  try{
-    const [bkData,rdData]=await Promise.all([
-      apiFetch('POST','/api/dataforseo/backlinks/backlinks/live',[{target:domain,limit:20,order_by:['rank,desc'],mode:'as_is',include_subdomains:true}]),
-      apiFetch('POST','/api/dataforseo/backlinks/referring_domains/live',[{target:domain,limit:20,order_by:['rank,desc'],include_subdomains:true}])
-    ]);
-    setProg('bl',80,'处理数据...');
-    const bkItems=[],rdItems=[];
-    (bkData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{bkItems.push(...(r.items||[]));}));
-    (rdData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{rdItems.push(...(r.items||[]));}));
-    let h=`<div class="stabs">
-      <button class="stab active" onclick="switchSTab('bl-bk',this,'bl-stab')">外链列表 (${bkItems.length})</button>
-      <button class="stab" onclick="switchSTab('bl-rd',this,'bl-stab')">引用域名 (${rdItems.length})</button>
-    </div>
-    <div id="bl-bk" class="bl-stab stab-content active">`;
-    if(bkItems.length){
-      h+=`<div class="table-wrap"><table><thead><tr><th style="min-width:200px">来源页面</th><th style="min-width:180px">目标页面</th><th style="min-width:130px">锚文本</th><th>DR</th><th>类型</th><th>首次发现</th></tr></thead><tbody>`;
-      bkItems.forEach(item=>{
-        const fromUrl=item.url_from||'';const df=item.dofollow?'<span class="bdg b-green">dofollow</span>':'<span class="bdg b-na">nofollow</span>';const date=item.first_seen?item.first_seen.split('T')[0]:'—';
-        h+=`<tr><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${fromUrl}"><a href="${fromUrl}" target="_blank" class="link">${fromUrl.replace(/^https?:\/\//,'').slice(0,50)}</a></td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text3)">${(item.url_to||'').replace(/^https?:\/\//,'').slice(0,40)}</td><td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.anchor||'—'}</td><td>${drBdg(item.rank)}</td><td>${df}</td><td style="font-size:12px;color:var(--text3)">${date}</td></tr>`;
-      });
-      h+='</tbody></table></div>';
-    }else h+='<div class="empty-state"><p>暂无外链数据</p></div>';
-    h+=`</div><div id="bl-rd" class="bl-stab stab-content">`;
-    if(rdItems.length){
-      h+=`<div class="table-wrap"><table><thead><tr><th>引用域名</th><th>DR</th><th>引用域名数</th><th>总外链数</th></tr></thead><tbody>`;
-      rdItems.forEach(r=>{h+=`<tr><td class="td-dm"><span class="link" onclick="document.getElementById('bl-input').value='${r.domain||''}';runBacklinks()">${r.domain||'—'}</span></td><td>${drBdg(r.rank)}</td><td>${fmt(r.referring_domains)}</td><td>${fmt(r.backlinks)}</td></tr>`;});
-      h+='</tbody></table></div>';
-    }else h+='<div class="empty-state"><p>暂无引用域名数据</p></div>';
-    h+='</div>';
-    document.getElementById('bl-res').innerHTML=h;
-  }catch(e){document.getElementById('bl-res').innerHTML='';showErr('bl-res',e.message);}
-  finally{hideProg('bl');}
-}
+/* MODALS WITH PAGINATION */
+const MP={rd:{domain:'',offset:0,total:0,items:[]},bk:{domain:'',offset:0,total:0,items:[]},kws:{domain:'',offset:0,total:0,items:[]}};
+const PAGE_SIZE=25;
 
-/* MODALS */
-async function showReferringDomains(domain){
-  openModal(`引用域名 — ${domain}`);
+async function showReferringDomains(domain,offset){
+  offset=offset||0;
+  if(offset===0){openModal('引用域名 — '+domain);MP.rd={domain,offset:0,total:0,items:[]};}
+  else{document.getElementById('modal-body').innerHTML='<div class="loading"><span class="spin"></span>加载中...</div>';}
   try{
-    const rdData=await apiFetch('POST','/api/dataforseo/backlinks/referring_domains/live',[{target:domain,limit:25,order_by:['rank,desc'],include_subdomains:true}]);
-    const items=[];(rdData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>items.push(...(r.items||[]))));
-    if(!items.length){document.getElementById('modal-body').innerHTML='<div class="empty-state"><p>暂无引用域名数据</p></div>';return;}
-    const domains2=items.map(i=>i.domain).filter(Boolean).slice(0,20);
+    const rdData=await apiFetch('POST','/api/dataforseo/backlinks/referring_domains/live',[{target:domain,limit:PAGE_SIZE,offset,order_by:['rank,desc'],include_subdomains:true}]);
+    let items=[],total=0;
+    (rdData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{items.push(...(r.items||[]));total=r.total_count||items.length;}));
+    MP.rd={domain,offset,total,items};
+    const domains2=items.map(i=>i.domain).filter(Boolean);
     let ovMap={};
-    try{
-      const ovData=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',domains2.map(d=>({target:d,location_code:2840,language_code:'en'})));
-      (ovData.tasks||[]).forEach(t=>{const tgt=t.data&&t.data.target||'';(t.result||[]).forEach(r=>{const item=r.items&&r.items[0];if(item&&item.metrics)ovMap[tgt]={etv:item.metrics.organic&&item.metrics.organic.etv,kws:item.metrics.organic&&item.metrics.organic.count};});});
-    }catch(e){}
-    let h=`<div class="table-wrap"><table><thead><tr><th>引用域名</th><th>DR</th><th>引用域名数</th><th>总外链数</th><th>Organic 关键词</th><th>预估月流量</th><th>引用 IP 数</th></tr></thead><tbody>`;
+    if(domains2.length){
+      try{
+        const ovData=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',domains2.map(d=>({target:d,location_code:2840,language_code:'en'})));
+        (ovData.tasks||[]).forEach(t=>{const tgt=t.data&&t.data.target||'';(t.result||[]).forEach(r=>{const item=r.items&&r.items[0];if(item&&item.metrics)ovMap[tgt]={etv:item.metrics.organic&&item.metrics.organic.etv,kws:item.metrics.organic&&item.metrics.organic.count};});});
+      }catch(e){}
+    }
+    const pages=Math.ceil(total/PAGE_SIZE),curPage=Math.floor(offset/PAGE_SIZE);
+    let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <span style="font-size:12px;color:var(--text3)">共 ${total} 个引用域名，第 ${curPage+1}/${pages||1} 页</span>
+      <button class="btn btn-ghost btn-sm" onclick="exportModalData('rd')">↓ 导出 CSV</button>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th>引用域名</th><th>DR</th><th>引用域名数</th><th>总外链数</th><th>Organic 关键词</th><th>预估月流量</th><th>引用 IP 数</th></tr></thead><tbody>`;
     items.forEach(item=>{const ov=ovMap[item.domain]||{};h+=`<tr><td class="td-dm"><span class="link" onclick="closeModal();viewSite('${item.domain||''}')">${item.domain||'—'}</span></td><td>${drBdg(item.rank)}</td><td>${fmt(item.referring_domains)}</td><td>${fmt(item.backlinks)}</td><td>${fmt(ov.kws)}</td><td>${fmt(ov.etv)}</td><td>${fmt(item.referring_ips)}</td></tr>`;});
     h+='</tbody></table></div>';
+    if(pages>1){h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+      <span style="font-size:12px;color:var(--text3)">${offset+1}–${Math.min(offset+PAGE_SIZE,total)} / ${total}</span>
+      <div style="display:flex;gap:8px">
+        ${offset>0?`<button class="btn btn-ghost btn-sm" onclick="showReferringDomains('${domain}',${offset-PAGE_SIZE})">← 上一页</button>`:''}
+        ${offset+PAGE_SIZE<total?`<button class="btn btn-ghost btn-sm" onclick="showReferringDomains('${domain}',${offset+PAGE_SIZE})">下一页 →</button>`:''}
+      </div>
+    </div>`;}
     document.getElementById('modal-body').innerHTML=h;
   }catch(e){document.getElementById('modal-body').innerHTML=`<div class="alert alert-err">⚠ ${e.message}</div>`;}
 }
 
-async function showBacklinks(domain){
-  openModal(`外链详情 — ${domain}`);
+async function showBacklinks(domain,offset){
+  offset=offset||0;
+  if(offset===0){openModal('外链详情 — '+domain);MP.bk={domain,offset:0,total:0,items:[]};}
+  else{document.getElementById('modal-body').innerHTML='<div class="loading"><span class="spin"></span>加载中...</div>';}
   try{
-    const bkData=await apiFetch('POST','/api/dataforseo/backlinks/backlinks/live',[{target:domain,limit:25,order_by:['rank,desc'],mode:'as_is',include_subdomains:true}]);
-    const items=[];(bkData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>items.push(...(r.items||[]))));
-    if(!items.length){document.getElementById('modal-body').innerHTML='<div class="empty-state"><p>暂无外链数据</p></div>';return;}
-    let h=`<div class="table-wrap"><table><thead><tr><th style="min-width:200px">来源页面</th><th style="min-width:180px">目标页面</th><th>锚文本</th><th>DR</th><th>类型</th><th>首次发现</th></tr></thead><tbody>`;
-    items.forEach(item=>{const fromUrl=item.url_from||'';const df=item.dofollow?'<span class="bdg b-green">dofollow</span>':'<span class="bdg b-na">nofollow</span>';const date=item.first_seen?item.first_seen.split('T')[0]:'—';h+=`<tr><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${fromUrl}" target="_blank" class="link">${fromUrl.replace(/^https?:\/\//,'').slice(0,50)}</a></td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text3)">${(item.url_to||'').replace(/^https?:\/\//,'').slice(0,40)}</td><td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.anchor||'—'}</td><td>${drBdg(item.rank)}</td><td>${df}</td><td style="font-size:12px;color:var(--text3)">${date}</td></tr>`;});
+    const bkData=await apiFetch('POST','/api/dataforseo/backlinks/backlinks/live',[{target:domain,limit:PAGE_SIZE,offset,order_by:['rank,desc'],mode:'as_is',include_subdomains:true}]);
+    let items=[],total=0;
+    (bkData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{items.push(...(r.items||[]));total=r.total_count||items.length;}));
+    MP.bk={domain,offset,total,items};
+    const pages=Math.ceil(total/PAGE_SIZE),curPage=Math.floor(offset/PAGE_SIZE);
+    let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <span style="font-size:12px;color:var(--text3)">共 ${total} 条外链，第 ${curPage+1}/${pages||1} 页</span>
+      <button class="btn btn-ghost btn-sm" onclick="exportModalData('bk')">↓ 导出 CSV</button>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th style="min-width:200px">来源页面</th><th style="min-width:160px">目标页面</th><th>锚文本</th><th>DR</th><th>类型</th><th>首次发现</th></tr></thead><tbody>`;
+    items.forEach(item=>{const fromUrl=item.url_from||'';const df=item.dofollow?'<span class="bdg b-green">dofollow</span>':'<span class="bdg b-na">nofollow</span>';const date=item.first_seen?item.first_seen.split('T')[0]:'—';h+=`<tr><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${fromUrl}" target="_blank" class="link">${fromUrl.replace(/^https?:\/\//,'').slice(0,50)}</a></td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text3)">${(item.url_to||'').replace(/^https?:\/\//,'').slice(0,40)}</td><td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.anchor||'—'}</td><td>${drBdg(item.rank)}</td><td>${df}</td><td style="font-size:12px;color:var(--text3)">${date}</td></tr>`;});
     h+='</tbody></table></div>';
+    if(pages>1){h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+      <span style="font-size:12px;color:var(--text3)">${offset+1}–${Math.min(offset+PAGE_SIZE,total)} / ${total}</span>
+      <div style="display:flex;gap:8px">
+        ${offset>0?`<button class="btn btn-ghost btn-sm" onclick="showBacklinks('${domain}',${offset-PAGE_SIZE})">← 上一页</button>`:''}
+        ${offset+PAGE_SIZE<total?`<button class="btn btn-ghost btn-sm" onclick="showBacklinks('${domain}',${offset+PAGE_SIZE})">下一页 →</button>`:''}
+      </div>
+    </div>`;}
     document.getElementById('modal-body').innerHTML=h;
   }catch(e){document.getElementById('modal-body').innerHTML=`<div class="alert alert-err">⚠ ${e.message}</div>`;}
 }
 
-async function showOrganicKws(domain){
-  openModal(`Organic 关键词 — ${domain}`);
+async function showOrganicKws(domain,offset){
+  offset=offset||0;
+  if(offset===0){openModal('Organic 关键词 — '+domain);MP.kws={domain,offset:0,total:0,items:[]};}
+  else{document.getElementById('modal-body').innerHTML='<div class="loading"><span class="spin"></span>加载中...</div>';}
   try{
-    const kwData2=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{target:domain,location_code:2840,language_code:'en',limit:25,order_by:['keyword_data.keyword_info.search_volume,desc']}]);
-    const items=[];(kwData2.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>items.push(...(r.items||[]))));
-    if(!items.length){document.getElementById('modal-body').innerHTML='<div class="empty-state"><p>暂无关键词数据</p></div>';return;}
-    let h=`<div class="table-wrap"><table><thead><tr><th style="min-width:200px">关键词</th><th>月均搜索量</th><th>难度 KD</th><th>CPC</th><th>排名</th><th>排名页面</th></tr></thead><tbody>`;
-    items.forEach(item=>{const kd2=item.keyword_data||{};const ki=kd2.keyword_info||{};const kp=kd2.keyword_properties||{};const ranked=item.ranked_serp_element&&item.ranked_serp_element.serp_item;const pos=ranked&&ranked.rank_absolute||'—';const url=ranked&&ranked.relative_url||'—';h+=`<tr><td class="td-kw">${kd2.keyword||'—'}</td><td>${fmt(ki.search_volume)}</td><td>${kdBdg(kp.keyword_difficulty)}</td><td>${ki.cpc?'$'+Number(ki.cpc).toFixed(2):'—'}</td><td>${pos}</td><td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text3)">${url}</td></tr>`;});
+    const kwData2=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{target:domain,location_code:2840,language_code:'en',limit:PAGE_SIZE,offset,order_by:['keyword_data.keyword_info.search_volume,desc']}]);
+    let items=[],total=0;
+    (kwData2.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{items.push(...(r.items||[]));total=r.total_count||items.length;}));
+    MP.kws={domain,offset,total,items};
+    const pages=Math.ceil(total/PAGE_SIZE),curPage=Math.floor(offset/PAGE_SIZE);
+    let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <span style="font-size:12px;color:var(--text3)">共 ${total} 个关键词，第 ${curPage+1}/${pages||1} 页</span>
+      <button class="btn btn-ghost btn-sm" onclick="exportModalData('kws')">↓ 导出 CSV</button>
+    </div>
+    <div class="table-wrap"><table><thead><tr><th style="min-width:200px">关键词</th><th>月均搜索量</th><th>难度 KD</th><th>CPC</th><th>排名</th><th>国家</th><th style="min-width:160px">排名页面</th></tr></thead><tbody>`;
+    items.forEach(item=>{
+      const kd2=item.keyword_data||{};const ki=kd2.keyword_info||{};const kp=kd2.keyword_properties||{};
+      const ranked=item.ranked_serp_element&&item.ranked_serp_element.serp_item;const pos=ranked&&ranked.rank_absolute||'—';const url=ranked&&ranked.relative_url||'—';
+      const locCode=kd2.location_code||2840;const locFlag=LOC_FLAGS[locCode]||'🌐';
+      h+=`<tr><td class="td-kw">${kd2.keyword||'—'}</td><td>${fmt(ki.search_volume)}</td><td>${kdBdg(kp.keyword_difficulty)}</td><td>${ki.cpc?'$'+Number(ki.cpc).toFixed(2):'—'}</td><td>${pos}</td><td title="location ${locCode}">${locFlag}</td><td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text3)">${url}</td></tr>`;
+    });
     h+='</tbody></table></div>';
+    if(pages>1){h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+      <span style="font-size:12px;color:var(--text3)">${offset+1}–${Math.min(offset+PAGE_SIZE,total)} / ${total}</span>
+      <div style="display:flex;gap:8px">
+        ${offset>0?`<button class="btn btn-ghost btn-sm" onclick="showOrganicKws('${domain}',${offset-PAGE_SIZE})">← 上一页</button>`:''}
+        ${offset+PAGE_SIZE<total?`<button class="btn btn-ghost btn-sm" onclick="showOrganicKws('${domain}',${offset+PAGE_SIZE})">下一页 →</button>`:''}
+      </div>
+    </div>`;}
     document.getElementById('modal-body').innerHTML=h;
   }catch(e){document.getElementById('modal-body').innerHTML=`<div class="alert alert-err">⚠ ${e.message}</div>`;}
 }
+
+function exportModalData(type){
+  const d=MP[type];if(!d||!d.items||!d.items.length){alert('暂无数据可导出');return;}
+  let csv,name;
+  if(type==='rd'){
+    csv='域名,DR,引用域名数,总外链数\n'+d.items.map(i=>`${i.domain||''},${i.rank||''},${i.referring_domains||''},${i.backlinks||''}`).join('\n');name='referring_domains.csv';
+  }else if(type==='bk'){
+    csv='来源URL,目标URL,锚文本,DR,dofollow,首次发现\n'+d.items.map(i=>`"${i.url_from||''}","${i.url_to||''}","${i.anchor||''}",${i.rank||''},${i.dofollow||false},"${i.first_seen||''}"`).join('\n');name='backlinks.csv';
+  }else if(type==='kws'){
+    csv='关键词,月均搜索量,KD,CPC,排名\n'+d.items.map(i=>{const kd2=i.keyword_data||{};const ki=kd2.keyword_info||{};const kp=kd2.keyword_properties||{};const pos=(i.ranked_serp_element&&i.ranked_serp_element.serp_item&&i.ranked_serp_element.serp_item.rank_absolute)||'';return`"${kd2.keyword||''}",${ki.search_volume||''},${kp.keyword_difficulty||''},${ki.cpc||''},${pos}`;}).join('\n');name='organic_keywords.csv';
+  }
+  dlCsv(csv,name);
+}
+
 </script>
 </body>
 </html>
