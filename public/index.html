@@ -551,7 +551,10 @@ function renderKwsChart(items,months){
 }
 function updateCharts(months,btn){
   var items=window._histItems||[];
-  if(!items.length) return;
+  if(!items.length){alert("_histItems empty!");return;}
+  var ct=document.getElementById("chart-traffic");
+  var ck=document.getElementById("chart-kws");
+  if(!ct||!ck){alert("chart divs not found! ct="+!!ct+" ck="+!!ck);return;}
   document.querySelectorAll('#chart-range-btns .stab').forEach(function(b){b.classList.remove('active');});
   if(btn) btn.classList.add('active');
   var sl=sliceHist(items,months);
