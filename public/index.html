@@ -1264,7 +1264,7 @@ function sortTable(col,allLoaded,locCode){
 
 async function showOrganicKws(domain,offset,locCode){
   offset=offset||0;
-  if(locCode===undefined||locCode===null) locCode=2840;
+  if(locCode===undefined||locCode===null) locCode=0;
   var PAGE=50;
   if(offset===0){
     openModal('Organic 关键词 — '+domain);
@@ -1296,6 +1296,29 @@ async function showOrganicKws(domain,offset,locCode){
     } else {
       var kwResp=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{target:domain,location_code:locCode,language_code:'en',limit:PAGE,offset:offset,order_by:['keyword_data.keyword_info.search_volume,desc']}]);
       (kwResp.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){(r.items||[]).forEach(function(item){item._loc=locCode;pageItems.push(item);});total=r.total_count||pageItems.length+offset;locCounts[locCode]=total;});});
+      // If we don't have counts for other countries yet, fetch them in background
+      var hasAllCounts=allLocs.filter(function(l){return locCounts[l];}).length>3;
+      if(!hasAllCounts&&offset===0){
+        Promise.all(allLocs.filter(function(l){return l!==locCode;}).map(function(loc){
+          return apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{target:domain,location_code:loc,language_code:'en',limit:1,order_by:['keyword_data.keyword_info.search_volume,desc']}]).catch(function(){return{tasks:[]};});
+        })).then(function(responses){
+          var changed=false;
+          responses.forEach(function(data,li){
+            var loc=allLocs.filter(function(l){return l!==locCode;})[li];
+            (data.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){if(r.total_count>0){locCounts[loc]=r.total_count;changed=true;}});});
+          });
+          if(changed){
+            MP.kws.locCounts=locCounts;
+            // Update dropdown options
+            var sel=document.getElementById('kw-loc-modal');
+            if(sel){
+              var opts='<option value="0"'+(locCode===0?' selected':'')+'>\u5168\u90e8\u4e3b\u8981\u5e02\u573a\uff08\u6982\u89c8\uff09</option>';
+              allLocs.forEach(function(loc2){var cnt=locCounts[loc2];opts+='<option value="'+loc2+'"'+(locCode===loc2?' selected':'')+'>'+(LOC_NAME[loc2]||loc2)+(cnt?' ('+cnt+')':'')+'</option>';});
+              sel.innerHTML=opts;
+            }
+          }
+        }).catch(function(){});
+      }
     }
 
     var prevItems=MP.kws.allItems||[];
