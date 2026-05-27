@@ -529,14 +529,18 @@ function svgLineChart(data,labels,color,W2,H2){
 function sliceHist(items,months){
   if(!items||!items.length) return items;
   if(!months||months===0) return items;
+  // Try date-based filtering first
   var now=new Date();
   var cutoff=new Date(now.getFullYear(), now.getMonth()-months, 1);
   var filtered=items.filter(function(i){
     if(!i.date) return false;
     return new Date(i.date.slice(0,7)+'-01')>=cutoff;
   });
-  return filtered.length>1 ? filtered : items.slice(-months);
+  // If date filtering gives fewer items than array slicing would, use array slice
+  var sliced=items.slice(-months);
+  return filtered.length>=sliced.length ? filtered : sliced;
 }
+
 function renderTrafficChart(items,months){
   const sl=sliceHist(items,months);
   const dates=sl.map(i=>(i.date||'').slice(0,7));
@@ -551,17 +555,14 @@ function renderKwsChart(items,months){
 }
 function updateCharts(months,btn){
   var items=window._histItems||[];
-  if(!items.length){alert("_histItems empty!");return;}
-  var ct=document.getElementById("chart-traffic");
-  var ck=document.getElementById("chart-kws");
-  if(!ct||!ck){alert("chart divs not found! ct="+!!ct+" ck="+!!ck);return;}
+  if(!items.length) return;
   document.querySelectorAll('#chart-range-btns .stab').forEach(function(b){b.classList.remove('active');});
   if(btn) btn.classList.add('active');
   var sl=sliceHist(items,months);
   var dates=sl.map(function(i){return (i.date||'').slice(0,7);});
   var traffic=sl.map(function(i){return (i.metrics&&i.metrics.organic&&i.metrics.organic.etv)||0;});
   var kws=sl.map(function(i){return (i.metrics&&i.metrics.organic&&i.metrics.organic.count)||0;});
-  var span=months===0?'全部 ('+items.length+'个月)':sl.length+'个月';
+  var span=sl.length===items.length?'全部 '+items.length+'个月':sl.length+'个月 / 共'+items.length+'个月';
   var ct=document.getElementById('chart-traffic');
   var ck=document.getElementById('chart-kws');
   if(ct) ct.innerHTML='<div style="font-size:12px;color:var(--text2);margin-bottom:8px">流量趋势 <span style="font-size:10px;color:var(--text3)">('+span+')</span></div>'+svgLineChart(traffic,dates,'#3b82f6',680,165);
@@ -680,7 +681,7 @@ async function runSiteExplorer(){
       apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',[{target:domain,location_code:2840,language_code:'en'}]).catch(()=>({tasks:[]})),
       apiFetch('POST','/api/dataforseo/backlinks/referring_domains/live',[{target:domain,limit:10,order_by:['rank,desc'],include_subdomains:true}]).catch(()=>({tasks:[]})),
       apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{target:domain,location_code:2840,language_code:'en',limit:10,order_by:['keyword_data.keyword_info.search_volume,desc']}]).catch(()=>({tasks:[]})),
-      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/historical_rank_overview/live',[{target:domain,location_code:2840,language_code:'en'}]).catch(()=>({tasks:[]})),
+      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/historical_rank_overview/live',[{target:domain,location_code:2840,language_code:'en',date_from:'2020-01-01'}]).catch(()=>({tasks:[]})),
       // DNS: A record for IP, NS for nameservers, MX for mail, TXT for verification
       Promise.all([
         fetch('https://dns.google/resolve?name='+domain+'&type=A'),
