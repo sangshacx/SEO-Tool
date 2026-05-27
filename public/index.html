@@ -493,57 +493,49 @@ document.getElementById('api-modal').addEventListener('click',e=>{if(e.target===
 
 /* SVG Line Chart */
 function svgLineChart(data,labels,color,W2,H2){
-  if(!data||data.length<2)return'<div style="text-align:center;padding:20px;font-size:12px;color:var(--text3)">数据不足</div>';
-  const pad={t:14,r:20,b:36,l:58};
-  const W=W2-pad.l-pad.r,H=H2-pad.t-pad.b;
-  const maxV=Math.max(...data)||1,minV=0;
-  const pts=data.map((v,i)=>{
-    const x=pad.l+(i/(data.length-1))*W;
-    const y=pad.t+H-((v-minV)/(maxV-minV))*H;
-    return[x,y];
-  });
-  const poly=pts.map(([x,y])=>x+','+y).join(' ');
-  const fillPts=pad.l+','+(pad.t+H)+' '+poly+' '+(pad.l+W)+','+(pad.t+H);
-  // Y axis: 5 ticks
-  const yTicks=5;
-  let yAxis='';
-  for(let i=0;i<=yTicks;i++){
-    const v=Math.round((maxV/yTicks)*i);
-    const y=pad.t+H-((v/maxV)*H);
-    const lbl=v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'K':String(v);
-    yAxis+=`<line x1="${pad.l}" y1="${y}" x2="${pad.l+W}" y2="${y}" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>`;
-    yAxis+=`<text x="${pad.l-6}" y="${y+4}" text-anchor="end" font-size="10" fill="#4e5d78" font-family="sans-serif">${lbl}</text>`;
+  if(!data||data.length<2) return '<div style="text-align:center;padding:20px;font-size:12px;color:#4e5d78">数据不足</div>';
+  var pad={t:16,r:20,b:42,l:58};
+  var W=W2-pad.l-pad.r, H=H2-pad.t-pad.b;
+  var maxV=0; for(var i=0;i<data.length;i++) if(data[i]>maxV) maxV=data[i]; if(!maxV) maxV=1;
+  var pts=data.map(function(v,i){ return [pad.l+(i/(data.length-1||1))*W, pad.t+H-(v/maxV)*H]; });
+  var polyStr=pts.map(function(p){return p[0].toFixed(1)+','+p[1].toFixed(1);}).join(' ');
+  var fillStr=pad.l+','+(pad.t+H)+' '+polyStr+' '+(pad.l+W)+','+(pad.t+H);
+  var yLines=''; var yTicks=5;
+  for(var t=0;t<=yTicks;t++){
+    var v=maxV/yTicks*t; var y=pad.t+H-(v/maxV)*H;
+    var lbl=v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?(v/1e3).toFixed(0)+'K':Math.round(v).toString();
+    yLines+='<line x1="'+pad.l+'" y1="'+y.toFixed(1)+'" x2="'+(pad.l+W)+'" y2="'+y.toFixed(1)+'" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>';
+    yLines+='<text x="'+(pad.l-8)+'" y="'+(y+4).toFixed(1)+'" text-anchor="end" font-size="11" fill="#6b7280" font-family="sans-serif">'+lbl+'</text>';
   }
-  // X axis: up to 8 labels evenly spaced
-  let xAxis='';
-  const maxLabels=8;
-  const step=Math.max(1,Math.floor(labels.length/maxLabels));
-  for(let i=0;i<labels.length;i+=step){
-    const x=pad.l+(i/(data.length-1))*W;
-    xAxis+=`<text x="${x}" y="${pad.t+H+20}" text-anchor="middle" font-size="10" fill="#4e5d78" font-family="sans-serif">${labels[i]||''}</text>`;
+  var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var xLabels=''; var xStep=Math.max(1,Math.floor((data.length-1)/6));
+  for(var j=0;j<data.length;j+=xStep){
+    var xp=pad.l+(j/(data.length-1||1))*W; var lb=labels[j]||'';
+    if(/^\d{4}-\d{2}$/.test(lb)){ var yr=lb.slice(2,4); var mo=parseInt(lb.slice(5,7))-1; lb=MON[mo]+" '"+yr; }
+    xLabels+='<line x1="'+xp.toFixed(1)+'" y1="'+(pad.t+H+2)+'" x2="'+xp.toFixed(1)+'" y2="'+(pad.t+H+8)+'" stroke="#374151" stroke-width="1"/>';
+    xLabels+='<text x="'+xp.toFixed(1)+'" y="'+(pad.t+H+28)+'" text-anchor="middle" font-size="11" fill="#6b7280" font-family="sans-serif">'+lb+'</text>';
   }
-  // Hover points
-  let circles=pts.map(([x,y],i)=>`<circle cx="${x}" cy="${y}" r="3" fill="${color}" opacity="0" class="chart-pt"><title>${labels[i]||''}: ${data[i]}</title></circle>`).join('');
-  // Last point always visible
-  const [lx,ly]=pts[pts.length-1];
-  circles+=`<circle cx="${lx}" cy="${ly}" r="4" fill="${color}"/>`;
-  return`<svg viewBox="0 0 ${W2} ${H2}" style="width:100%;height:${H2}px;display:block" xmlns="http://www.w3.org/2000/svg">
-    <style>.chart-pt:hover{opacity:1;r:5}</style>
-    <defs><linearGradient id="g${color.replace('#','')}" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="${color}" stop-opacity="0.25"/>
-      <stop offset="100%" stop-color="${color}" stop-opacity="0.02"/>
-    </linearGradient></defs>
-    ${yAxis}
-    <polygon points="${fillPts}" fill="url(#g${color.replace('#','')})"/>
-    <polyline points="${poly}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round"/>
-    ${circles}${xAxis}
-  </svg>`;
+  var circles=pts.map(function(p,k){return '<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3" fill="'+color+'" opacity="0"><title>'+(labels[k]||'')+': '+fmt(data[k])+'</title></circle>';}).join('');
+  circles+='<circle cx="'+pts[pts.length-1][0].toFixed(1)+'" cy="'+pts[pts.length-1][1].toFixed(1)+'" r="4" fill="'+color+'"/>';
+  var uid='g'+(Math.random()*99999|0);
+  return '<svg viewBox="0 0 '+W2+' '+H2+'" style="width:100%;height:'+H2+'px;display:block;overflow:visible" xmlns="http://www.w3.org/2000/svg">'
+    +'<defs><linearGradient id="'+uid+'" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+color+'" stop-opacity="0.3"/><stop offset="100%" stop-color="'+color+'" stop-opacity="0.02"/></linearGradient></defs>'
+    +yLines+'<polygon points="'+fillStr+'" fill="url(#'+uid+')"/>'
+    +'<polyline points="'+polyStr+'" fill="none" stroke="'+color+'" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>'
+    +circles+xLabels+'</svg>';
 }
 
 
 function sliceHist(items,months){
-  if(!months||months===0)return items;
-  return items.slice(-months);
+  if(!items||!items.length) return items;
+  if(!months||months===0) return items;
+  var now=new Date();
+  var cutoff=new Date(now.getFullYear(), now.getMonth()-months, 1);
+  var filtered=items.filter(function(i){
+    if(!i.date) return false;
+    return new Date(i.date.slice(0,7)+'-01')>=cutoff;
+  });
+  return filtered.length>1 ? filtered : items.slice(-months);
 }
 function renderTrafficChart(items,months){
   const sl=sliceHist(items,months);
@@ -558,18 +550,19 @@ function renderKwsChart(items,months){
   return svgLineChart(vals,dates,'#22c55e',300,150);
 }
 function updateCharts(months,btn){
-  const items=window._histItems||[];
-  if(!items.length){console.log('No hist items');return;}
-  document.querySelectorAll('#chart-range-btns .stab').forEach(b=>b.classList.remove('active'));
-  if(btn)btn.classList.add('active');
-  const sl=sliceHist(items,months);
-  const dates=sl.map(i=>(i.date||'').slice(0,7));
-  const traffic=sl.map(i=>(i.metrics&&i.metrics.organic&&i.metrics.organic.etv)||0);
-  const kws=sl.map(i=>(i.metrics&&i.metrics.organic&&i.metrics.organic.count)||0);
-  const ct=document.getElementById('chart-traffic');
-  const ck=document.getElementById('chart-kws');
-  if(ct)ct.innerHTML='<div class="chart-title" style="font-size:12px;color:var(--text2);margin-bottom:8px">📈 月度流量趋势</div>'+svgLineChart(traffic,dates,'#3b82f6',680,145);
-  if(ck)ck.innerHTML='<div class="chart-title" style="font-size:12px;color:var(--text2);margin-bottom:8px">🔑 关键词数量趋势</div>'+svgLineChart(kws,dates,'#22c55e',300,145);
+  var items=window._histItems||[];
+  if(!items.length) return;
+  document.querySelectorAll('#chart-range-btns .stab').forEach(function(b){b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  var sl=sliceHist(items,months);
+  var dates=sl.map(function(i){return (i.date||'').slice(0,7);});
+  var traffic=sl.map(function(i){return (i.metrics&&i.metrics.organic&&i.metrics.organic.etv)||0;});
+  var kws=sl.map(function(i){return (i.metrics&&i.metrics.organic&&i.metrics.organic.count)||0;});
+  var span=months===0?'全部 ('+items.length+'个月)':sl.length+'个月';
+  var ct=document.getElementById('chart-traffic');
+  var ck=document.getElementById('chart-kws');
+  if(ct) ct.innerHTML='<div style="font-size:12px;color:var(--text2);margin-bottom:8px">流量趋势 <span style="font-size:10px;color:var(--text3)">('+span+')</span></div>'+svgLineChart(traffic,dates,'#3b82f6',680,165);
+  if(ck) ck.innerHTML='<div style="font-size:12px;color:var(--text2);margin-bottom:8px">关键词数量 <span style="font-size:10px;color:var(--text3)">('+span+')</span></div>'+svgLineChart(kws,dates,'#22c55e',300,165);
 }
 
 
