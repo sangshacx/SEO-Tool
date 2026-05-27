@@ -523,53 +523,70 @@ async function runSiteExplorer(){
   document.getElementById('se-res').innerHTML='<div class="loading"><span class="spin"></span>正在分析 '+domain+'...</div>';
   setProg('se',5,'初始化...');
   try{
-    // Parallel: backlinks, organic overview, referring domains, ranked keywords
-    setProg('se',15,'获取外链数据...');
-    const [bkData,ovData]=await Promise.all([
-      apiFetch('POST','/api/dataforseo/backlinks/summary/live',[{target:domain,include_subdomains:true}]),
-      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',[{target:domain,location_code:2840,language_code:'en'}])
-    ]);
-
-    setProg('se',40,'获取关键词和外链详情...');
-    const [rdData,kwData2,histData]=await Promise.all([
-      apiFetch('POST','/api/dataforseo/backlinks/referring_domains/live',[{target:domain,limit:10,order_by:['rank,desc'],include_subdomains:true}]),
-      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{target:domain,location_code:2840,language_code:'en',limit:10,order_by:['keyword_data.keyword_info.search_volume,desc']}]),
-      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/historical_rank_overview/live',[{target:domain,location_code:2840,language_code:'en'}]).catch(()=>({tasks:[]}))
-    ]);
-
-    setProg('se',75,'获取 DNS 信息...');
-    let dnsData=null;
-    try{
-      const [aR,nsR,mxR,txtR]=await Promise.all([
+    setProg('se',15,'获取外链和流量数据...');
+    // Run all in parallel, each with individual catch so one failure doesn't block others
+    const [bkData,ovData,rdData,kwData2,histData,dnsData]=await Promise.all([
+      apiFetch('POST','/api/dataforseo/backlinks/summary/live',[{target:domain,include_subdomains:true}]).catch(e=>({_err:e.message,tasks:[]})),
+      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',[{target:domain,location_code:2840,language_code:'en'}]).catch(()=>({tasks:[]})),
+      apiFetch('POST','/api/dataforseo/backlinks/referring_domains/live',[{target:domain,limit:10,order_by:['rank,desc'],include_subdomains:true}]).catch(()=>({tasks:[]})),
+      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{target:domain,location_code:2840,language_code:'en',limit:10,order_by:['keyword_data.keyword_info.search_volume,desc']}]).catch(()=>({tasks:[]})),
+      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/historical_rank_overview/live',[{target:domain,location_code:2840,language_code:'en'}]).catch(()=>({tasks:[]})),
+      // DNS: A record for IP, NS for nameservers, MX for mail, TXT for verification
+      Promise.all([
         fetch('https://dns.google/resolve?name='+domain+'&type=A'),
         fetch('https://dns.google/resolve?name='+domain+'&type=NS'),
         fetch('https://dns.google/resolve?name='+domain+'&type=MX'),
         fetch('https://dns.google/resolve?name='+domain+'&type=TXT')
-      ]);
-      const [a,ns,mx,txt]=await Promise.all([aR.json(),nsR.json(),mxR.json(),txtR.json()]);
-      dnsData={a,ns,mx,txt};
-    }catch(e){}
+      ]).then(rs=>Promise.all(rs.map(r=>r.json()))).then(([a,ns,mx,txt])=>({a,ns,mx,txt})).catch(()=>null)
+    ]);
 
-    // FIX: no strict matching, just grab first result
-    let bk={rank:null,referring_domains:null,backlinks:null,referring_ips:null},ov={etv:null,kws:null};
-    (bkData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{bk=r;}));
-    (ovData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{const item=r.items&&r.items[0];if(item&&item.metrics){ov={etv:item.metrics.organic&&item.metrics.organic.etv,kws:item.metrics.organic&&item.metrics.organic.count};}}));
+    setProg('se',80,'解析数据...');
 
-    const topRd=[];(rdData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{topRd.push(...(r.items||[]).slice(0,10));}));
-    const topKws=[];(kwData2.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{topKws.push(...(r.items||[]).slice(0,10));}));
+    // Parse backlinks - try multiple field paths DataForSEO may use
+    let bk={rank:null,referring_domains:null,backlinks:null,referring_main_domains:null};
+    (bkData.tasks||[]).forEach(t=>{
+      (t.result||[]).forEach(r=>{
+        // DataForSEO backlinks/summary fields
+        if(r.rank!=null) bk.rank=r.rank;
+        if(r.referring_domains!=null) bk.referring_domains=r.referring_domains;
+        if(r.referring_main_domains!=null) bk.referring_domains=r.referring_main_domains; // alt field name
+        if(r.backlinks!=null) bk.backlinks=r.backlinks;
+        if(r.referring_ips!=null) bk.referring_ips=r.referring_ips;
+      });
+    });
 
-    // Historical data for charts
+    // Parse organic overview
+    let ov={etv:null,kws:null};
+    (ovData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{
+      const item=r.items&&r.items[0];
+      if(item&&item.metrics){
+        ov.etv=item.metrics.organic&&item.metrics.organic.etv;
+        ov.kws=item.metrics.organic&&item.metrics.organic.count;
+      }
+    }));
+
+    // Get A record IP from DNS
+    const aRecords=(dnsData&&dnsData.a&&dnsData.a.Answer||[]).filter(r=>r.type===1).map(r=>r.data);
+
+    const topRd=[];
+    (rdData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>topRd.push(...(r.items||[]).slice(0,10))));
+
+    const topKws=[];
+    (kwData2.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>topKws.push(...(r.items||[]).slice(0,10))));
+
     let histItems=[];
-    (histData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{histItems=[...(r.items||[])].sort((a,b)=>a.date>b.date?1:-1);}));
+    (histData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{
+      histItems=[...(r.items||[])].sort((a,b)=>a.date>b.date?1:-1);
+    }));
 
     S.sessionDomains++;updateDash();
     setProg('se',100,'完成');
-    renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData);
+    renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords);
   }catch(e){document.getElementById('se-res').innerHTML='';showErr('se-res',e.message);}
   finally{hideProg('se');}
 }
 
-function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData){
+function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords){
   const hasBacklinkData=bk&&(bk.rank!=null||bk.referring_domains!=null||bk.backlinks!=null);
   const hasOvData=ov&&(ov.etv!=null||ov.kws!=null);
   // Metrics row
@@ -590,7 +607,7 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData){
     <div class="metric-card"><div class="metric-label">域名权重 DR</div><div class="metric-val">${bk.rank!=null?Math.round(bk.rank):'—'}</div><div class="metric-sub">DataForSEO 评分 0–100</div></div>
     <div class="metric-card"><div class="metric-label">引用域名数</div><div class="metric-val"><span class="link" onclick="showReferringDomains('${domain}')">${fmt(bk.referring_domains)}</span></div><div class="metric-sub">点击查看详情</div></div>
     <div class="metric-card"><div class="metric-label">总外链数</div><div class="metric-val"><span class="link" onclick="showBacklinks('${domain}')">${fmt(bk.backlinks)}</span></div><div class="metric-sub">点击查看详情</div></div>
-    <div class="metric-card"><div class="metric-label">引用 IP 数</div><div class="metric-val">${fmt(bk.referring_ips)}</div><div class="metric-sub">独立 IP</div></div>
+    <div class="metric-card"><div class="metric-label">A 记录 IP</div><div class="metric-val" style="font-size:13px;word-break:break-all">${aRecords&&aRecords.length?aRecords[0]:'—'}</div><div class="metric-sub">${aRecords&&aRecords.length>1?aRecords.slice(1).join(', '):'域名所在服务器IP'}</div></div>
   </div>
   <div class="grid-2">
     <div class="metric-card"><div class="metric-label">Organic 关键词</div><div class="metric-val"><span class="link" onclick="showOrganicKws('${domain}')">${fmt(ov.kws)}</span></div><div class="metric-sub">点击查看</div></div>
