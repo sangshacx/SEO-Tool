@@ -626,6 +626,12 @@ function viewSite(domain){document.getElementById('se-input').value=domain;nav('
 async function runSiteExplorer(){
   const domain=document.getElementById('se-input').value.trim().replace(/^https?:\/\//,'').replace(/\/$/,'');
   if(!domain){showErr('se-res','请输入域名');return;}
+  if(!S.login||!S.pass){
+    document.getElementById('se-res').innerHTML='';
+    showErr('se-res','请先点击右上角「API 设置」填写登录信息');
+    openApiModal();
+    return;
+  }
   document.getElementById('se-res').innerHTML='<div class="loading"><span class="spin"></span>正在分析 '+domain+'...</div>';
   setProg('se',5,'初始化...');
   try{
@@ -701,7 +707,9 @@ async function runSiteExplorer(){
     S.sessionDomains++;updateDash();
     setProg('se',100,'完成');
     // Save to cache
-    cacheSet(cacheKey('site', domain), {bk,ov,topRd,topKws,histItems,dnsData,aRecords});updateCacheStat();
+    // Only cache if we got at least some real data
+    const hasSomeData = (bk.rank!=null||bk.referring_domains!=null||bk.backlinks!=null) || (ov.etv!=null||ov.kws!=null);
+    if(hasSomeData) { cacheSet(cacheKey('site', domain), {bk,ov,topRd,topKws,histItems,dnsData,aRecords});updateCacheStat(); }
     renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords,null);
   }catch(e){document.getElementById('se-res').innerHTML='';showErr('se-res',e.message);}
   finally{hideProg('se');}
@@ -714,15 +722,12 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords
   // Metrics row
   let noDataWarn='';
   if(!hasBacklinkData&&!hasOvData){noDataWarn=`<div style="background:var(--abg);border:1px solid #92400e;border-radius:var(--rad);padding:20px;margin-bottom:20px">
-    <div style="font-size:14px;font-weight:600;color:var(--amber);margin-bottom:8px">⚠ 该域名在数据库中暂无记录</div>
+    <div style="font-size:14px;font-weight:600;color:var(--amber);margin-bottom:8px">⚠ 暂无数据</div>
     <div style="font-size:13px;color:var(--text2);line-height:1.6">
-      <b>${domain}</b> 在数据库中没有外链或流量数据，原因可能是：<br>
-      • 该站点是新站点，还未被收录<br>
-      • 该站点流量/外链极低，未达到收录门槛<br>
-      • 请换一个有一定规模的域名测试，例如：<br>
-      <span onclick="document.getElementById('se-input').value='great-ocean-waterproof.com';runSiteExplorer()" style="color:var(--blue);cursor:pointer;text-decoration:underline">great-ocean-waterproof.com</span>
-      &nbsp;或&nbsp;
-      <span onclick="document.getElementById('se-input').value='semrush.com';runSiteExplorer()" style="color:var(--blue);cursor:pointer;text-decoration:underline">semrush.com</span>
+      可能原因：① API未连接（请检查右上角API设置） ② 该域名数据库中无记录<br>
+      <span onclick="localStorage.removeItem(cacheKey('site','${domain}'));runSiteExplorer()" style="color:var(--blue);cursor:pointer;text-decoration:underline">🔄 清除缓存重新查询</span>
+      &nbsp;·&nbsp;
+      <span onclick="openApiModal()" style="color:var(--blue);cursor:pointer;text-decoration:underline">⚙ 检查API设置</span>
     </div>
   </div>`;}
   let h=noDataWarn+`<div style="display:flex;align-items:center;margin-bottom:16px"><span style="font-size:13px;color:var(--text2)">${domain}</span>${cacheBadge}<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="invalidateSiteCache('${domain}')">🔄 重新查询</button></div><div class="grid-4">
@@ -927,7 +932,8 @@ async function runKw(){
     rel.sort((a,b)=>(b.sv||0)-(a.sv||0));q.sort((a,b)=>(b.sv||0)-(a.sv||0));
     S.kwResults={main,rel,q};S.kwParentMap=parentMap;S.kwInputSet=inputSet;S.sessionKws+=main.length;updateDash();
     // Save to cache (inputSet converted to Array for JSON serialization)
-    cacheSet(kwCacheKey, {main,rel,q,parentMap,inputSet:[...inputSet]});_lastKwCacheKey=kwCacheKey;updateCacheStat();
+    // Only cache if we got real keyword data
+    if(main.length>0||rel.length>0) { cacheSet(kwCacheKey, {main,rel,q,parentMap,inputSet:[...inputSet]});_lastKwCacheKey=kwCacheKey;updateCacheStat(); }
     setProg('kw',100,'完成');renderKwResults(main,rel,q,parentMap,inputSet,se,loc,null);
   }catch(e){document.getElementById('kw-res').innerHTML='';showErr('kw-res',e.message);}
   finally{document.getElementById('kw-btn').disabled=false;hideProg('kw');}
