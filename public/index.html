@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -77,7 +78,7 @@ th{text-align:left;padding:10px 14px;background:var(--bg3);color:var(--text2);fo
 td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--text)}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:rgba(255,255,255,.02)}
-.kw{font-weight:500;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kw{font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dm{font-weight:500;color:var(--blue);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .bdg{display:inline-flex;align-items:center;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
 .b-easy{background:var(--green-bg);color:var(--green);border:1px solid var(--green2)}
@@ -89,7 +90,6 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .sb.up{background:var(--green)}.sb.dn{background:var(--red)}
 .alert{padding:12px 16px;border-radius:var(--rad-sm);font-size:13px;margin-top:1rem;display:flex;align-items:flex-start;gap:8px;line-height:1.5}
 .alert-err{background:var(--red-bg);color:var(--red);border:1px solid #7f1d1d}
-.alert-ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green2)}
 .loading{text-align:center;padding:2.5rem;color:var(--text2);font-size:14px}
 .spin{display:inline-block;width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;vertical-align:-3px;margin-right:7px}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -125,7 +125,7 @@ footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border);tex
     </div>
     <button class="btn btn-ghost" id="test-btn" onclick="testConn()">测试连接</button>
   </div>
-  <p class="note">还没有账号？<a href="https://dataforseo.com" target="_blank">前往 DataForSEO 注册</a>，注册赠 $1 测试额度。密码保存在本地，不上传任何第三方。</p>
+  <p class="note">还没有账号？<a href="https://dataforseo.com" target="_blank">前往 DataForSEO 注册</a>，注册赠 $1 测试额度。</p>
 </div>
 
 <div class="tabs">
@@ -139,12 +139,11 @@ footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border);tex
   </button>
 </div>
 
-<!-- Keyword Section -->
 <div id="sec-kw" class="sec active">
   <div class="qbox">
     <h3>关键词批量分析</h3>
-    <p>每行输入一个关键词，最多 20 个。查询月均搜索量、竞争难度、CPC 和近期趋势。</p>
-    <textarea id="kw-input" placeholder="solar panel&#10;led strip lights&#10;custom packaging&#10;outdoor furniture&#10;stainless steel pipe" oninput="updateKwCnt()"></textarea>
+    <p>每行输入一个关键词，最多 20 个。查询月均搜索量、关键词难度 KD、CPC 和相关词。</p>
+    <textarea id="kw-input" placeholder="gearbox&#10;industrial gearbox&#10;gearbox manufacturer&#10;waterproof connector" oninput="updateKwCnt()"></textarea>
     <div class="qfoot">
       <div class="controls">
         <select id="kw-loc" style="width:155px">
@@ -173,11 +172,10 @@ footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border);tex
   <div id="kw-res"></div>
 </div>
 
-<!-- Domain Section -->
 <div id="sec-dm" class="sec">
   <div class="qbox">
     <h3>域名批量分析（Guest Post 筛选）</h3>
-    <p>每行输入一个域名，最多 20 个，不需要加 https://。分析域名权重、外链数、Organic 关键词数、预估流量，帮助快速判断 Guest Post 价值。</p>
+    <p>每行输入一个域名，最多 20 个，不需要加 https://。</p>
     <textarea id="dm-input" placeholder="example.com&#10;techblog.io&#10;industry-news.net" oninput="updateDmCnt()"></textarea>
     <div class="qfoot">
       <span class="cnt" id="dm-cnt">0 个域名</span>
@@ -203,8 +201,7 @@ function hasAuth(){return getLogin()&&getPass()}
 
 function onCredInput(){
   const b=document.getElementById('conn-badge');
-  if(hasAuth()){b.className='badge badge-off';b.textContent='● 未验证';}
-  else{b.className='badge badge-off';b.textContent='● 未连接';}
+  b.className='badge badge-off';b.textContent='● 未验证';
 }
 
 async function testConn(){
@@ -225,11 +222,11 @@ async function testConn(){
   finally{btn.disabled=false;btn.textContent='测试连接';}
 }
 
-async function apiFetch(method, path, body){
+async function apiFetch(method,path,body){
   const opts={method,headers:{'Content-Type':'application/json','login':getLogin(),'password':getPass()}};
   if(body) opts.body=JSON.stringify(body);
   const r=await fetch(path,opts);
-  if(!r.ok){const t=await r.text();throw new Error(`HTTP ${r.status}: ${t.slice(0,200)}`);}
+  if(!r.ok){const t=await r.text();throw new Error(`HTTP ${r.status}: ${t.slice(0,300)}`);}
   return r.json();
 }
 
@@ -266,7 +263,7 @@ function drBadge(v){
 function sparkline(arr){
   if(!arr||!arr.length)return'—';
   const max=Math.max(...arr)||1;
-  return'<div class="spark">'+arr.map((v,i)=>{const h=Math.max(3,Math.round((v/max)*18));const c=i>0&&v>arr[i-1]?'up':i>0&&v<arr[i-1]?'dn':'';return`<div class="sb ${c}" style="height:${h}px" title="${fmt(v)}"></div>`}).join('')+'</div>';
+  return'<div class="spark">'+arr.map((v,i)=>{const h=Math.max(3,Math.round((v/max)*18));const c=i>0&&v>arr[i-1]?'up':i>0&&v<arr[i-1]?'dn':'';return`<div class="sb ${c}" style="height:${h}px"></div>`}).join('')+'</div>';
 }
 function showErr(id,msg){document.getElementById(id).insertAdjacentHTML('beforeend',`<div class="alert alert-err"><span>⚠ ${msg}</span></div>`);}
 
@@ -278,35 +275,110 @@ async function runKw(){
   document.getElementById('kw-btn').disabled=true;
   document.getElementById('kw-res').innerHTML='<div class="loading"><span class="spin"></span>正在查询 '+kws.length+' 个关键词...</div>';
   setProg('kw',10,'发送请求...');
+
   try{
-    const payload=kws.map(k=>({keyword:k,location_code:loc,language_code:'en'}));
-    const data=await apiFetch('POST','/api/dataforseo/keywords_data/google_ads/search_volume/live',payload);
-    setProg('kw',70,'处理数据...');
-    if(data.status_code!==20000)throw new Error(data.status_message||'API 错误');
-    const rows=[];
-    (data.tasks||[]).forEach(t=>(t.result||[]).forEach(item=>{
-      rows.push({kw:item.keyword,sv:item.search_volume,comp:item.competition_index,cpc:item.cpc,trend:(item.monthly_searches||[]).slice(-6).map(m=>m.search_volume)});
+    // 使用 keyword_suggestions 接口，每个关键词一个task，include_seed_keyword确保返回本词数据
+    const payload=kws.map(k=>({
+      keyword: k,
+      location_code: loc,
+      language_code: 'en',
+      include_seed_keyword: true,
+      limit: 5
     }));
-    kwData=rows;setProg('kw',100,'完成');renderKw(rows);
-  }catch(e){document.getElementById('kw-res').innerHTML='';showErr('kw-res',e.message);}
-  finally{document.getElementById('kw-btn').disabled=false;hideProg('kw');}
+    const data=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/keyword_suggestions/live',payload);
+    setProg('kw',70,'处理数据...');
+
+    if(data.status_code!==20000) throw new Error(data.status_message||'API 错误 code:'+data.status_code);
+
+    const rows=[];
+    const seen=new Set();
+    // 先把输入关键词本身的数据提取出来（seed keyword data）
+    (data.tasks||[]).forEach(t=>{
+      (t.result||[]).forEach(r=>{
+        // seed keyword 自身数据
+        if(r.seed_keyword_data){
+          const sd=r.seed_keyword_data;
+          const key=(sd.keyword||'').toLowerCase();
+          if(!seen.has(key)){
+            seen.add(key);
+            rows.push({
+              kw:sd.keyword,
+              sv:sd.keyword_info&&sd.keyword_info.search_volume,
+              kd:sd.keyword_properties&&sd.keyword_properties.keyword_difficulty,
+              cpc:sd.keyword_info&&sd.keyword_info.cpc,
+              trend:sd.keyword_info&&sd.keyword_info.monthly_searches
+                ?sd.keyword_info.monthly_searches.slice(-6).map(m=>m.search_volume):[]
+            });
+          }
+        }
+        // 相关建议词
+        (r.items||[]).forEach(item=>{
+          const kd=item.keyword_data||item;
+          const key=(kd.keyword||'').toLowerCase();
+          if(!seen.has(key)){
+            seen.add(key);
+            rows.push({
+              kw:kd.keyword,
+              sv:kd.keyword_info&&kd.keyword_info.search_volume,
+              kd:kd.keyword_properties&&kd.keyword_properties.keyword_difficulty,
+              cpc:kd.keyword_info&&kd.keyword_info.cpc,
+              trend:kd.keyword_info&&kd.keyword_info.monthly_searches
+                ?kd.keyword_info.monthly_searches.slice(-6).map(m=>m.search_volume):[]
+            });
+          }
+        });
+      });
+    });
+
+    // 输入词排最前，其余按搜索量排序
+    const inputSet=new Set(kws.map(k=>k.toLowerCase()));
+    rows.sort((a,b)=>{
+      const aIn=inputSet.has((a.kw||'').toLowerCase())?1:0;
+      const bIn=inputSet.has((b.kw||'').toLowerCase())?1:0;
+      if(aIn!==bIn) return bIn-aIn;
+      return (b.sv||0)-(a.sv||0);
+    });
+
+    kwData=rows;
+    setProg('kw',100,'完成');
+    renderKw(rows);
+  }catch(e){
+    document.getElementById('kw-res').innerHTML='';
+    showErr('kw-res',e.message);
+  }finally{
+    document.getElementById('kw-btn').disabled=false;
+    hideProg('kw');
+  }
 }
 
 function renderKw(rows){
-  if(!rows.length){document.getElementById('kw-res').innerHTML='<div class="loading">未返回数据</div>';return;}
+  if(!rows.length){document.getElementById('kw-res').innerHTML='<div class="loading">未返回数据，请检查关键词或网络连接</div>';return;}
   const totalSv=rows.reduce((s,r)=>s+(r.sv||0),0);
-  const validComp=rows.filter(r=>r.comp!=null);
-  const avgComp=validComp.length?Math.round(validComp.reduce((s,r)=>s+r.comp,0)/validComp.length):0;
+  const validKd=rows.filter(r=>r.kd!=null);
+  const avgKd=validKd.length?Math.round(validKd.reduce((s,r)=>s+r.kd,0)/validKd.length):0;
   let h=`<div class="stats-row">
-    <div class="stat-card"><div class="lbl">关键词数量</div><div class="val">${rows.length}</div><div class="sub">已查询</div></div>
+    <div class="stat-card"><div class="lbl">关键词数量</div><div class="val">${rows.length}</div><div class="sub">已返回</div></div>
     <div class="stat-card"><div class="lbl">总搜索量</div><div class="val">${fmt(totalSv)}</div><div class="sub">月均合计</div></div>
-    <div class="stat-card"><div class="lbl">平均竞争度</div><div class="val">${avgComp||'—'}</div><div class="sub">0–100</div></div>
+    <div class="stat-card"><div class="lbl">平均难度 KD</div><div class="val">${avgKd||'—'}</div><div class="sub">0–100</div></div>
   </div>
   <div class="res-hd"><h4>查询结果</h4><div style="display:flex;gap:8px;align-items:center"><span>${rows.length} 条</span><button class="btn btn-ghost btn-sm" onclick="exportCsv('kw')">↓ 导出 CSV</button></div></div>
   <div class="table-wrap"><table>
-    <thead><tr><th style="min-width:180px">关键词</th><th style="min-width:90px">月均搜索量</th><th style="min-width:100px">竞争难度</th><th style="min-width:80px">CPC ($)</th><th style="min-width:140px">近6月趋势</th></tr></thead>
-    <tbody>`;
-  rows.forEach(r=>{h+=`<tr><td class="kw" title="${r.kw}">${r.kw}</td><td>${fmt(r.sv)}</td><td>${kdBadge(r.comp)}</td><td>${r.cpc?'$'+Number(r.cpc).toFixed(2):'—'}</td><td>${sparkline(r.trend)}</td></tr>`;});
+    <thead><tr>
+      <th style="min-width:200px">关键词</th>
+      <th style="min-width:90px">月均搜索量</th>
+      <th style="min-width:100px">难度 KD</th>
+      <th style="min-width:80px">CPC ($)</th>
+      <th style="min-width:140px">近6月趋势</th>
+    </tr></thead><tbody>`;
+  rows.forEach(r=>{
+    h+=`<tr>
+      <td class="kw" title="${r.kw||''}">${r.kw||'—'}</td>
+      <td>${fmt(r.sv)}</td>
+      <td>${kdBadge(r.kd)}</td>
+      <td>${r.cpc?'$'+Number(r.cpc).toFixed(2):'—'}</td>
+      <td>${sparkline(r.trend)}</td>
+    </tr>`;
+  });
   h+='</tbody></table></div>';
   document.getElementById('kw-res').innerHTML=h;
 }
@@ -330,7 +402,15 @@ async function runDm(){
       const tgt=t.data&&t.data.target||'';
       (t.result||[]).forEach(r=>{const item=r.items&&r.items[0];if(item&&item.metrics){ovMap[tgt]={etv:item.metrics.organic&&item.metrics.organic.etv,kws:item.metrics.organic&&item.metrics.organic.count};}});
     });
-    const rows=domains.map(d=>({domain:d,dr:bkMap[d]?bkMap[d].rank:null,ref_domains:bkMap[d]?bkMap[d].ref_domains:null,backlinks:bkMap[d]?bkMap[d].backlinks:null,ref_ips:bkMap[d]?bkMap[d].ref_ips:null,traffic:ovMap[d]?ovMap[d].etv:null,organic_kws:ovMap[d]?ovMap[d].kws:null}));
+    const rows=domains.map(d=>({
+      domain:d,
+      dr:bkMap[d]?bkMap[d].rank:null,
+      ref_domains:bkMap[d]?bkMap[d].ref_domains:null,
+      backlinks:bkMap[d]?bkMap[d].backlinks:null,
+      ref_ips:bkMap[d]?bkMap[d].ref_ips:null,
+      traffic:ovMap[d]?ovMap[d].etv:null,
+      organic_kws:ovMap[d]?ovMap[d].kws:null
+    }));
     dmData=rows;setProg('dm',100,'完成');renderDm(rows);
   }catch(e){document.getElementById('dm-res').innerHTML='';showErr('dm-res',e.message);}
   finally{document.getElementById('dm-btn').disabled=false;hideProg('dm');}
@@ -340,8 +420,15 @@ function renderDm(rows){
   if(!rows.length){document.getElementById('dm-res').innerHTML='<div class="loading">未返回数据</div>';return;}
   let h=`<div class="res-hd"><h4>域名分析结果</h4><div style="display:flex;gap:8px;align-items:center"><span>${rows.length} 条</span><button class="btn btn-ghost btn-sm" onclick="exportCsv('dm')">↓ 导出 CSV</button></div></div>
   <div class="table-wrap"><table>
-    <thead><tr><th style="min-width:165px">域名</th><th style="min-width:90px">域名权重 DR</th><th style="min-width:100px">引用域名数</th><th style="min-width:90px">总外链数</th><th style="min-width:110px">Organic 关键词</th><th style="min-width:100px">预估月流量</th><th style="min-width:90px">引用 IP 数</th></tr></thead>
-    <tbody>`;
+    <thead><tr>
+      <th style="min-width:165px">域名</th>
+      <th style="min-width:90px">域名权重 DR</th>
+      <th style="min-width:100px">引用域名数</th>
+      <th style="min-width:90px">总外链数</th>
+      <th style="min-width:110px">Organic 关键词</th>
+      <th style="min-width:100px">预估月流量</th>
+      <th style="min-width:90px">引用 IP 数</th>
+    </tr></thead><tbody>`;
   rows.forEach(r=>{h+=`<tr><td class="dm" title="${r.domain}">${r.domain}</td><td>${drBadge(r.dr)}</td><td>${fmt(r.ref_domains)}</td><td>${fmt(r.backlinks)}</td><td>${fmt(r.organic_kws)}</td><td>${fmt(r.traffic)}</td><td>${fmt(r.ref_ips)}</td></tr>`;});
   h+='</tbody></table></div>';
   document.getElementById('dm-res').innerHTML=h;
@@ -350,7 +437,7 @@ function renderDm(rows){
 function exportCsv(type){
   let csv,name;
   if(type==='kw'){
-    csv='关键词,月均搜索量,竞争难度,CPC(USD)\n'+kwData.map(r=>`"${r.kw}",${r.sv||''},${r.comp||''},${r.cpc||''}`).join('\n');name='keywords.csv';
+    csv='关键词,月均搜索量,难度KD,CPC(USD)\n'+kwData.map(r=>`"${r.kw}",${r.sv||''},${r.kd||''},${r.cpc||''}`).join('\n');name='keywords.csv';
   }else{
     csv='域名,DR,引用域名数,总外链数,Organic关键词,预估月流量,引用IP数\n'+dmData.map(r=>`${r.domain},${r.dr||''},${r.ref_domains||''},${r.backlinks||''},${r.organic_kws||''},${r.traffic||''},${r.ref_ips||''}`).join('\n');name='domains.csv';
   }
