@@ -86,7 +86,7 @@ input::placeholder,textarea::placeholder{color:var(--text3)}
 select option{background:var(--bg3)}
 textarea{resize:vertical;line-height:1.7}
 .search-bar{display:flex;gap:8px;align-items:center;margin-bottom:20px}
-.search-bar input{flex:1;height:40px}
+.search-bar input{flex:1;height:40px;min-height:unset}
 .stabs{display:flex;gap:4px;margin-bottom:16px;flex-wrap:wrap}
 .stab{padding:6px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit;font-weight:500;transition:all .15s}
 .stab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
@@ -524,7 +524,18 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData){
   const hasOvData=ov&&(ov.etv!=null||ov.kws!=null);
   // Metrics row
   let noDataWarn='';
-  if(!hasBacklinkData&&!hasOvData){noDataWarn=`<div class="alert alert-info" style="margin-bottom:16px">⚠ 该域名在数据库中暂无记录，可能是新站或流量极低的站点。请尝试查询其他域名（如 ahrefs.com）验证工具是否正常。</div>`;}
+  if(!hasBacklinkData&&!hasOvData){noDataWarn=`<div style="background:var(--abg);border:1px solid #92400e;border-radius:var(--rad);padding:20px;margin-bottom:20px">
+    <div style="font-size:14px;font-weight:600;color:var(--amber);margin-bottom:8px">⚠ 该域名在数据库中暂无记录</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.6">
+      <b>${domain}</b> 在数据库中没有外链或流量数据，原因可能是：<br>
+      • 该站点是新站点，还未被收录<br>
+      • 该站点流量/外链极低，未达到收录门槛<br>
+      • 请换一个有一定规模的域名测试，例如：<br>
+      <span onclick="document.getElementById('se-input').value='great-ocean-waterproof.com';runSiteExplorer()" style="color:var(--blue);cursor:pointer;text-decoration:underline">great-ocean-waterproof.com</span>
+      &nbsp;或&nbsp;
+      <span onclick="document.getElementById('se-input').value='semrush.com';runSiteExplorer()" style="color:var(--blue);cursor:pointer;text-decoration:underline">semrush.com</span>
+    </div>
+  </div>`;}
   let h=noDataWarn+`<div class="grid-4">
     <div class="metric-card"><div class="metric-label">域名权重 DR</div><div class="metric-val">${bk.rank!=null?Math.round(bk.rank):'—'}</div><div class="metric-sub">DataForSEO 评分 0–100</div></div>
     <div class="metric-card"><div class="metric-label">引用域名数</div><div class="metric-val"><span class="link" onclick="showReferringDomains('${domain}')">${fmt(bk.referring_domains)}</span></div><div class="metric-sub">点击查看详情</div></div>
@@ -567,7 +578,7 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData){
     h+=`<div class="table-wrap"><table><thead><tr><th>引用域名</th><th>DR</th><th>引用域名数</th><th>总外链数</th></tr></thead><tbody>`;
     topRd.forEach(r=>{h+=`<tr><td class="td-dm"><span class="link" onclick="viewSite('${r.domain||''}')">${r.domain||'—'}</span></td><td>${drBdg(r.rank)}</td><td>${fmt(r.referring_domains)}</td><td>${fmt(r.backlinks)}</td></tr>`;});
     h+='</tbody></table></div>';
-  }else h='<div class="empty-state"><p>暂无引用域名数据</p></div>';
+  }else h+='<div class="empty-state"><p>暂无引用域名数据</p></div>';
   h+='</div>';
 
   // Keywords tab
