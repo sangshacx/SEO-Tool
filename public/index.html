@@ -293,17 +293,19 @@ textarea{resize:vertical;line-height:1.7}
 
     <!-- BATCH ANALYSIS PAGE -->
     <div class="page" id="page-batch">
-      <div class="card" style="margin-bottom:16px">
-        <div style="font-size:13px;font-weight:600;margin-bottom:8px">批量域名分析 <span style="font-size:11px;color:var(--text3);font-weight:400">（最多200个，每域名约 $0.003）</span></div>
+      <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rad);padding:20px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">批量域名分析
+          <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:8px">最多200个，每域名约 $0.003</span>
+        </div>
         <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">每行输入一个域名，适合筛选 Guest Post 资源。分析完成后可一键导出 CSV。</p>
-        <textarea id="batch-input" placeholder="example.com&#10;blog.io&#10;industry-site.net&#10;（每行一个，最多200个）" style="width:100%;min-height:120px;font-size:13px" oninput="updateBatchCnt()"></textarea>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;flex-wrap:wrap;gap:8px">
+        <textarea id="batch-input" placeholder="example.com&#10;blog.io&#10;industry-site.net&#10;（每行一个，最多200个）" style="width:100%;min-height:130px;font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rad-sm);color:var(--text);padding:10px;font-family:inherit;resize:vertical" oninput="updateBatchCnt()"></textarea>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px">
           <span id="batch-cnt" style="font-size:12px;color:var(--text3)">0 个域名，预计费用 $0.000</span>
           <button class="btn btn-primary" id="batch-btn" onclick="runBatch()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>开始批量分析
           </button>
         </div>
-        <div class="prog-wrap" id="batch-pw"><div class="prog-bar"><div class="prog-fill" id="batch-pf"></div></div><div class="prog-lbl" id="batch-pl"></div></div>
+        <div class="prog-wrap" id="batch-pw"><div class="prog-bar"><div class="prog-fill" id="batch-pf"></div></div><div class="prog-lbl" id="batch-pl" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
       </div>
       <div id="batch-res"></div>
     </div>
@@ -794,7 +796,7 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords
 
   // Historical charts
   window._histItems=histItems;
-  if(histItems.length>1){
+  if(true){  // always show chart section
     h+=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <span style="font-size:13px;font-weight:600">📊 历史趋势</span>
       <div style="display:flex;gap:4px;flex-wrap:wrap" id="chart-range-btns">
