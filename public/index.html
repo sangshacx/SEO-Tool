@@ -150,6 +150,8 @@ textarea{resize:vertical;line-height:1.7}
 /* Overview sections */
 .overview-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px}
 .chart-wrap svg text{user-select:none}
+th[data-col]:hover{color:var(--accent) !important;}
+.sort-arrow{font-size:10px;opacity:0.7}
 @media(max-width:900px){.overview-grid{grid-template-columns:1fr}.grid-4{grid-template-columns:repeat(2,1fr)}.dns-grid{grid-template-columns:1fr}}
 </style>
 </head>
@@ -488,7 +490,7 @@ function setProg(id,pct,lbl){const pw=document.getElementById(id+'-pw');if(pw){p
 function hideProg(id){setTimeout(()=>{const pw=document.getElementById(id+'-pw');if(pw)pw.style.display='none';},800);}
 function showErr(id,msg){const el=document.getElementById(id);if(el)el.insertAdjacentHTML('beforeend',`<div class="alert alert-err" style="margin-top:12px">⚠ ${msg}</div>`);}
 function dlCsv(csv,name){const b=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u);}
-function openModal(title){document.getElementById('modal-title').textContent=title;document.getElementById('modal-body').innerHTML='<div class="loading"><span class="spin"></span>加载中...</div>';document.getElementById('modal').classList.add('open');}
+function openModal(title){_sortState={col:null,asc:false};document.getElementById('modal-title').textContent=title;document.getElementById('modal-body').innerHTML='<div class="loading"><span class="spin"></span>加载中...</div>';document.getElementById('modal').classList.add('open');}
 function closeModal(){document.getElementById('modal').classList.remove('open');}
 document.getElementById('modal').addEventListener('click',e=>{if(e.target===document.getElementById('modal'))closeModal();});
 document.getElementById('api-modal').addEventListener('click',e=>{if(e.target===document.getElementById('api-modal'))closeApiModal();});
@@ -1202,6 +1204,64 @@ async function showBacklinks(domain,offset){
   }catch(e){document.getElementById('modal-body').innerHTML=`<div class="alert alert-err">⚠ ${e.message}</div>`;}
 }
 
+
+/* ===== SORT HELPER ===== */
+var _sortState={col:null,asc:false};
+
+function sortTable(col,allLoaded,locCode){
+  if(_sortState.col===col){ _sortState.asc=!_sortState.asc; }
+  else { _sortState.col=col; _sortState.asc=false; }
+  var sorted=allLoaded.slice().sort(function(a,b){
+    var va=0,vb=0;
+    var ka=a.keyword_data||{},kb=b.keyword_data||{};
+    var kia=ka.keyword_info||{},kib=kb.keyword_info||{};
+    var kpa=ka.keyword_properties||{},kpb=kb.keyword_properties||{};
+    var ra=a.ranked_serp_element&&a.ranked_serp_element.serp_item;
+    var rb=b.ranked_serp_element&&b.ranked_serp_element.serp_item;
+    if(col==='sv'){va=kia.search_volume||0;vb=kib.search_volume||0;}
+    else if(col==='etv'){va=(ra&&ra.etv)||0;vb=(rb&&rb.etv)||0;}
+    else if(col==='kd'){va=kpa.keyword_difficulty!=null?kpa.keyword_difficulty:999;vb=kpb.keyword_difficulty!=null?kpb.keyword_difficulty:999;}
+    else if(col==='cpc'){va=kia.cpc||0;vb=kib.cpc||0;}
+    else if(col==='pos'){va=(ra&&ra.rank_absolute)||9999;vb=(rb&&rb.rank_absolute)||9999;}
+    return _sortState.asc?(va-vb):(vb-va);
+  });
+  MP.kws.allItems=sorted;
+  // Re-render just the tbody
+  var tbody=document.querySelector('#modal-body table tbody');
+  if(!tbody) return;
+  var LOC_SHORT={2840:'US',2826:'UK',2276:'DE',2250:'FR',2036:'AU',2124:'CA',2392:'JP',2356:'IN',2076:'BR',2724:'ES',2380:'IT',2528:'NL',2616:'PL',2752:'SE',2578:'NO',2208:'DK',2710:'ZA',2484:'MX',2682:'SA',2784:'AE'};
+  tbody.innerHTML=sorted.map(function(item){
+    var kd2=item.keyword_data||{};var ki=kd2.keyword_info||{};var kp=kd2.keyword_properties||{};
+    var ranked=item.ranked_serp_element&&item.ranked_serp_element.serp_item;
+    var pos=ranked&&ranked.rank_absolute||'—';
+    var url=ranked&&ranked.relative_url||'—';
+    var etv=ranked&&ranked.etv!=null?Math.round(ranked.etv):null;
+    var locLabel=LOC_SHORT[item._loc||locCode||2840]||String(item._loc||locCode);
+    return '<tr>'
+      +'<td class="td-kw">'+(kd2.keyword||'—')+'</td>'
+      +'<td>'+fmt(ki.search_volume)+'</td>'
+      +'<td style="color:var(--green);font-weight:500">'+(etv!=null?etv:'—')+'</td>'
+      +'<td>'+kdBdg(kp.keyword_difficulty)+'</td>'
+      +'<td>'+(ki.cpc?'$'+Number(ki.cpc).toFixed(2):'—')+'</td>'
+      +'<td>'+pos+'</td>'
+      +'<td style="white-space:nowrap;font-size:11px">'+locLabel+'</td>'
+      +'<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text3)">'+url+'</td>'
+      +'</tr>';
+  }).join('');
+  // Update header arrows
+  document.querySelectorAll('#modal-body th[data-col]').forEach(function(th){
+    var arrow=th.querySelector('.sort-arrow');
+    if(!arrow) return;
+    if(th.dataset.col===col){
+      arrow.textContent=_sortState.asc?' ↑':' ↓';
+      th.style.color='var(--accent)';
+    } else {
+      arrow.textContent=' ↕';
+      th.style.color='';
+    }
+  });
+}
+
 async function showOrganicKws(domain,offset,locCode){
   offset=offset||0;
   if(locCode===undefined||locCode===null) locCode=2840;
@@ -1280,9 +1340,15 @@ async function showOrganicKws(domain,offset,locCode){
       +'<span style="font-size:12px;color:var(--text3)">已加载 <strong style="color:var(--text)">'+allLoaded.length+'</strong> / <strong style="color:var(--text)">'+total+'</strong> 条</span>'
       +'<button class="btn btn-ghost btn-sm" id="kw-exp-btn">↓ 导出已加载</button></div></div>'
       +'<div class="table-wrap"><table><thead><tr>'
-      +'<th style="min-width:180px">关键词</th><th>月均搜索量</th><th style="color:var(--green)">带来流量</th>'
-      +'<th>难度 KD</th><th>CPC</th><th>排名</th><th>市场</th><th style="min-width:140px">排名页面</th>'
-      +'</tr></thead><tbody>'+rows+'</tbody></table></div>'+extra;
+      +'<th style="min-width:180px">关键词</th>'
+      +'<th style="cursor:pointer;user-select:none" data-col="sv" onclick="sortTable(\'sv\',MP.kws.allItems,MP.kws.locCode)">月均搜索量<span class="sort-arrow"> ↕</span></th>'
+      +'<th style="color:var(--green);cursor:pointer;user-select:none" data-col="etv" onclick="sortTable(\'etv\',MP.kws.allItems,MP.kws.locCode)">带来流量<span class="sort-arrow"> ↕</span></th>'
+      +'<th style="cursor:pointer;user-select:none" data-col="kd" onclick="sortTable(\'kd\',MP.kws.allItems,MP.kws.locCode)">难度 KD<span class="sort-arrow"> ↕</span></th>'
+      +'<th style="cursor:pointer;user-select:none" data-col="cpc" onclick="sortTable(\'cpc\',MP.kws.allItems,MP.kws.locCode)">CPC<span class="sort-arrow"> ↕</span></th>'
+      +'<th style="cursor:pointer;user-select:none" data-col="pos" onclick="sortTable(\'pos\',MP.kws.allItems,MP.kws.locCode)">排名<span class="sort-arrow"> ↕</span></th>'
+      +'<th>市场</th><th style="min-width:140px">排名页面</th>'
+      +'</tr></thead><tbody>'
++rows+'</tbody></table></div>'+extra;
 
     var sel=document.getElementById('kw-loc-modal');
     if(sel) sel.addEventListener('change',function(){showOrganicKws(MP.kws.domain,0,parseInt(this.value));});
