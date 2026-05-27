@@ -179,6 +179,10 @@ textarea{resize:vertical;line-height:1.7}
   </div>
   <div class="sidebar-footer">
     <div class="api-status" onclick="openApiModal()"><div class="api-dot" id="api-dot"></div><span id="api-status-text">点击配置 API</span></div>
+    <div style="margin-top:6px;padding:6px 10px;font-size:11px;color:var(--text3);display:flex;align-items:center;justify-content:space-between">
+      <span id="cache-stat">缓存: 0 条</span>
+      <button onclick="cacheClear()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;font-family:inherit;padding:0" title="清空所有缓存">🗑 清空</button>
+    </div>
   </div>
 </div>
 
@@ -293,14 +297,100 @@ textarea{resize:vertical;line-height:1.7}
 <script>
 let S={login:'',pass:'',mySites:[],kwResults:{main:[],rel:[],q:[]},kwParentMap:{},kwInputSet:new Set(),sessionKws:0,sessionDomains:0};
 
+/* ===== CACHE LAYER (3-day localStorage cache) ===== */
+const CACHE_TTL = 3 * 24 * 60 * 60 * 1000; // 3 days in ms
+const MAX_CACHE_ENTRIES = 100; // max entries before LRU eviction
+
+function cacheKey(type, ...args) {
+  return 'seo_cache_' + type + '_' + args.join('_').replace(/[^a-zA-Z0-9._-]/g,'_').slice(0,120);
+}
+
+function cacheGet(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    if (Date.now() - entry.ts > CACHE_TTL) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return entry.data;
+  } catch(e) { return null; }
+}
+
+function cacheSet(key, data) {
+  try {
+    // LRU eviction: if too many cache entries, remove oldest
+    const allKeys = Object.keys(localStorage).filter(k => k.startsWith('seo_cache_'));
+    if (allKeys.length >= MAX_CACHE_ENTRIES) {
+      // Remove oldest entries
+      const entries = allKeys.map(k => {
+        try { return { k, ts: JSON.parse(localStorage.getItem(k)).ts }; } catch(e) { return { k, ts: 0 }; }
+      }).sort((a,b) => a.ts - b.ts);
+      entries.slice(0, 10).forEach(e => localStorage.removeItem(e.k));
+    }
+    localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch(e) {
+    // localStorage full - clear old cache entries
+    Object.keys(localStorage).filter(k => k.startsWith('seo_cache_')).forEach(k => localStorage.removeItem(k));
+    try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch(e2) {}
+  }
+}
+
+function cacheAge(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    const ms = Date.now() - entry.ts;
+    if (ms > CACHE_TTL) return null;
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    if (h > 24) return Math.floor(h/24) + '天前缓存';
+    if (h > 0) return h + '小时前缓存';
+    return m + '分钟前缓存';
+  } catch(e) { return null; }
+}
+
+function cacheClear() {
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('seo_cache_'));
+  keys.forEach(k => localStorage.removeItem(k));
+  alert('已清空 ' + keys.length + ' 条缓存记录');
+}
+
+function cacheStats() {
+  const keys = Object.keys(localStorage).filter(k => k.startsWith('seo_cache_'));
+  const valid = keys.filter(k => cacheGet(k) !== null);
+  return { total: keys.length, valid: valid.length };
+}
+
+
 (function init(){
   const sl=localStorage.getItem('seo_login'),sp=localStorage.getItem('seo_pass');
   if(sl){S.login=sl;document.getElementById('api-login').value=sl;}
   if(sp){S.pass=sp;document.getElementById('api-pass').value=sp;}
   if(sl&&sp){document.getElementById('api-dot').className='api-dot on';document.getElementById('api-status-text').textContent=sl.split('@')[0];}
   try{const ms=localStorage.getItem('seo_sites');if(ms)S.mySites=JSON.parse(ms);}catch(e){}
-  renderMySites();updateDash();
+  renderMySites();updateDash();updateCacheStat();
 })();
+
+
+function invalidateSiteCache(domain) {
+  localStorage.removeItem(cacheKey('site', domain));
+  runSiteExplorer();
+}
+
+let _lastKwCacheKey = null;
+function invalidateKwCache() {
+  if (_lastKwCacheKey) localStorage.removeItem(_lastKwCacheKey);
+  document.querySelector('#kw-res button[onclick*="invalidateKwCache"]') && runKw();
+}
+
+function updateCacheStat() {
+  const stats = cacheStats();
+  const el = document.getElementById('cache-stat');
+  if (el) el.textContent = '缓存: ' + stats.valid + ' 条';
+}
 
 const pageTitles={dashboard:'仪表盘','site-explorer':'站点分析','my-sites':'我的站点','keyword-explorer':'关键词分析','kw-detail':'关键词详情','backlinks':'外链分析'};
 const pageSubs={dashboard:'概览','site-explorer':'分析任意域名的 DR · 流量 · 关键词 · 外链 · DNS','my-sites':'监控你的站点','keyword-explorer':'搜索量 · KD · CPC · 相关词 · 问题词','kw-detail':'关键词深度分析','backlinks':'外链 · 引用域名'};
@@ -523,6 +613,19 @@ async function runSiteExplorer(){
   document.getElementById('se-res').innerHTML='<div class="loading"><span class="spin"></span>正在分析 '+domain+'...</div>';
   setProg('se',5,'初始化...');
   try{
+    // Check cache first
+    const seCacheKey = cacheKey('site', domain);
+    const seCache = cacheGet(seCacheKey);
+    if (seCache) {
+      const age = cacheAge(seCacheKey);
+      setProg('se',100,'从缓存加载');
+      const {bk,ov,topRd,topKws,histItems,dnsData,aRecords} = seCache;
+      S.sessionDomains++;updateDash();
+      renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords,age);
+      hideProg('se');
+      return;
+    }
+
     setProg('se',15,'获取外链和流量数据...');
     // Run all in parallel, each with individual catch so one failure doesn't block others
     const [bkData,ovData,rdData,kwData2,histData,dnsData]=await Promise.all([
@@ -581,13 +684,16 @@ async function runSiteExplorer(){
 
     S.sessionDomains++;updateDash();
     setProg('se',100,'完成');
-    renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords);
+    // Save to cache
+    cacheSet(cacheKey('site', domain), {bk,ov,topRd,topKws,histItems,dnsData,aRecords});updateCacheStat();
+    renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords,null);
   }catch(e){document.getElementById('se-res').innerHTML='';showErr('se-res',e.message);}
   finally{hideProg('se');}
 }
 
-function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords){
+function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords,fromCache){
   const hasBacklinkData=bk&&(bk.rank!=null||bk.referring_domains!=null||bk.backlinks!=null);
+  const cacheBadge=fromCache?`<span style="font-size:11px;background:var(--gbg);color:var(--green);border:1px solid var(--green2);padding:2px 9px;border-radius:20px;margin-left:8px">💾 ${fromCache}</span>`:'';
   const hasOvData=ov&&(ov.etv!=null||ov.kws!=null);
   // Metrics row
   let noDataWarn='';
@@ -603,7 +709,7 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords
       <span onclick="document.getElementById('se-input').value='semrush.com';runSiteExplorer()" style="color:var(--blue);cursor:pointer;text-decoration:underline">semrush.com</span>
     </div>
   </div>`;}
-  let h=noDataWarn+`<div class="grid-4">
+  let h=noDataWarn+`<div style="display:flex;align-items:center;margin-bottom:16px"><span style="font-size:13px;color:var(--text2)">${domain}</span>${cacheBadge}<button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="invalidateSiteCache('${domain}')">🔄 重新查询</button></div><div class="grid-4">
     <div class="metric-card"><div class="metric-label">域名权重 DR</div><div class="metric-val">${bk.rank!=null?Math.round(bk.rank):'—'}</div><div class="metric-sub">DataForSEO 评分 0–100</div></div>
     <div class="metric-card"><div class="metric-label">引用域名数</div><div class="metric-val"><span class="link" onclick="showReferringDomains('${domain}')">${fmt(bk.referring_domains)}</span></div><div class="metric-sub">点击查看详情</div></div>
     <div class="metric-card"><div class="metric-label">总外链数</div><div class="metric-val"><span class="link" onclick="showBacklinks('${domain}')">${fmt(bk.backlinks)}</span></div><div class="metric-sub">点击查看详情</div></div>
@@ -763,6 +869,20 @@ async function runKw(){
   document.getElementById('kw-res').innerHTML='<div class="loading"><span class="spin"></span>查询中 ('+se.toUpperCase()+')...</div>';
   setProg('kw',10,'获取关键词数据...');
   try{
+    // Check cache
+    const kwCacheKey = cacheKey('kw', kws.join(','), loc, se);
+    const kwCache = cacheGet(kwCacheKey);
+    if (kwCache) {
+      const age = cacheAge(kwCacheKey);
+      const {main,rel,q,parentMap,inputSet} = kwCache;
+      const iSet = new Set(inputSet);
+      S.kwResults={main,rel,q};S.kwParentMap=parentMap;S.kwInputSet=iSet;S.sessionKws+=main.length;updateDash();
+      setProg('kw',100,'从缓存加载');
+      renderKwResults(main,rel,q,parentMap,iSet,se,loc,age);
+      hideProg('kw');
+      document.getElementById('kw-btn').disabled=false;
+      return;
+    }
     const sugPayload=kws.map(k=>({keyword:k,location_code:loc,language_code:'en',include_seed_keyword:true,limit:20}));
     const sugData=await apiFetch('POST','/api/dataforseo/'+(SE_SUG[se]||SE_SUG.google),sugPayload);
     setProg('kw',55,'获取问题词...');
@@ -790,7 +910,9 @@ async function runKw(){
     main.sort((a,b)=>{const ai=inputSet.has((a.kw||'').toLowerCase())?1:0,bi=inputSet.has((b.kw||'').toLowerCase())?1:0;return bi-ai||(b.sv||0)-(a.sv||0);});
     rel.sort((a,b)=>(b.sv||0)-(a.sv||0));q.sort((a,b)=>(b.sv||0)-(a.sv||0));
     S.kwResults={main,rel,q};S.kwParentMap=parentMap;S.kwInputSet=inputSet;S.sessionKws+=main.length;updateDash();
-    setProg('kw',100,'完成');renderKwResults(main,rel,q,parentMap,inputSet,se,loc);
+    // Save to cache (inputSet converted to Array for JSON serialization)
+    cacheSet(kwCacheKey, {main,rel,q,parentMap,inputSet:[...inputSet]});_lastKwCacheKey=kwCacheKey;updateCacheStat();
+    setProg('kw',100,'完成');renderKwResults(main,rel,q,parentMap,inputSet,se,loc,null);
   }catch(e){document.getElementById('kw-res').innerHTML='';showErr('kw-res',e.message);}
   finally{document.getElementById('kw-btn').disabled=false;hideProg('kw');}
 }
@@ -837,16 +959,19 @@ function reRenderKwTable(btn,newPage){
   container.innerHTML=kwTable(d.rows,d.showPT,d.parentMap,d.inputSet,50,newPage);
 }
 
-function renderKwResults(main,rel,q,parentMap,inputSet,se,loc){
+function renderKwResults(main,rel,q,parentMap,inputSet,se,loc,fromCache){
   const flag=LOC_FLAGS[loc]||'🌐';
   const seLabel={google:'Google',bing:'Bing'}[se]||se;
   const vk=main.filter(r=>r.kd!=null);const avgKd=vk.length?Math.round(vk.reduce((s,r)=>s+r.kd,0)/vk.length):0;
   _kwTableData['kwr-main']={rows:main,showPT:true,parentMap,inputSet};
   _kwTableData['kwr-q']={rows:q,showPT:false,parentMap:null,inputSet:null};
   _kwTableData['kwr-rel']={rows:rel,showPT:false,parentMap:null,inputSet:null};
-  let h=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+  const kwCacheBadge=fromCache?`<span style="font-size:11px;background:var(--gbg);color:var(--green);border:1px solid var(--green2);padding:2px 9px;border-radius:20px">💾 ${fromCache}</span>`:'';
+  let h=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
     <span class="bdg b-blue">${seLabel}</span>
     <span class="bdg b-na">${flag}</span>
+    ${kwCacheBadge}
+    ${fromCache?`<button class="btn btn-ghost btn-sm" onclick="invalidateKwCache()">🔄 重新查询</button>`:''}
   </div>
   <div class="grid-4" style="margin-bottom:16px">
     <div class="metric-card"><div class="metric-label">主要关键词</div><div class="metric-val">${main.length}</div></div>
