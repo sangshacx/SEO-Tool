@@ -645,9 +645,9 @@ async function runSiteExplorer(){
     if (seCache) {
       const age = cacheAge(seCacheKey);
       setProg('se',100,'从缓存加载');
-      const {bk,ov,topRd,topKws,histItems,dnsData,aRecords} = seCache;
+      const {bk,ov,topRd,topKws,histItems,dnsData,aRecords,rdOvMap,rdDnsMap} = seCache;
       S.sessionDomains++;updateDash();
-      renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords,age);
+      renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords,age,rdOvMap||{},rdDnsMap||{});
       hideProg('se');
       return;
     }
@@ -701,25 +701,50 @@ async function runSiteExplorer(){
     (rdData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>topRd.push(...(r.items||[]).slice(0,10))));
 
     const topKws=[];
-    (kwData2.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>topKws.push(...(r.items||[]).slice(0,10))));
+    (kwData2.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>topKws.push(...(r.items||[]).slice(0,10)))));
 
     let histItems=[];
     (histData.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{
       histItems=[...(r.items||[])].sort((a,b)=>a.date>b.date?1:-1);
     }));
 
+    // Fetch organic+traffic data AND A-record IPs for referring domains
+    let rdOvMap={}, rdDnsMap={};
+    if(topRd.length){
+      const rdDomains=topRd.map(r=>r.domain).filter(Boolean).slice(0,10);
+      setProg('se',88,'获取引用域名详情...');
+      const [rdOvData,...rdDnsResults]=await Promise.all([
+        apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',
+          rdDomains.map(d=>({target:d,location_code:2840,language_code:'en'}))).catch(()=>({tasks:[]})),
+        ...rdDomains.map(d=>
+          fetch('https://dns.google/resolve?name='+d+'&type=A').then(r=>r.json()).catch(()=>null)
+        )
+      ]);
+      (rdOvData.tasks||[]).forEach(t=>{
+        const tgt=t.data&&t.data.target||'';
+        (t.result||[]).forEach(r=>{
+          const item=r.items&&r.items[0];
+          if(item&&item.metrics) rdOvMap[tgt]={etv:item.metrics.organic&&item.metrics.organic.etv,kws:item.metrics.organic&&item.metrics.organic.count};
+        });
+      });
+      rdDomains.forEach((d,i)=>{
+        const dns=rdDnsResults[i];
+        const aRecs=(dns&&dns.Answer||[]).filter(r=>r.type===1).map(r=>r.data);
+        if(aRecs.length) rdDnsMap[d]=aRecs[0];
+      });
+    }
+
     S.sessionDomains++;updateDash();
     setProg('se',100,'完成');
     // Save to cache
-    // Only cache if we got at least some real data
-    const hasSomeData = (bk.rank!=null||bk.referring_domains!=null||bk.backlinks!=null) || (ov.etv!=null||ov.kws!=null);
-    if(hasSomeData) { cacheSet(cacheKey('site', domain), {bk,ov,topRd,topKws,histItems,dnsData,aRecords});updateCacheStat(); }
-    renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords,null);
+    const hasSomeData=(bk.rank!=null||bk.referring_domains!=null||bk.backlinks!=null)||(ov.etv!=null||ov.kws!=null);
+    if(hasSomeData){cacheSet(cacheKey('site',domain),{bk,ov,topRd,topKws,histItems,dnsData,aRecords,rdOvMap,rdDnsMap});updateCacheStat();}
+    renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords,null,rdOvMap,rdDnsMap);
   }catch(e){document.getElementById('se-res').innerHTML='';showErr('se-res',e.message);}
   finally{hideProg('se');}
 }
 
-function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords,fromCache){
+function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords,fromCache,rdOvMap,rdDnsMap){
   const hasBacklinkData=bk&&(bk.rank!=null||bk.referring_domains!=null||bk.backlinks!=null);
   const cacheBadge=fromCache?`<span style="font-size:11px;background:var(--gbg);color:var(--green);border:1px solid var(--green2);padding:2px 9px;border-radius:20px;margin-left:8px">💾 ${fromCache}</span>`:'';
   const hasOvData=ov&&(ov.etv!=null||ov.kws!=null);
@@ -780,8 +805,23 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords
   h+=`<div id="se-rd" class="se-stab stab-content active">`;
   if(topRd.length){
     h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:12px;color:var(--text3)">显示前 ${topRd.length} 个，按 DR 排序</span><span class="link" style="font-size:12px" onclick="showReferringDomains('${domain}')">查看全部 →</span></div>`;
-    h+=`<div class="table-wrap"><table><thead><tr><th>引用域名</th><th>DR</th><th>引用域名数</th><th>总外链数</th></tr></thead><tbody>`;
-    topRd.forEach(r=>{h+=`<tr><td class="td-dm"><span class="link" onclick="viewSite('${r.domain||''}')">${r.domain||'—'}</span></td><td>${drBdg(r.rank)}</td><td>${fmt(r.referring_domains)}</td><td>${fmt(r.backlinks)}</td></tr>`;});
+    h+=`<div class="table-wrap"><table><thead><tr>
+      <th>引用域名</th><th>DR</th><th>引用域名数</th><th>总外链数</th>
+      <th>Organic 关键词</th><th>月流量</th><th>A 记录 IP</th>
+    </tr></thead><tbody>`;
+    topRd.forEach(r=>{
+      const rdm=rdOvMap&&rdOvMap[r.domain]||{};
+      const rdip=rdDnsMap&&rdDnsMap[r.domain]||'—';
+      h+=`<tr>
+        <td class="td-dm"><span class="link" onclick="viewSite('${r.domain||''}')">${r.domain||'—'}</span></td>
+        <td>${drBdg(r.rank)}</td>
+        <td>${fmt(r.referring_domains)}</td>
+        <td>${fmt(r.backlinks)}</td>
+        <td>${rdm.kws!=null?`<span class="link" onclick="showOrganicKws('${r.domain||''}',0,0)">${fmt(rdm.kws)}</span>`:'—'}</td>
+        <td>${rdm.etv!=null?`<span class="link" onclick="viewSite('${r.domain||''}')">${fmt(rdm.etv)}</span>`:'—'}</td>
+        <td style="font-family:monospace;font-size:12px">${rdip}</td>
+      </tr>`;
+    });
     h+='</tbody></table></div>';
   }else h+='<div class="empty-state"><p>暂无引用域名数据</p></div>';
   h+='</div>';
@@ -1138,74 +1178,102 @@ async function showBacklinks(domain,offset){
 
 async function showOrganicKws(domain,offset,locCode){
   offset=offset||0;
-  locCode=locCode||0;
-  if(offset===0){
+  locCode=locCode!==undefined?locCode:0;
+  const PAGE=25; // 每页25条，约 $0.025，不翻页不花钱
+  const isFirstLoad=offset===0;
+
+  if(isFirstLoad){
     openModal('Organic 关键词 — '+domain);
-    MP.kws={domain,offset:0,total:0,items:[],locCode,locCounts:{}};
+    MP.kws={domain,offset:0,total:0,items:[],allItems:[],locCode,locCounts:{}};
   } else {
-    document.getElementById('modal-body').innerHTML='<div class="loading"><span class="spin"></span>加载中...</div>';
+    document.getElementById('modal-body').innerHTML='<div class="loading"><span class="spin"></span>加载第'+(Math.floor(offset/PAGE)+1)+'页，约 $0.025...</div>';
   }
+
   try{
     const allLocs=[2840,2826,2276,2250,2036,2124,2392,2356,2076,2724,2380,2528,2616,2752,2578,2208,2710,2484,2682,2784];
-    const locsToQuery=locCode===0?allLocs:[locCode];
-    const PAGE=100;
-    let allItems=[],total=0,locCounts=MP.kws.locCounts||{};
+    const LOC_MAP={2840:'🇺🇸 美国',2826:'🇬🇧 英国',2276:'🇩🇪 德国',2250:'🇫🇷 法国',2036:'🇦🇺 澳大利亚',2124:'🇨🇦 加拿大',2392:'🇯🇵 日本',2356:'🇮🇳 印度',2076:'🇧🇷 巴西',2724:'🇪🇸 西班牙',2380:'🇮🇹 意大利',2528:'🇳🇱 荷兰',2616:'🇵🇱 波兰',2752:'🇸🇪 瑞典',2578:'🇳🇴 挪威',2208:'🇩🇰 丹麦',2710:'🇿🇦 南非',2484:'🇲🇽 墨西哥',2682:'🇸🇦 沙特',2784:'🇦🇪 阿联酋'};
+    const LOC_SHORT={2840:'US',2826:'UK',2276:'DE',2250:'FR',2036:'AU',2124:'CA',2392:'JP',2356:'IN',2076:'BR',2724:'ES',2380:'IT',2528:'NL',2616:'PL',2752:'SE',2578:'NO',2208:'DK',2710:'ZA',2484:'MX',2682:'SA',2784:'AE'};
 
-    if(locCode===0){
-      const responses=await Promise.all(locsToQuery.map(loc=>
+    let pageItems=[], total=0;
+    let locCounts = MP.kws.locCounts||{};
+    const isAllMode = locCode===0;
+
+    if(isAllMode){
+      // All markets: query each country, 5 per country (cheap), combine
+      const responses=await Promise.all(allLocs.map(loc=>
         apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{
-          target:domain,location_code:loc,language_code:'en',limit:15,
+          target:domain,location_code:loc,language_code:'en',
+          limit:PAGE,offset:offset,
           order_by:['keyword_data.keyword_info.search_volume,desc']
         }]).catch(()=>({tasks:[]}))
       ));
       const seen=new Set();
       locCounts={};
       responses.forEach((data,li)=>{
-        const loc=locsToQuery[li];
+        const loc=allLocs[li];
         let cnt=0;
         (data.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{
-          cnt+=(r.items||[]).length;
+          total=Math.max(total,r.total_count||0);
+          cnt+=(r.total_count||0);
           (r.items||[]).forEach(item=>{
             item._loc=loc;
             const kw=(item.keyword_data||{}).keyword||'';
             const key=kw+'_'+loc;
-            if(!seen.has(key)){seen.add(key);allItems.push(item);}
+            if(!seen.has(key)){seen.add(key);pageItems.push(item);}
           });
         }));
-        if(cnt>0)locCounts[loc]=cnt;
+        if(cnt>0) locCounts[loc]=cnt;
       });
-      allItems.sort((a,b)=>{
+      pageItems.sort((a,b)=>{
         const svA=(a.keyword_data&&a.keyword_data.keyword_info&&a.keyword_data.keyword_info.search_volume)||0;
         const svB=(b.keyword_data&&b.keyword_data.keyword_info&&b.keyword_data.keyword_info.search_volume)||0;
         return svB-svA;
       });
-      total=allItems.length;
-      MP.kws.locCounts=locCounts;
+      total=pageItems.length+(offset>0?offset:0);
     } else {
-      const kwData2=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{
-        target:domain,location_code:locCode,language_code:'en',limit:PAGE,offset,
+      const data=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{
+        target:domain,location_code:locCode,language_code:'en',
+        limit:PAGE,offset:offset,
         order_by:['keyword_data.keyword_info.search_volume,desc']
       }]);
-      (kwData2.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{
-        allItems.push(...(r.items||[]).map(item=>{item._loc=locCode;return item;}));
-        total=r.total_count||allItems.length;
+      (data.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{
+        pageItems.push(...(r.items||[]).map(item=>{item._loc=locCode;return item;}));
+        total=r.total_count||pageItems.length+offset;
+        if(pageItems.length>0) locCounts[locCode]=(locCounts[locCode]||total);
       }));
-      locCounts=MP.kws.locCounts||{};
     }
 
-    MP.kws={domain,offset,total,items:allItems,locCode,locCounts};
+    // Accumulate all loaded items across pages
+    const prevItems = MP.kws.allItems||[];
+    const allLoaded = offset===0 ? pageItems : [...prevItems, ...pageItems];
+    MP.kws={domain,offset,total,items:pageItems,allItems:allLoaded,locCode,locCounts};
 
-    const LOC_MAP={2840:'🇺🇸 美国',2826:'🇬🇧 英国',2276:'🇩🇪 德国',2250:'🇫🇷 法国',2036:'🇦🇺 澳大利亚',2124:'🇨🇦 加拿大',2392:'🇯🇵 日本',2356:'🇮🇳 印度',2076:'🇧🇷 巴西',2724:'🇪🇸 西班牙',2380:'🇮🇹 意大利',2528:'🇳🇱 荷兰',2616:'🇵🇱 波兰',2752:'🇸🇪 瑞典',2578:'🇳🇴 挪威',2208:'🇩🇰 丹麦',2710:'🇿🇦 南非',2484:'🇲🇽 墨西哥',2682:'🇸🇦 沙特',2784:'🇦🇪 阿联酋'};
-    const LOC_SHORT={2840:'US',2826:'UK',2276:'DE',2250:'FR',2036:'AU',2124:'CA',2392:'JP',2356:'IN',2076:'BR',2724:'ES',2380:'IT',2528:'NL',2616:'PL',2752:'SE',2578:'NO',2208:'DK',2710:'ZA',2484:'MX',2682:'SA',2784:'AE'};
+    const curPage=Math.floor(offset/PAGE)+1;
+    const hasMore=offset+pageItems.length<total||(isAllMode&&pageItems.length===PAGE);
+    const costPerPage=(isAllMode?allLocs.length:1)*PAGE*0.001;
 
-    function locOption(code,label,cur,counts){
-      const cnt=counts[code];
-      const cntStr=cnt?` (${cnt})`:' ';
-      return`<option value="${code}" ${cur===code?'selected':''}>${label}${cnt?` (${cnt})`:''}</option>`;
+    // Build table rows from ALL loaded items so far
+    function buildRows(items){
+      return items.map(item=>{
+        const kd2=item.keyword_data||{};const ki=kd2.keyword_info||{};const kp=kd2.keyword_properties||{};
+        const ranked=item.ranked_serp_element&&item.ranked_serp_element.serp_item;
+        const pos=ranked&&ranked.rank_absolute||'—';
+        const url=ranked&&ranked.relative_url||'—';
+        const etv=ranked&&ranked.etv!=null?Math.round(ranked.etv):null;
+        const itemLoc=item._loc||locCode||2840;
+        const locLabel=(LOC_MAP[itemLoc]||LOC_SHORT[itemLoc]||'').slice(0,10);
+        return`<tr>
+          <td class="td-kw" title="${kd2.keyword||''}">${kd2.keyword||'—'}</td>
+          <td>${fmt(ki.search_volume)}</td>
+          <td style="color:var(--green);font-weight:500">${etv!=null?etv:'—'}</td>
+          <td>${kdBdg(kp.keyword_difficulty)}</td>
+          <td>${ki.cpc?'$'+Number(ki.cpc).toFixed(2):'—'}</td>
+          <td>${pos}</td>
+          <td style="white-space:nowrap;font-size:11px">${locLabel}</td>
+          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text3)">${url}</td>
+        </tr>`;
+      }).join('');
     }
-
-    const isAllMode=locCode===0;
-    const pages=Math.ceil(total/PAGE),curPage=Math.floor(offset/PAGE);
 
     let h=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;justify-content:space-between">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -1216,53 +1284,40 @@ async function showOrganicKws(domain,offset,locCode){
         </select>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:12px;color:var(--text3)">${isAllMode?total+' 条（全部市场）':('共 '+total+' 条，第 '+(curPage+1)+'/'+(pages||1)+' 页')}</span>
-        <button class="btn btn-ghost btn-sm" onclick="exportModalData('kws')">↓ 导出 CSV</button>
+        <span style="font-size:12px;color:var(--text3)">已加载 <strong style="color:var(--text)">${allLoaded.length}</strong> 条 / 约 ${fmt(total)} 条</span>
+        <button class="btn btn-ghost btn-sm" onclick="exportModalData('kws')">↓ 导出已加载</button>
       </div>
     </div>
     <div class="table-wrap"><table><thead><tr>
       <th style="min-width:180px">关键词</th>
       <th>月均搜索量</th>
-      <th>带来流量</th>
+      <th style="color:var(--green)">带来流量</th>
       <th>难度 KD</th>
       <th>CPC</th>
       <th>排名</th>
       <th>市场</th>
       <th style="min-width:140px">排名页面</th>
-    </tr></thead><tbody>`;
+    </tr></thead><tbody>
+    ${buildRows(allLoaded)}
+    </tbody></table></div>`;
 
-    allItems.forEach(item=>{
-      const kd2=item.keyword_data||{};const ki=kd2.keyword_info||{};const kp=kd2.keyword_properties||{};
-      const ranked=item.ranked_serp_element&&item.ranked_serp_element.serp_item;
-      const pos=ranked&&ranked.rank_absolute||'—';
-      const url=ranked&&ranked.relative_url||'—';
-      const etv=ranked&&ranked.etv!=null?Math.round(ranked.etv):null;
-      const itemLoc=item._loc||locCode||2840;
-      const locShort=LOC_SHORT[itemLoc]||String(itemLoc);
-      const locLabel=(LOC_MAP[itemLoc]||locShort).slice(0,10);
-      h+=`<tr>
-        <td class="td-kw" title="${kd2.keyword||''}">${kd2.keyword||'—'}</td>
-        <td>${fmt(ki.search_volume)}</td>
-        <td style="color:var(--green)">${etv!=null?etv:'—'}</td>
-        <td>${kdBdg(kp.keyword_difficulty)}</td>
-        <td>${ki.cpc?'$'+Number(ki.cpc).toFixed(2):'—'}</td>
-        <td>${pos}</td>
-        <td style="white-space:nowrap;font-size:11px">${locLabel}</td>
-        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text3)">${url}</td>
-      </tr>`;
-    });
-    h+='</tbody></table></div>';
-
-    if(!isAllMode&&pages>1){
-      h+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
-        <span style="font-size:12px;color:var(--text3)">${offset+1}–${Math.min(offset+PAGE,total)} / ${total}</span>
-        <div style="display:flex;gap:8px">
-          ${offset>0?`<button class="btn btn-ghost btn-sm" onclick="showOrganicKws('${domain}',${offset-PAGE},${locCode})">← 上一页</button>`:''}
-          ${offset+PAGE<total?`<button class="btn btn-ghost btn-sm" onclick="showOrganicKws('${domain}',${offset+PAGE},${locCode})">下一页 →</button>`:''}
+    if(hasMore){
+      h+=`<div style="text-align:center;margin-top:16px;padding:16px;background:var(--bg3);border-radius:var(--rad);border:1px dashed var(--border)">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:10px">
+          还有更多关键词未加载
         </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:12px">
+          点击加载下一页 (${PAGE}条)，约消耗 <strong style="color:var(--amber)">$${costPerPage.toFixed(3)}</strong>
+        </div>
+        <button class="btn btn-primary" onclick="showOrganicKws('${domain}',${offset+PAGE},${locCode})">
+          加载更多 +${PAGE}条
+        </button>
       </div>`;
+    } else {
+      h+=`<div style="text-align:center;padding:12px;font-size:12px;color:var(--text3)">✓ 已加载全部 ${allLoaded.length} 条</div>`;
     }
-    if(!allItems.length) h+='<div class="empty-state" style="padding:1rem"><p>该市场暂无排名数据</p></div>';
+
+    if(!allLoaded.length) h+='<div class="empty-state" style="padding:1rem"><p>该市场暂无排名数据</p></div>';
     document.getElementById('modal-body').innerHTML=h;
   }catch(e){document.getElementById('modal-body').innerHTML=`<div class="alert alert-err">⚠ ${e.message}</div>`;}
 }
@@ -1275,7 +1330,8 @@ function exportModalData(type){
   }else if(type==='bk'){
     csv='来源URL,目标URL,锚文本,DR,dofollow,首次发现\n'+d.items.map(i=>`"${i.url_from||''}","${i.url_to||''}","${i.anchor||''}",${i.rank||''},${i.dofollow||false},"${i.first_seen||''}"`).join('\n');name='backlinks.csv';
   }else if(type==='kws'){
-    csv='关键词,月均搜索量,KD,CPC,排名\n'+d.items.map(i=>{const kd2=i.keyword_data||{};const ki=kd2.keyword_info||{};const kp=kd2.keyword_properties||{};const pos=(i.ranked_serp_element&&i.ranked_serp_element.serp_item&&i.ranked_serp_element.serp_item.rank_absolute)||'';return`"${kd2.keyword||''}",${ki.search_volume||''},${kp.keyword_difficulty||''},${ki.cpc||''},${pos}`;}).join('\n');name='organic_keywords.csv';
+    const exportItems=d.allItems&&d.allItems.length?d.allItems:d.items;
+    csv='关键词,月均搜索量,带来流量,KD,CPC,排名,市场\n'+exportItems.map(i=>{const kd2=i.keyword_data||{};const ki=kd2.keyword_info||{};const kp=kd2.keyword_properties||{};const pos=(i.ranked_serp_element&&i.ranked_serp_element.serp_item&&i.ranked_serp_element.serp_item.rank_absolute)||'';const ranked2=i.ranked_serp_element&&i.ranked_serp_element.serp_item;const pos2=ranked2&&ranked2.rank_absolute||'';const etv2=ranked2&&ranked2.etv!=null?Math.round(ranked2.etv):'';const loc2=i._loc||'';return`"${kd2.keyword||''}",${ki.search_volume||''},${etv2},${kp.keyword_difficulty||''},${ki.cpc||''},${pos2},${loc2}`;}).join('\n');name='organic_keywords.csv';
   }
   dlCsv(csv,name);
 }
