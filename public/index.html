@@ -189,7 +189,10 @@ textarea{resize:vertical;line-height:1.7}
 <div class="main">
   <div class="topbar">
     <div><div class="topbar-title" id="topbar-title">仪表盘</div><div class="topbar-sub" id="topbar-sub">概览</div></div>
-    <div class="topbar-actions"><button class="btn btn-ghost btn-sm" onclick="openApiModal()">⚙ API 设置</button></div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm" onclick="debugBacklinks()" title="调试外链API">🔍 调试</button>
+      <button class="btn btn-ghost btn-sm" onclick="openApiModal()">⚙ API 设置</button>
+    </div>
   </div>
   <div class="content" id="main-content">
 
@@ -268,6 +271,19 @@ textarea{resize:vertical;line-height:1.7}
       <div id="bl-res"></div>
     </div>
 
+  </div>
+</div>
+
+<!-- DEBUG MODAL -->
+<div class="modal-overlay" id="debug-modal">
+  <div class="modal-box" style="max-width:800px">
+    <div class="modal-hd"><h3>🔍 API 调试 — 外链数据</h3><button class="modal-close" onclick="document.getElementById('debug-modal').classList.remove('open')">×</button></div>
+    <div class="modal-body" id="debug-body"><div class="loading">点击下方按钮测试</div></div>
+    <div style="padding:16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
+      <input type="text" id="debug-domain" placeholder="输入域名" style="flex:1;min-width:200px">
+      <button class="btn btn-primary" onclick="runDebug()">测试外链 API</button>
+      <button class="btn btn-ghost" onclick="runDebugLabs()">测试 Labs API</button>
+    </div>
   </div>
 </div>
 
@@ -1277,6 +1293,61 @@ function exportModalData(type){
     csv='关键词,月均搜索量,KD,CPC,排名\n'+d.items.map(i=>{const kd2=i.keyword_data||{};const ki=kd2.keyword_info||{};const kp=kd2.keyword_properties||{};const pos=(i.ranked_serp_element&&i.ranked_serp_element.serp_item&&i.ranked_serp_element.serp_item.rank_absolute)||'';return`"${kd2.keyword||''}",${ki.search_volume||''},${kp.keyword_difficulty||''},${ki.cpc||''},${pos}`;}).join('\n');name='organic_keywords.csv';
   }
   dlCsv(csv,name);
+}
+
+/* DEBUG */
+async function debugBacklinks() {
+  document.getElementById('debug-modal').classList.add('open');
+  const domain = document.getElementById('se-input').value.trim().replace(/^https?:\/\//,'').replace(/\/$/,'') || '';
+  if(domain) document.getElementById('debug-domain').value = domain;
+}
+
+async function runDebug() {
+  const domain = document.getElementById('debug-domain').value.trim().replace(/^https?:\/\//,'').replace(/\/$/,'');
+  if(!domain){alert('请输入域名');return;}
+  document.getElementById('debug-body').innerHTML = '<div class="loading"><span class="spin"></span>调用 backlinks/summary/live ...</div>';
+  try {
+    const data = await apiFetch('POST', '/api/dataforseo/backlinks/summary/live', [{target: domain, include_subdomains: true}]);
+    const task = data.tasks && data.tasks[0];
+    const result = task && task.result && task.result[0];
+    let html = `<div style="margin-bottom:12px">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:6px">响应状态</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span class="bdg ${data.status_code===20000?'b-easy':'b-hard'}">HTTP响应 ${data.status_code} ${data.status_message||''}</span>
+        ${task?`<span class="bdg ${task.status_code===20000?'b-easy':'b-hard'}">Task ${task.status_code} ${task.status_message||''}</span>`:'<span class="bdg b-hard">无Task</span>'}
+      </div>
+    </div>`;
+    if(result) {
+      html += `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">解析到的数据字段</div>
+      <div class="table-wrap"><table><thead><tr><th>字段名</th><th>值</th></tr></thead><tbody>`;
+      const keys = ['target','rank','referring_domains','referring_main_domains','backlinks','referring_ips','referring_pages','broken_backlinks','broken_pages'];
+      keys.forEach(k => {
+        const v = result[k];
+        html += `<tr><td style="font-family:monospace">${k}</td><td style="color:${v!=null?'var(--green)':'var(--red)'}">${v!=null?JSON.stringify(v):'null / 无此字段'}</td></tr>`;
+      });
+      html += '</tbody></table></div>';
+      html += `<div style="margin-top:12px;font-size:12px;color:var(--text3)">完整原始返回（前2000字符）</div>
+      <pre style="background:var(--bg3);padding:12px;border-radius:6px;font-size:11px;overflow-x:auto;max-height:200px;color:var(--text2)">${JSON.stringify(result,null,2).slice(0,2000)}</pre>`;
+    } else {
+      html += `<div class="alert alert-err">result 为空！DataForSEO 没有返回该域名的外链数据</div>`;
+      html += `<pre style="background:var(--bg3);padding:12px;border-radius:6px;font-size:11px;overflow-x:auto;max-height:300px;color:var(--text2)">${JSON.stringify(data,null,2).slice(0,3000)}</pre>`;
+    }
+    document.getElementById('debug-body').innerHTML = html;
+  } catch(e) {
+    document.getElementById('debug-body').innerHTML = `<div class="alert alert-err">调用失败: ${e.message}</div>`;
+  }
+}
+
+async function runDebugLabs() {
+  const domain = document.getElementById('debug-domain').value.trim().replace(/^https?:\/\//,'').replace(/\/$/,'');
+  if(!domain){alert('请输入域名');return;}
+  document.getElementById('debug-body').innerHTML = '<div class="loading"><span class="spin"></span>调用 dataforseo_labs/google/domain_rank_overview/live ...</div>';
+  try {
+    const data = await apiFetch('POST', '/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live', [{target: domain, location_code: 2840, language_code: 'en'}]);
+    document.getElementById('debug-body').innerHTML = `<pre style="background:var(--bg3);padding:12px;border-radius:6px;font-size:11px;overflow-x:auto;max-height:500px;color:var(--text2)">${JSON.stringify(data,null,2).slice(0,5000)}</pre>`;
+  } catch(e) {
+    document.getElementById('debug-body').innerHTML = `<div class="alert alert-err">调用失败: ${e.message}</div>`;
+  }
 }
 
 </script>
