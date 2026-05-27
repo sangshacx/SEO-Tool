@@ -1205,148 +1205,96 @@ async function showBacklinks(domain,offset){
 
 async function showOrganicKws(domain,offset,locCode){
   offset=offset||0;
-  locCode=locCode!==undefined?locCode:0;
-  const PAGE=25; // 每页25条，约 $0.025，不翻页不花钱
-  const isFirstLoad=offset===0;
-
-  if(isFirstLoad){
+  if(locCode===undefined||locCode===null) locCode=2840;
+  var PAGE=50;
+  if(offset===0){
     openModal('Organic 关键词 — '+domain);
-    MP.kws={domain,offset:0,total:0,items:[],allItems:[],locCode,locCounts:{}};
+    MP.kws={domain:domain,offset:0,total:0,items:[],allItems:[],locCode:locCode,locCounts:{}};
   } else {
-    document.getElementById('modal-body').innerHTML='<div class="loading"><span class="spin"></span>加载第'+(Math.floor(offset/PAGE)+1)+'页，约 $0.025...</div>';
+    document.getElementById('modal-body').innerHTML='<div class="loading"><span class="spin"></span>加载中...</div>';
   }
-
   try{
-    const allLocs=[2840,2826,2276,2250,2036,2124,2392,2356,2076,2724,2380,2528,2616,2752,2578,2208,2710,2484,2682,2784];
-    const LOC_MAP={2840:'🇺🇸 美国',2826:'🇬🇧 英国',2276:'🇩🇪 德国',2250:'🇫🇷 法国',2036:'🇦🇺 澳大利亚',2124:'🇨🇦 加拿大',2392:'🇯🇵 日本',2356:'🇮🇳 印度',2076:'🇧🇷 巴西',2724:'🇪🇸 西班牙',2380:'🇮🇹 意大利',2528:'🇳🇱 荷兰',2616:'🇵🇱 波兰',2752:'🇸🇪 瑞典',2578:'🇳🇴 挪威',2208:'🇩🇰 丹麦',2710:'🇿🇦 南非',2484:'🇲🇽 墨西哥',2682:'🇸🇦 沙特',2784:'🇦🇪 阿联酋'};
-    const LOC_SHORT={2840:'US',2826:'UK',2276:'DE',2250:'FR',2036:'AU',2124:'CA',2392:'JP',2356:'IN',2076:'BR',2724:'ES',2380:'IT',2528:'NL',2616:'PL',2752:'SE',2578:'NO',2208:'DK',2710:'ZA',2484:'MX',2682:'SA',2784:'AE'};
+    var allLocs=[2840,2826,2276,2250,2036,2124,2392,2356,2076,2724,2380,2528,2616,2752,2578,2208,2710,2484,2682,2784];
+    var LOC_NAME={2840:'美国',2826:'英国',2276:'德国',2250:'法国',2036:'澳大利亚',2124:'加拿大',2392:'日本',2356:'印度',2076:'巴西',2724:'西班牙',2380:'意大利',2528:'荷兰',2616:'波兰',2752:'瑞典',2578:'挪威',2208:'丹麦',2710:'南非',2484:'墨西哥',2682:'沙特',2784:'阿联酋'};
+    var LOC_SHORT={2840:'US',2826:'UK',2276:'DE',2250:'FR',2036:'AU',2124:'CA',2392:'JP',2356:'IN',2076:'BR',2724:'ES',2380:'IT',2528:'NL',2616:'PL',2752:'SE',2578:'NO',2208:'DK',2710:'ZA',2484:'MX',2682:'SA',2784:'AE'};
 
-    let pageItems=[], total=0;
-    let locCounts = MP.kws.locCounts||{};
-    const isAllMode = locCode===0;
+    var pageItems=[],total=0,isAllMode=(locCode===0);
+    var locCounts=MP.kws.locCounts||{};
 
     if(isAllMode){
-      // All markets: query each country, 5 per country (cheap), combine
-      const responses=await Promise.all(allLocs.map(loc=>
-        apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{
-          target:domain,location_code:loc,language_code:'en',
-          limit:PAGE,offset:offset,
-          order_by:['keyword_data.keyword_info.search_volume,desc']
-        }]).catch(()=>({tasks:[]}))
-      ));
-      const seen=new Set();
-      locCounts={};
-      responses.forEach((data,li)=>{
-        const loc=allLocs[li];
-        let cnt=0;
-        (data.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{
-          total=Math.max(total,r.total_count||0);
-          cnt+=(r.total_count||0);
-          (r.items||[]).forEach(item=>{
-            item._loc=loc;
-            const kw=(item.keyword_data||{}).keyword||'';
-            const key=kw+'_'+loc;
-            if(!seen.has(key)){seen.add(key);pageItems.push(item);}
-          });
-        }));
-        if(cnt>0) locCounts[loc]=cnt;
-      });
-      pageItems.sort((a,b)=>{
-        const svA=(a.keyword_data&&a.keyword_data.keyword_info&&a.keyword_data.keyword_info.search_volume)||0;
-        const svB=(b.keyword_data&&b.keyword_data.keyword_info&&b.keyword_data.keyword_info.search_volume)||0;
-        return svB-svA;
-      });
-      total=pageItems.length+(offset>0?offset:0);
-    } else {
-      const data=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{
-        target:domain,location_code:locCode,language_code:'en',
-        limit:PAGE,offset:offset,
-        order_by:['keyword_data.keyword_info.search_volume,desc']
-      }]);
-      (data.tasks||[]).forEach(t=>(t.result||[]).forEach(r=>{
-        pageItems.push(...(r.items||[]).map(item=>{item._loc=locCode;return item;}));
-        total=r.total_count||pageItems.length+offset;
-        if(pageItems.length>0) locCounts[locCode]=(locCounts[locCode]||total);
+      var responses=await Promise.all(allLocs.map(function(loc){
+        return apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{target:domain,location_code:loc,language_code:'en',limit:10,order_by:['keyword_data.keyword_info.search_volume,desc']}]).catch(function(){return{tasks:[]};});
       }));
-    }
-
-    // Accumulate all loaded items across pages
-    const prevItems = MP.kws.allItems||[];
-    const allLoaded = offset===0 ? pageItems : [...prevItems, ...pageItems];
-    MP.kws={domain,offset,total,items:pageItems,allItems:allLoaded,locCode,locCounts};
-
-    const curPage=Math.floor(offset/PAGE)+1;
-    const hasMore=offset+pageItems.length<total||(isAllMode&&pageItems.length===PAGE);
-    const costPerPage=(isAllMode?allLocs.length:1)*PAGE*0.001;
-
-    // Build table rows from ALL loaded items so far
-    function buildRows(items){
-      return items.map(item=>{
-        const kd2=item.keyword_data||{};const ki=kd2.keyword_info||{};const kp=kd2.keyword_properties||{};
-        const ranked=item.ranked_serp_element&&item.ranked_serp_element.serp_item;
-        const pos=ranked&&ranked.rank_absolute||'—';
-        const url=ranked&&ranked.relative_url||'—';
-        const etv=ranked&&ranked.etv!=null?Math.round(ranked.etv):null;
-        const itemLoc=item._loc||locCode||2840;
-        const locLabel=(LOC_MAP[itemLoc]||LOC_SHORT[itemLoc]||'').slice(0,10);
-        return`<tr>
-          <td class="td-kw" title="${kd2.keyword||''}">${kd2.keyword||'—'}</td>
-          <td>${fmt(ki.search_volume)}</td>
-          <td style="color:var(--green);font-weight:500">${etv!=null?etv:'—'}</td>
-          <td>${kdBdg(kp.keyword_difficulty)}</td>
-          <td>${ki.cpc?'$'+Number(ki.cpc).toFixed(2):'—'}</td>
-          <td>${pos}</td>
-          <td style="white-space:nowrap;font-size:11px">${locLabel}</td>
-          <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text3)">${url}</td>
-        </tr>`;
-      }).join('');
-    }
-
-    let h=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;justify-content:space-between">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="font-size:12px;color:var(--text2)">查询市场：</span>
-        <select id="kw-loc-modal" style="height:32px;font-size:12px" onchange="showOrganicKws('${domain}',0,parseInt(this.value))">
-          <option value="0" ${locCode===0?'selected':''}>🌍 全部主要市场</option>
-          ${allLocs.map(loc=>`<option value="${loc}" ${locCode===loc?'selected':''}>${LOC_MAP[loc]||loc}${locCounts[loc]?' ('+locCounts[loc]+')':''}</option>`).join('')}
-        </select>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:12px;color:var(--text3)">已加载 <strong style="color:var(--text)">${allLoaded.length}</strong> 条 / 约 ${fmt(total)} 条</span>
-        <button class="btn btn-ghost btn-sm" onclick="exportModalData('kws')">↓ 导出已加载</button>
-      </div>
-    </div>
-    <div class="table-wrap"><table><thead><tr>
-      <th style="min-width:180px">关键词</th>
-      <th>月均搜索量</th>
-      <th style="color:var(--green)">带来流量</th>
-      <th>难度 KD</th>
-      <th>CPC</th>
-      <th>排名</th>
-      <th>市场</th>
-      <th style="min-width:140px">排名页面</th>
-    </tr></thead><tbody>
-    ${buildRows(allLoaded)}
-    </tbody></table></div>`;
-
-    if(hasMore){
-      h+=`<div style="text-align:center;margin-top:16px;padding:16px;background:var(--bg3);border-radius:var(--rad);border:1px dashed var(--border)">
-        <div style="font-size:13px;color:var(--text2);margin-bottom:10px">
-          还有更多关键词未加载
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:12px">
-          点击加载下一页 (${PAGE}条)，约消耗 <strong style="color:var(--amber)">$${costPerPage.toFixed(3)}</strong>
-        </div>
-        <button class="btn btn-primary" onclick="showOrganicKws('${domain}',${offset+PAGE},${locCode})">
-          加载更多 +${PAGE}条
-        </button>
-      </div>`;
+      var seen=new Set();
+      locCounts={};
+      responses.forEach(function(data,li){
+        var loc=allLocs[li];var cnt=0;
+        (data.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){cnt=r.total_count||0;(r.items||[]).forEach(function(item){item._loc=loc;var kw=(item.keyword_data||{}).keyword||'';var key=kw+'_'+loc;if(!seen.has(key)){seen.add(key);pageItems.push(item);}});});});
+        if(cnt>0)locCounts[loc]=cnt;
+      });
+      pageItems.sort(function(a,b){return((b.keyword_data&&b.keyword_data.keyword_info&&b.keyword_data.keyword_info.search_volume)||0)-((a.keyword_data&&a.keyword_data.keyword_info&&a.keyword_data.keyword_info.search_volume)||0);});
+      total=Object.keys(locCounts).reduce(function(s,k){return s+locCounts[k];},0)||pageItems.length;
     } else {
-      h+=`<div style="text-align:center;padding:12px;font-size:12px;color:var(--text3)">✓ 已加载全部 ${allLoaded.length} 条</div>`;
+      var kwResp=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{target:domain,location_code:locCode,language_code:'en',limit:PAGE,offset:offset,order_by:['keyword_data.keyword_info.search_volume,desc']}]);
+      (kwResp.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){(r.items||[]).forEach(function(item){item._loc=locCode;pageItems.push(item);});total=r.total_count||pageItems.length+offset;locCounts[locCode]=total;});});
     }
 
-    if(!allLoaded.length) h+='<div class="empty-state" style="padding:1rem"><p>该市场暂无排名数据</p></div>';
-    document.getElementById('modal-body').innerHTML=h;
-  }catch(e){document.getElementById('modal-body').innerHTML=`<div class="alert alert-err">⚠ ${e.message}</div>`;}
+    var prevItems=MP.kws.allItems||[];
+    var allLoaded=offset===0?pageItems:prevItems.concat(pageItems);
+    MP.kws={domain:domain,offset:offset,total:total,items:pageItems,allItems:allLoaded,locCode:locCode,locCounts:locCounts};
+    var hasMore=!isAllMode&&(offset+pageItems.length<total);
+
+    var opts='<option value="0"'+(locCode===0?' selected':'')+'>全部主要市场（概览）</option>';
+    allLocs.forEach(function(loc){var cnt=locCounts[loc];opts+='<option value="'+loc+'"'+(locCode===loc?' selected':'')+'>'+(LOC_NAME[loc]||loc)+(cnt?' ('+cnt+')':'')+'</option>';});
+
+    var rows='';
+    allLoaded.forEach(function(item){
+      var kd2=item.keyword_data||{};var ki=kd2.keyword_info||{};var kp=kd2.keyword_properties||{};
+      var ranked=item.ranked_serp_element&&item.ranked_serp_element.serp_item;
+      var pos=ranked&&ranked.rank_absolute||'—';var url=ranked&&ranked.relative_url||'—';
+      var etv=ranked&&ranked.etv!=null?Math.round(ranked.etv):null;
+      var locLabel=LOC_SHORT[item._loc||locCode||2840]||String(item._loc||locCode);
+      rows+='<tr><td class="td-kw">'+(kd2.keyword||'—')+'</td><td>'+fmt(ki.search_volume)+'</td>'
+        +'<td style="color:var(--green);font-weight:500">'+(etv!=null?etv:'—')+'</td>'
+        +'<td>'+kdBdg(kp.keyword_difficulty)+'</td>'
+        +'<td>'+(ki.cpc?'$'+Number(ki.cpc).toFixed(2):'—')+'</td>'
+        +'<td>'+pos+'</td>'
+        +'<td style="white-space:nowrap;font-size:11px">'+locLabel+'</td>'
+        +'<td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--text3)">'+url+'</td></tr>';
+    });
+
+    var extra='';
+    if(hasMore){
+      extra='<div style="text-align:center;margin-top:16px;padding:16px;background:var(--bg3);border-radius:var(--rad);border:1px dashed var(--border)">'
+        +'<div style="font-size:13px;color:var(--text2);margin-bottom:6px">已加载 '+allLoaded.length+' / '+total+' 条</div>'
+        +'<div style="font-size:11px;color:var(--text3);margin-bottom:12px">加载下一页 ('+PAGE+'条)，约 <strong style="color:var(--amber)">$'+(PAGE*0.001).toFixed(3)+'</strong></div>'
+        +'<button class="btn btn-primary" id="kw-lm-btn">加载更多 +'+PAGE+'条</button></div>';
+    } else if(!isAllMode&&allLoaded.length>0){
+      extra='<div style="text-align:center;padding:10px;font-size:12px;color:var(--text3)">✓ 已加载全部 '+allLoaded.length+' 条</div>';
+    }
+
+    document.getElementById('modal-body').innerHTML=
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;justify-content:space-between">'
+      +'<div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:var(--text2)">市场：</span>'
+      +'<select id="kw-loc-modal" style="height:32px;font-size:12px">'+opts+'</select></div>'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<span style="font-size:12px;color:var(--text3)">已加载 <strong style="color:var(--text)">'+allLoaded.length+'</strong> / <strong style="color:var(--text)">'+total+'</strong> 条</span>'
+      +'<button class="btn btn-ghost btn-sm" id="kw-exp-btn">↓ 导出已加载</button></div></div>'
+      +'<div class="table-wrap"><table><thead><tr>'
+      +'<th style="min-width:180px">关键词</th><th>月均搜索量</th><th style="color:var(--green)">带来流量</th>'
+      +'<th>难度 KD</th><th>CPC</th><th>排名</th><th>市场</th><th style="min-width:140px">排名页面</th>'
+      +'</tr></thead><tbody>'+rows+'</tbody></table></div>'+extra;
+
+    var sel=document.getElementById('kw-loc-modal');
+    if(sel) sel.addEventListener('change',function(){showOrganicKws(MP.kws.domain,0,parseInt(this.value));});
+    var expBtn=document.getElementById('kw-exp-btn');
+    if(expBtn) expBtn.addEventListener('click',function(){exportModalData('kws');});
+    var lmBtn=document.getElementById('kw-lm-btn');
+    if(lmBtn) lmBtn.addEventListener('click',function(){showOrganicKws(MP.kws.domain,MP.kws.offset+PAGE,MP.kws.locCode);});
+
+  }catch(e){
+    document.getElementById('modal-body').innerHTML='<div class="alert alert-err">⚠ '+e.message+'</div>';
+  }
 }
 
 function exportModalData(type){
