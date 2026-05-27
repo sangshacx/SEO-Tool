@@ -489,7 +489,16 @@ async function runSiteExplorer(){
 
     setProg('se',75,'获取 DNS 信息...');
     let dnsData=null;
-    try{const dr=await fetch('/api/dns?domain='+domain);dnsData=await dr.json();}catch(e){}
+    try{
+      const [aR,nsR,mxR,txtR]=await Promise.all([
+        fetch('https://dns.google/resolve?name='+domain+'&type=A'),
+        fetch('https://dns.google/resolve?name='+domain+'&type=NS'),
+        fetch('https://dns.google/resolve?name='+domain+'&type=MX'),
+        fetch('https://dns.google/resolve?name='+domain+'&type=TXT')
+      ]);
+      const [a,ns,mx,txt]=await Promise.all([aR.json(),nsR.json(),mxR.json(),txtR.json()]);
+      dnsData={a,ns,mx,txt};
+    }catch(e){}
 
     // FIX: no strict matching, just grab first result
     let bk={rank:null,referring_domains:null,backlinks:null,referring_ips:null},ov={etv:null,kws:null};
