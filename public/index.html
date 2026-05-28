@@ -824,6 +824,7 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords
   h+=`<div class="stabs">
     <button class="stab active" onclick="switchSTab('se-rd',this,'se-stab')">引用域名 (${topRd.length})</button>
     <button class="stab" onclick="switchSTab('se-kw',this,'se-stab')">Top 关键词 (${topKws.length})</button>
+    <button class="stab" onclick="switchSTab('se-pages',this,'se-stab');loadPages('${domain}')">页面分析</button>
     <button class="stab" onclick="switchSTab('se-dns',this,'se-stab')">DNS 信息</button>
   </div>`;
 
@@ -865,6 +866,23 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords
     h+='</tbody></table></div>';
   }else h+='<div class="empty-state"><p>暂无关键词数据</p></div>';
   h+='</div>';
+
+  // Pages tab
+  h+='<div id="se-pages" class="se-stab stab-content">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    +'<span style="font-size:12px;color:var(--text3)">按页面流量排序，显示该页面的关键词数和流量</span>'
+    +'<button class="btn btn-ghost btn-sm" onclick="loadPages(\''+domain+'\')">加载页面数据</button>'
+    +'</div><div id="se-pages-content"><div style="text-align:center;padding:2rem;font-size:12px;color:var(--text3)">点击「加载页面数据」按需查询</div></div>'
+    +'</div>';
+
+  // Pages tab
+  h+=`<div id="se-pages" class="se-stab stab-content">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:12px;color:var(--text3)">按页面流量排序，显示该页面的关键词和外链</span>
+      <button class="btn btn-ghost btn-sm" onclick="loadPages('${domain}')">加载页面数据</button>
+    </div>
+    <div id="se-pages-content"><div style="text-align:center;padding:2rem;font-size:12px;color:var(--text3)">点击「加载页面数据」按需查询（避免不必要的费用）</div></div>
+  </div>`;
 
   // DNS tab
   h+=`<div id="se-dns" class="se-stab stab-content">`;
@@ -1681,6 +1699,133 @@ function renderSerp(items, kw, fromCache){
   }
 
   el.innerHTML = h;
+}
+
+/* ===== PAGE ANALYSIS ===== */
+async function loadPages(domain){
+  var el=document.getElementById('se-pages-content');
+  if(!el) return;
+  el.innerHTML='<div class="loading"><span class="spin"></span>\u52a0\u8f7d\u9875\u9762\u6570\u636e...</div>';
+  try{
+    var resp=await apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{
+      target:domain,location_code:2840,language_code:'en',
+      limit:100,order_by:['keyword_data.keyword_info.search_volume,desc']
+    }]);
+    if(resp.status_code!==20000) throw new Error(resp.status_message||'API error');
+    var pageMap={};
+    (resp.tasks||[]).forEach(function(t){
+      (t.result||[]).forEach(function(r){
+        (r.items||[]).forEach(function(item){
+          var ranked=item.ranked_serp_element&&item.ranked_serp_element.serp_item;
+          var url=ranked&&ranked.relative_url||'/';
+          var etv=(ranked&&ranked.etv)||0;
+          var kd2=item.keyword_data||{};var ki=kd2.keyword_info||{};
+          if(!pageMap[url]) pageMap[url]={url:url,kws:[],traffic:0,topKw:'',topKwSv:0};
+          pageMap[url].traffic+=etv;
+          pageMap[url].kws.push({kw:kd2.keyword||'',sv:ki.search_volume||0,pos:(ranked&&ranked.rank_absolute)||99});
+          if((ki.search_volume||0)>pageMap[url].topKwSv){pageMap[url].topKwSv=ki.search_volume||0;pageMap[url].topKw=kd2.keyword||'';}
+        });
+      });
+    });
+    var pages=Object.values(pageMap).sort(function(a,b){return b.traffic-a.traffic;});
+    if(!pages.length){el.innerHTML='<div class="empty-state" style="padding:1.5rem"><p>\u6682\u65e0\u9875\u9762\u6570\u636e</p></div>';return;}
+    window._pg={pages:pages,domain:domain,sortAsc:{traffic:false,kws:false}};
+    renderPagesTable(pages,domain);
+  }catch(e){el.innerHTML='<div class="alert alert-err">\u26a0 '+e.message+'</div>';}
+}
+
+function renderPagesTable(pages,domain){
+  var tbody='';
+  pages.forEach(function(p,i){
+    var fu='https://'+domain+p.url;
+    var sid='pg'+i;
+    tbody+='<tr>'
+      +'<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">'
+      +'<a href="'+fu+'" target="_blank" class="link" title="'+fu+'">'+p.url+'</a></td>'
+      +'<td style="color:var(--green);font-weight:500">'+Math.round(p.traffic)+'</td>'
+      +'<td><span class="link" data-pi="'+i+'" onclick="showPageKws(parseInt(this.dataset.pi))">'+p.kws.length+'</span></td>'
+      +'<td style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.topKw+'</td>'
+      +'<td id="'+sid+'rd"><span class="link" data-pi="'+i+'" onclick="loadPageBL(parseInt(this.dataset.pi))">\u52a0\u8f7d</span></td>'
+      +'<td id="'+sid+'bk"><span class="link" data-pi="'+i+'" onclick="loadPageBL2(parseInt(this.dataset.pi))">\u52a0\u8f7d</span></td>'
+      +'</tr>';
+  });
+  var h='<div class="table-wrap"><table><thead><tr>'
+    +'<th style="min-width:200px">\u9875\u9762 URL</th>'
+    +'<th style="cursor:pointer" onclick="sortPages(\'traffic\')">\u6d41\u91cf <span>\u2195</span></th>'
+    +'<th style="cursor:pointer" onclick="sortPages(\'kws\')">\u5173\u952e\u8bcd\u6570 <span>\u2195</span></th>'
+    +'<th style="min-width:150px">Top \u5173\u952e\u8bcd</th>'
+    +'<th>\u5f15\u7528\u57df\u540d</th>'
+    +'<th>\u5916\u94fe\u6570</th>'
+    +'</tr></thead><tbody>'+tbody+'</tbody></table></div>';
+  var el=document.getElementById('se-pages-content');
+  if(el) el.innerHTML=h;
+}
+
+function sortPages(col){
+  if(!window._pg) return;
+  window._pg.sortAsc[col]=!window._pg.sortAsc[col];
+  var asc=window._pg.sortAsc[col];
+  var sorted=window._pg.pages.slice().sort(function(a,b){
+    var va=col==='traffic'?a.traffic:a.kws.length;
+    var vb=col==='traffic'?b.traffic:b.kws.length;
+    return asc?(va-vb):(vb-va);
+  });
+  window._pg.pages=sorted;
+  renderPagesTable(sorted,window._pg.domain);
+}
+
+function showPageKws(idx){
+  if(!window._pg) return;
+  var p=window._pg.pages[idx];
+  if(!p) return;
+  openModal('\u9875\u9762\u5173\u952e\u8bcd \u2014 '+p.url);
+  var sorted=p.kws.slice().sort(function(a,b){return b.sv-a.sv;});
+  var h='<p style="font-size:12px;color:var(--text3);margin-bottom:12px">\u8be5\u9875\u5171\u6709 '+sorted.length+' \u4e2a\u5173\u952e\u8bcd\u6392\u540d</p>'
+    +'<div class="table-wrap"><table><thead><tr><th>\u5173\u952e\u8bcd</th><th>\u6708\u5747\u641c\u7d22\u91cf</th><th>\u6392\u540d\u4f4d\u7f6e</th></tr></thead><tbody>';
+  sorted.forEach(function(k){h+='<tr><td>'+k.kw+'</td><td>'+fmt(k.sv)+'</td><td>'+k.pos+'</td></tr>';});
+  h+='</tbody></table></div>';
+  document.getElementById('modal-body').innerHTML=h;
+}
+
+async function loadPageBL(idx){
+  if(!window._pg) return;
+  var p=window._pg.pages[idx];if(!p) return;
+  var fu='https://'+window._pg.domain+p.url;
+  openModal('\u5f15\u7528\u57df\u540d \u2014 '+p.url);
+  try{
+    var data=await apiFetch('POST','/api/dataforseo/backlinks/referring_domains/live',[{target:fu,limit:25,order_by:['rank,desc'],include_subdomains:false}]);
+    var items=[];(data.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){items.push.apply(items,r.items||[]);});});
+    if(!items.length){document.getElementById('modal-body').innerHTML='<div class="empty-state"><p>\u6682\u65e0\u5f15\u7528\u57df\u540d</p></div>';return;}
+    var h='<div class="table-wrap"><table><thead><tr><th>\u5f15\u7528\u57df\u540d</th><th>DR</th><th>\u5f15\u7528\u57df\u540d\u6570</th><th>\u603b\u5916\u94fe\u6570</th></tr></thead><tbody>';
+    items.forEach(function(r){
+      var dm=r.domain||'';
+      h+='<tr><td class="td-dm"><span class="link" data-dm="'+dm+'" onclick="closeModal();viewSite(this.dataset.dm)">'+dm+'</span></td>'
+        +'<td>'+drBdg(r.rank)+'</td><td>'+fmt(r.referring_domains)+'</td><td>'+fmt(r.backlinks)+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+    document.getElementById('modal-body').innerHTML=h;
+  }catch(e){document.getElementById('modal-body').innerHTML='<div class="alert alert-err">\u26a0 '+e.message+'</div>';}
+}
+
+async function loadPageBL2(idx){
+  if(!window._pg) return;
+  var p=window._pg.pages[idx];if(!p) return;
+  var fu='https://'+window._pg.domain+p.url;
+  openModal('\u5916\u94fe\u8be6\u60c5 \u2014 '+p.url);
+  try{
+    var data=await apiFetch('POST','/api/dataforseo/backlinks/backlinks/live',[{target:fu,limit:25,order_by:['rank,desc'],mode:'as_is',include_subdomains:false}]);
+    var items=[];(data.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){items.push.apply(items,r.items||[]);});});
+    if(!items.length){document.getElementById('modal-body').innerHTML='<div class="empty-state"><p>\u6682\u65e0\u5916\u94fe\u6570\u636e</p></div>';return;}
+    var h='<div class="table-wrap"><table><thead><tr><th style="min-width:200px">\u6765\u6e90\u9875\u9762</th><th>\u9519\u6587\u672c</th><th>DR</th><th>\u7c7b\u578b</th></tr></thead><tbody>';
+    items.forEach(function(item){
+      var df=item.dofollow?'<span class="bdg b-green">dofollow</span>':'<span class="bdg b-na">nofollow</span>';
+      h+='<tr><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="'+(item.url_from||'')+'" target="_blank" class="link">'+(item.url_from||'').replace(/^https?:\/\//,'').slice(0,50)+'</a></td>'
+        +'<td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(item.anchor||'—')+'</td>'
+        +'<td>'+drBdg(item.rank)+'</td><td>'+df+'</td></tr>';
+    });
+    h+='</tbody></table></div>';
+    document.getElementById('modal-body').innerHTML=h;
+  }catch(e){document.getElementById('modal-body').innerHTML='<div class="alert alert-err">\u26a0 '+e.message+'</div>';}
 }
 
 </script>
