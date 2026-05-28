@@ -259,6 +259,7 @@ th[data-col]:hover{color:var(--accent) !important;}
           <button class="btn btn-primary" id="kw-btn" onclick="runKw()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>查询</button>
         </div>
       </div>
+      <div id="kw-batch-wrap" style="display:none;margin-bottom:16px"><textarea id="kw-batch-input" placeholder="每行一个关键词，最多100个" style="width:100%;min-height:140px;font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rad-sm);color:var(--text);padding:10px;font-family:inherit;resize:vertical;box-sizing:border-box" oninput="updateBKCnt()"></textarea><div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:8px"><span id="bk-cnt" style="font-size:12px;color:var(--text3)">0 个关键词</span><div style="display:flex;gap:8px"><select id="kw-batch-loc" style="height:32px;font-size:12px"><option value="2840">🇺🇸 美国</option><option value="2826">🇬🇧 英国</option><option value="2276">🇩🇪 德国</option><option value="2250">🇫🇷 法国</option><option value="2036">🇦🇺 澳大利亚</option><option value="2124">🇨🇦 加拿大</option><option value="2392">🇯🇵 日本</option><option value="2356">🇮🇳 印度</option></select><button class="btn btn-primary" id="kw-batch-btn" onclick="runBatchKw()">批量查询</button></div></div></div>
       <div class="prog-wrap" id="kw-pw"><div class="prog-bar"><div class="prog-fill" id="kw-pf"></div></div><div class="prog-lbl" id="kw-pl"></div></div>
       <div id="kw-res"></div>
     </div>
@@ -1929,10 +1930,16 @@ async function runPageAnalysis(pageUrl, domain){
       +'<div class="grid-4" style="margin-bottom:20px">'
       +'<div class="metric-card"><div class="metric-label">页面流量</div><div class="metric-val">'+fmt(Math.round(totalTraffic))+'</div><div class="metric-sub">月均有机访问</div></div>'
       +'<div class="metric-card"><div class="metric-label">Organic 关键词</div><div class="metric-val">'+pageKws.length+'</div><div class="metric-sub">该页排名数量</div></div>'
-      +'<div class="metric-card"><div class="metric-label">引用域名数</div><div class="metric-val"><span class="link" onclick="showPageRdModal()">'+(bk.referring_domains!=null?fmt(bk.referring_domains):'0')+'</span></div><div class="metric-sub">点击查看</div></div>'
-      +'<div class="metric-card"><div class="metric-label">总外链数</div><div class="metric-val"><span class="link" onclick="showPageBkModal()">'+(bk.backlinks!=null?fmt(bk.backlinks):'0')+'</span></div><div class="metric-sub">点击查看</div></div>'
+      +'<div class="metric-card"><div class="metric-label">引用域名数</div><div class="metric-val">'+(bk.referring_domains===-1?'<span style="font-size:13px;color:var(--text3)">未收录</span>':(bk.referring_domains!=null?'<span class="link" onclick="showPageRdModal()">'+fmt(bk.referring_domains)+'</span>':'—'))+'</div><div class="metric-sub">'+(bk.referring_domains===-1?'DataForSEO暂无此页数据':'点击查看')+'</div></div>'
+      +'<div class="metric-card"><div class="metric-label">总外链数</div><div class="metric-val">'+(bk.backlinks===-1?'<span style="font-size:13px;color:var(--text3)">未收录</span>':(bk.backlinks!=null?'<span class="link" onclick="showPageBkModal()">'+fmt(bk.backlinks)+'</span>':'—'))+'</div><div class="metric-sub">'+(bk.backlinks===-1?'DataForSEO暂无此页数据':'点击查看')+'</div></div>'
       +'</div>';
 
+    if(bk.referring_domains===-1){
+      h+='<div style="font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rad);padding:10px 14px;margin-bottom:16px;color:var(--text2)">'
+        +'<strong>说明：</strong> DataForSEO 的外链数据库尚未收录该页面的外链信息。'
+        +'这并不意味该页面没有外链，可能是新页面或该页面未被抓取。'
+        +'</div>';
+    }
     h+='<div class="sec-title">Organic 关键词 ('+pageKws.length+')</div>';
     if(pageKws.length){
       h+='<div class="table-wrap" style="margin-bottom:20px"><table><thead><tr>'
@@ -1999,6 +2006,101 @@ async function showPageBkModal(){
     h+='</tbody></table></div>';
     document.getElementById('modal-body').innerHTML=h;
   }catch(e){document.getElementById('modal-body').innerHTML='<div class="alert alert-err">⚠ '+e.message+'</div>';}
+}
+
+/* ===== BATCH KW ===== */
+var _kwMode=0;
+function switchKwMode(btn,mode){
+  _kwMode=mode;
+  document.querySelectorAll('#page-keyword-explorer .stab[id^="kw-mode"]').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  var sw=document.getElementById('kw-single-wrap');
+  var bw=document.getElementById('kw-batch-wrap');
+  var se=document.getElementById('kw-se');
+  if(mode===1){if(sw)sw.style.display='none';if(bw)bw.style.display='block';if(se)se.style.display='none';}
+  else{if(sw)sw.style.display='';if(bw)bw.style.display='none';if(se)se.style.display='';}
+}
+function runKwDispatch(){if(_kwMode===1)runBatchKw();else runKw();}
+function updateBKCnt(){
+  var n=Math.min((document.getElementById('kw-batch-input').value.split('\n').map(function(l){return l.trim();}).filter(Boolean)).length,100);
+  var el=document.getElementById('bk-cnt');
+  if(el)el.textContent=n+' \u4e2a\u5173\u952e\u8bcd\uff0c\u9884\u8ba1 $'+(n*0.001).toFixed(3);
+}
+async function runBatchKw(){
+  var rawKws=(document.getElementById('kw-batch-input').value||'').split('\n').map(function(l){return l.trim();}).filter(Boolean).slice(0,100);
+  if(!rawKws.length){alert('\u8bf7\u8f93\u5165\u5173\u952e\u8bcd');return;}
+  var loc=parseInt(document.getElementById('kw-batch-loc').value)||2840;
+  document.getElementById('kw-batch-btn').disabled=true;
+  document.getElementById('kw-res').innerHTML='<div class="loading"><span class="spin"></span>\u6279\u91cf\u67e5\u8be2 '+rawKws.length+' \u4e2a\u5173\u952e\u8bcd...</div>';
+  setProg('kw',5,'\u67e5\u8be2\u4e2d...');
+  try{
+    var ck=cacheKey('bkw',rawKws.join('|'),loc);
+    var cached=cacheGet(ck);
+    if(cached){renderBKR(cached,loc,cacheAge(ck));hideProg('kw');document.getElementById('kw-batch-btn').disabled=false;return;}
+    var CHUNK=50,allR={};
+    for(var i=0;i<rawKws.length;i+=CHUNK){
+      var ch=rawKws.slice(i,i+CHUNK);
+      setProg('kw',10+70*(i/rawKws.length),'\u5904\u7406 '+(i+ch.length)+'/'+rawKws.length+'...');
+      var res=await Promise.all([
+        apiFetch('POST','/api/dataforseo/keywords_data/google_ads/search_volume/live',[{keywords:ch,location_code:loc,language_code:'en'}]).catch(function(){return{tasks:[]};} ),
+        apiFetch('POST','/api/dataforseo/dataforseo_labs/google/bulk_keyword_difficulty/live',[{keywords:ch,location_code:loc,language_code:'en'}]).catch(function(){return{tasks:[]};})
+      ]);
+      var svD=res[0],kdD=res[1];
+      (svD.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){var k=(r.keyword||'').toLowerCase();if(!allR[k])allR[k]={kw:r.keyword,sv:null,kd:null,cpc:null,trend:[]};allR[k].sv=r.search_volume;allR[k].cpc=r.cpc;allR[k].trend=(r.monthly_searches||[]).slice(-6).map(function(m){return m.search_volume;});});});
+      (kdD.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){var k=(r.keyword||'').toLowerCase();if(!allR[k])allR[k]={kw:r.keyword,sv:null,kd:null,cpc:null,trend:[]};allR[k].kd=r.keyword_difficulty;});});
+    }
+    var rows=rawKws.map(function(kw){return allR[kw.toLowerCase()]||{kw:kw,sv:null,kd:null,cpc:null,trend:[]};});
+    cacheSet(ck,rows);updateCacheStat();
+    setProg('kw',100,'\u5b8c\u6210');
+    renderBKR(rows,loc,null);
+  }catch(e){document.getElementById('kw-res').innerHTML='<div class="alert alert-err">\u26a0 '+e.message+'</div>';}
+  finally{document.getElementById('kw-batch-btn').disabled=false;hideProg('kw');}
+}
+var _bkR=[],_bkL=2840,_bkS={c:'sv',a:false};
+function renderBKR(rows,loc,fc){
+  _bkR=rows.slice();_bkL=loc;
+  var cb=fc?('<span style="font-size:11px;background:var(--gbg);color:var(--green);border:1px solid var(--green2);padding:2px 8px;border-radius:20px;margin-left:6px">\ud83d\udcbe '+fc+'</span>'):'';
+  var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">'
+    +'<span style="font-size:14px;font-weight:600">'+rows.length+' \u4e2a\u5173\u952e\u8bcd'+cb+'</span>'
+    +'<button class="btn btn-ghost btn-sm" onclick="expBKR()">\u2193 \u5bfc\u51fa CSV</button>'
+    +'</div>'
+    +'<div class="table-wrap"><table><thead><tr>'
+    +'<th style="min-width:200px">\u5173\u952e\u8bcd</th>'
+    +'<th style="cursor:pointer" onclick="sortBKR(0)">\u6708\u5747\u641c\u7d22\u91cf \u2195</th>'
+    +'<th style="cursor:pointer" onclick="sortBKR(1)">\u96be\u5ea6 KD \u2195</th>'
+    +'<th style="cursor:pointer" onclick="sortBKR(2)">CPC \u2195</th>'
+    +'<th>\u8d8b\u52bf</th>'
+    +'<th>\u8be6\u60c5</th>'
+    +'</tr></thead><tbody id="bkr-tbody">'
+    +mkBKRows(rows,loc)+'</tbody></table></div>';
+  document.getElementById('kw-res').innerHTML=h;
+}
+function mkBKRows(rows,loc){
+  return rows.map(function(r){
+    var kw=r.kw||'';
+    return '<tr>'
+      +'<td class="td-kw"><span class="link" data-kw="'+kw.replace(/"/g,'&quot;')+'" onclick="document.getElementById(\'kw-input\').value=this.dataset.kw;switchKwMode(document.getElementById(\'kw-mode-single\'),0);runKw()">'+kw+'</span></td>'
+      +'<td>'+(r.sv!=null?fmt(r.sv):'\u2014')+'</td>'
+      +'<td>'+kdBdg(r.kd)+'</td>'
+      +'<td>'+(r.cpc?'$'+Number(r.cpc).toFixed(2):'\u2014')+'</td>'
+      +'<td>'+spark(r.trend||[])+'</td>'
+      +'<td><span class="link" data-kw="'+kw.replace(/"/g,'&quot;')+'" onclick="openKwDetail(this.dataset.kw,'+(loc||2840)+',\'google\')">\u67e5\u770b</span></td>'
+      +'</tr>';
+  }).join('');
+}
+function sortBKR(col){
+  _bkS.a=_bkS.c===col?!_bkS.a:false;_bkS.c=col;
+  _bkR.sort(function(a,b){
+    var va=col===0?a.sv:col===1?(a.kd!=null?a.kd:999):(a.cpc||0);va=va||0;
+    var vb=col===0?b.sv:col===1?(b.kd!=null?b.kd:999):(b.cpc||0);vb=vb||0;
+    return _bkS.a?(va-vb):(vb-va);
+  });
+  var tb=document.getElementById('bkr-tbody');
+  if(tb)tb.innerHTML=mkBKRows(_bkR,_bkL);
+}
+function expBKR(){
+  if(!_bkR.length){alert('\u65e0\u6570\u636e');return;}
+  dlCsv('\u5173\u952e\u8bcd,\u6708\u5747\u641c\u7d22\u91cf,\u96be\u5ea6KD,CPC\n'+_bkR.map(function(r){return (r.kw||'')+','+(r.sv!=null?r.sv:'')+','+(r.kd!=null?r.kd:'')+','+(r.cpc||'');}).join('\n'),'batch_keywords.csv');
 }
 
 </script>
