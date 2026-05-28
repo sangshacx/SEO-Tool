@@ -1881,13 +1881,20 @@ async function runPageAnalysis(pageUrl, domain){
     var bkData=results[0],rdData=results[1],kwData=results[2];
 
     var bk={referring_domains:null,backlinks:null};
-    (bkData.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){
-      // DataForSEO uses different field names depending on target type
-      if(r.referring_domains!=null) bk.referring_domains=r.referring_domains;
-      if(r.referring_main_domains!=null) bk.referring_domains=r.referring_main_domains;
-      if(r.backlinks!=null) bk.backlinks=r.backlinks;
-      if(r.total_count!=null&&bk.backlinks==null) bk.backlinks=r.total_count;
-    });});
+    console.log('[PageAnalysis] bkData raw:', JSON.stringify(bkData).slice(0,500));
+    (bkData.tasks||[]).forEach(function(t){
+      console.log('[PageAnalysis] task status:', t.status_code, t.status_message);
+      (t.result||[]).forEach(function(r){
+        console.log('[PageAnalysis] result fields:', Object.keys(r), 'rd:', r.referring_domains, 'bk:', r.backlinks, 'rmd:', r.referring_main_domains);
+        if(r.referring_domains!=null) bk.referring_domains=r.referring_domains;
+        if(r.referring_main_domains!=null) bk.referring_domains=r.referring_main_domains;
+        if(r.backlinks!=null) bk.backlinks=r.backlinks;
+        if(r.total_count!=null&&bk.backlinks==null) bk.backlinks=r.total_count;
+      });
+      // If no results, task_error tells us why
+      if(!t.result||!t.result.length) console.log('[PageAnalysis] no result, data:', JSON.stringify(t.data||{}).slice(0,200));
+    });
+    console.log('[PageAnalysis] final bk:', bk);
 
     var topRd=[];
     (rdData.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){topRd.push.apply(topRd,(r.items||[]).slice(0,10));});});
