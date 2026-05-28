@@ -995,7 +995,7 @@ async function runKw(){
       const iSet = new Set(inputSet);
       S.kwResults={main,rel,q};S.kwParentMap=parentMap;S.kwInputSet=iSet;S.sessionKws+=main.length;updateDash();
       setProg('kw',100,'从缓存加载');
-      renderKwResults(main,rel,q,parentMap,iSet,se,loc,age);
+      renderKwResults(main,rel,q,parentMap,iSet,se,loc,age,[],[]);
       hideProg('kw');
       document.getElementById('kw-btn').disabled=false;
       return;
@@ -1030,7 +1030,14 @@ async function runKw(){
     // Save to cache (inputSet converted to Array for JSON serialization)
     // Only cache if we got real keyword data
     if(main.length>0||rel.length>0) { cacheSet(kwCacheKey, {main,rel,q,parentMap,inputSet:[...inputSet]});_lastKwCacheKey=kwCacheKey;updateCacheStat(); }
-    setProg('kw',100,'完成');renderKwResults(main,rel,q,parentMap,inputSet,se,loc,null);
+    // Build per-keyword seed metrics
+    const kwMetrics=[];
+    (sugData.tasks||[]).forEach((t,ti)=>{
+      (t.result||[]).forEach(r=>{
+        if(r.seed_keyword_data){const row=parseKwItem(r.seed_keyword_data);if(row.kw) kwMetrics.push(row);}
+      });
+    });
+    setProg('kw',100,'完成');renderKwResults(main,rel,q,parentMap,inputSet,se,loc,null,kws,kwMetrics);
   }catch(e){document.getElementById('kw-res').innerHTML='';showErr('kw-res',e.message);}
   finally{document.getElementById('kw-btn').disabled=false;hideProg('kw');}
 }
@@ -1077,7 +1084,7 @@ function reRenderKwTable(btn,newPage){
   container.innerHTML=kwTable(d.rows,d.showPT,d.parentMap,d.inputSet,50,newPage);
 }
 
-function renderKwResults(main,rel,q,parentMap,inputSet,se,loc,fromCache){
+function renderKwResults(main,rel,q,parentMap,inputSet,se,loc,fromCache,origKws,kwMetrics){
   const flag=LOC_FLAGS[loc]||'🌐';
   const seLabel={google:'Google',bing:'Bing'}[se]||se;
   const vk=main.filter(r=>r.kd!=null);const avgKd=vk.length?Math.round(vk.reduce((s,r)=>s+r.kd,0)/vk.length):0;
@@ -1085,7 +1092,29 @@ function renderKwResults(main,rel,q,parentMap,inputSet,se,loc,fromCache){
   _kwTableData['kwr-q']={rows:q,showPT:false,parentMap:null,inputSet:null};
   _kwTableData['kwr-rel']={rows:rel,showPT:false,parentMap:null,inputSet:null};
   const kwCacheBadge=fromCache?`<span style="font-size:11px;background:var(--gbg);color:var(--green);border:1px solid var(--green2);padding:2px 9px;border-radius:20px">💾 ${fromCache}</span>`:'';
-  let h=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+
+  // Multi-keyword summary table (when > 1 kw entered)
+  let multiKwHtml='';
+  if(origKws&&origKws.length>1&&kwMetrics&&kwMetrics.length>0){
+    multiKwHtml='<div style="margin-bottom:16px"><div style="font-size:13px;font-weight:600;margin-bottom:8px">\u8f93\u5165\u5173\u952e\u8bcd\u6982\u89c8</div>'
+      +'<div class="table-wrap"><table><thead><tr>'
+      +'<th>\u5173\u952e\u8bcd</th><th>\u6708\u5747\u641c\u7d22\u91cf</th><th>\u96be\u5ea6 KD</th><th>CPC</th><th>\u6311\u76d8\u5173\u952e\u8bcd</th>'
+      +'</tr></thead><tbody>';
+    kwMetrics.forEach(function(k){
+      multiKwHtml+='<tr>'
+        +'<td class="td-kw" style="cursor:pointer;color:var(--accent)" onclick="document.getElementById(\'kw-input\').value=\''+k.kw.replace(/'/g,"\'")+'\';runKw()">'+k.kw+'</td>'
+        +'<td>'+fmt(k.sv)+'</td>'
+        +'<td>'+kdBdg(k.kd)+'</td>'
+        +'<td>'+(k.cpc?'$'+Number(k.cpc).toFixed(2):'—')+'</td>'
+        +'<td><span class="link" onclick="openKwDetail(\''+k.kw.replace(/'/g,"\'")+'\',' +loc+',\''+se+'\')">'
+        +'\u67e5\u770b\u8be6\u60c5 \u2192</span></td>'
+        +'</tr>';
+    });
+    multiKwHtml+='</tbody></table></div>'
+      +'<div style="font-size:11px;color:var(--text3);margin-top:6px">\u70b9\u51fb\u5173\u952e\u8bcd\u8fdb\u884c\u5355\u72ec\u67e5\u8be2\uff0c\u4e0b\u65b9\u663e\u793a\u6240\u6709\u5173\u952e\u8bcd\u7684\u76f8\u5173\u8bcd\u548c\u95ee\u9898\u8bcd</div>'
+      +'</div>';
+  }
+  let h=multiKwHtml+`<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
     <span class="bdg b-blue">${seLabel}</span>
     <span class="bdg b-na">${flag}</span>
     ${kwCacheBadge}
@@ -1852,7 +1881,13 @@ async function runPageAnalysis(pageUrl, domain){
     var bkData=results[0],rdData=results[1],kwData=results[2];
 
     var bk={referring_domains:null,backlinks:null};
-    (bkData.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){bk.referring_domains=r.referring_domains;bk.backlinks=r.backlinks;});});
+    (bkData.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){
+      // DataForSEO uses different field names depending on target type
+      if(r.referring_domains!=null) bk.referring_domains=r.referring_domains;
+      if(r.referring_main_domains!=null) bk.referring_domains=r.referring_main_domains;
+      if(r.backlinks!=null) bk.backlinks=r.backlinks;
+      if(r.total_count!=null&&bk.backlinks==null) bk.backlinks=r.total_count;
+    });});
 
     var topRd=[];
     (rdData.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){topRd.push.apply(topRd,(r.items||[]).slice(0,10));});});
@@ -1887,8 +1922,8 @@ async function runPageAnalysis(pageUrl, domain){
       +'<div class="grid-4" style="margin-bottom:20px">'
       +'<div class="metric-card"><div class="metric-label">页面流量</div><div class="metric-val">'+fmt(Math.round(totalTraffic))+'</div><div class="metric-sub">月均有机访问</div></div>'
       +'<div class="metric-card"><div class="metric-label">Organic 关键词</div><div class="metric-val">'+pageKws.length+'</div><div class="metric-sub">该页排名数量</div></div>'
-      +'<div class="metric-card"><div class="metric-label">引用域名数</div><div class="metric-val"><span class="link" onclick="showPageRdModal()">'+fmt(bk.referring_domains)+'</span></div><div class="metric-sub">点击查看</div></div>'
-      +'<div class="metric-card"><div class="metric-label">总外链数</div><div class="metric-val"><span class="link" onclick="showPageBkModal()">'+fmt(bk.backlinks)+'</span></div><div class="metric-sub">点击查看</div></div>'
+      +'<div class="metric-card"><div class="metric-label">引用域名数</div><div class="metric-val"><span class="link" onclick="showPageRdModal()">'+(bk.referring_domains!=null?fmt(bk.referring_domains):'0')+'</span></div><div class="metric-sub">点击查看</div></div>'
+      +'<div class="metric-card"><div class="metric-label">总外链数</div><div class="metric-val"><span class="link" onclick="showPageBkModal()">'+(bk.backlinks!=null?fmt(bk.backlinks):'0')+'</span></div><div class="metric-sub">点击查看</div></div>'
       +'</div>';
 
     h+='<div class="sec-title">Organic 关键词 ('+pageKws.length+')</div>';
