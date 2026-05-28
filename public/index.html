@@ -225,7 +225,7 @@ th[data-col]:hover{color:var(--accent) !important;}
     <!-- SITE EXPLORER -->
     <div class="page" id="page-site-explorer">
       <div class="search-bar">
-        <input type="text" id="se-input" placeholder="输入域名，如 example.com" onkeydown="if(event.key==='Enter')runSiteExplorer()">
+        <input type="text" id="se-input" placeholder="域名 example.com 或完整URL https://example.com/page/" onkeydown="if(event.key==='Enter')runSiteExplorer()">
         <button class="btn btn-primary" onclick="runSiteExplorer()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>分析</button>
       </div>
       <div class="prog-wrap" id="se-pw"><div class="prog-bar"><div class="prog-fill" id="se-pf"></div></div><div class="prog-lbl" id="se-pl"></div></div>
@@ -272,7 +272,7 @@ th[data-col]:hover{color:var(--accent) !important;}
     <!-- BACKLINKS -->
     <div class="page" id="page-backlinks">
       <div class="search-bar">
-        <input type="text" id="bl-input" placeholder="输入域名，如 example.com" onkeydown="if(event.key==='Enter')runBacklinks()">
+        <input type="text" id="bl-input" placeholder="域名 example.com 或完整URL https://example.com/page/" onkeydown="if(event.key==='Enter')runBacklinks()">
         <button class="btn btn-primary" onclick="runBacklinks()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>查询</button>
       </div>
       <div class="prog-wrap" id="bl-pw"><div class="prog-bar"><div class="prog-fill" id="bl-pf"></div></div><div class="prog-lbl" id="bl-pl"></div></div>
@@ -659,7 +659,9 @@ async function runSiteExplorer(){
   try{ urlObj=new URL(rawInput.startsWith('http')?rawInput:'https://'+rawInput); }catch(e){}
   const domain=urlObj?urlObj.hostname:rawInput.replace(/^https?:\/\//,'').replace(/\/.*/,'').replace(/\/$/,'');
   const inputPath=urlObj&&urlObj.pathname&&urlObj.pathname!=='/'?urlObj.pathname:null;
-  if(inputPath) document.getElementById('se-input').value=domain;
+  const fullPageUrl=inputPath?('https://'+domain+inputPath):null;
+  // If a full page URL entered, run page-level analysis
+  if(fullPageUrl){ runPageAnalysis(fullPageUrl,domain); return; }
   if(!domain){showErr('se-res','请输入域名');return;}
   if(!S.login||!S.pass){
     document.getElementById('se-res').innerHTML='';
@@ -1832,6 +1834,129 @@ async function loadPageBL2(idx){
     h+='</tbody></table></div>';
     document.getElementById('modal-body').innerHTML=h;
   }catch(e){document.getElementById('modal-body').innerHTML='<div class="alert alert-err">\u26a0 '+e.message+'</div>';}
+}
+
+/* ===== PAGE-LEVEL ANALYSIS ===== */
+async function runPageAnalysis(pageUrl, domain){
+  document.getElementById('se-res').innerHTML='<div class="loading"><span class="spin"></span>分析页面...</div>';
+  setProg('se',10,'获取页面数据...');
+  try{
+    var path=pageUrl.replace('https://'+domain,'');
+    setProg('se',30,'查询外链...');
+    var results=await Promise.all([
+      apiFetch('POST','/api/dataforseo/backlinks/summary/live',[{target:pageUrl,include_subdomains:false}]).catch(function(){return{tasks:[]};;}),
+      apiFetch('POST','/api/dataforseo/backlinks/referring_domains/live',[{target:pageUrl,limit:10,order_by:['rank,desc'],include_subdomains:false}]).catch(function(){return{tasks:[]};;}),
+      apiFetch('POST','/api/dataforseo/dataforseo_labs/google/ranked_keywords/live',[{target:domain,location_code:2840,language_code:'en',limit:100,order_by:['keyword_data.keyword_info.search_volume,desc']}]).catch(function(){return{tasks:[]};;})
+    ]);
+    setProg('se',80,'处理数据...');
+    var bkData=results[0],rdData=results[1],kwData=results[2];
+
+    var bk={referring_domains:null,backlinks:null};
+    (bkData.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){bk.referring_domains=r.referring_domains;bk.backlinks=r.backlinks;});});
+
+    var topRd=[];
+    (rdData.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){topRd.push.apply(topRd,(r.items||[]).slice(0,10));});});
+
+    var pageKws=[],totalTraffic=0;
+    var pathClean=path.replace(/\/$/,'');
+    (kwData.tasks||[]).forEach(function(t){
+      (t.result||[]).forEach(function(r){
+        (r.items||[]).forEach(function(item){
+          var ranked=item.ranked_serp_element&&item.ranked_serp_element.serp_item;
+          var url=(ranked&&ranked.relative_url||'').replace(/\/$/,'');
+          if(url===pathClean||url===path){
+            var kd2=item.keyword_data||{};var ki=kd2.keyword_info||{};var kp=kd2.keyword_properties||{};
+            var etv=(ranked&&ranked.etv)||0;
+            totalTraffic+=etv;
+            pageKws.push({kw:kd2.keyword||'',sv:ki.search_volume||0,kd:kp.keyword_difficulty,cpc:ki.cpc,pos:ranked&&ranked.rank_absolute||99,etv:etv});
+          }
+        });
+      });
+    });
+    pageKws.sort(function(a,b){return b.sv-a.sv;});
+    window._currentPageUrl=pageUrl;
+
+    S.sessionDomains++;updateDash();
+    setProg('se',100,'完成');
+
+    var h='<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">'
+      +'<span style="font-size:11px;background:var(--bbg);color:var(--blue);padding:2px 8px;border-radius:12px">页面分析</span>'
+      +'<span style="font-size:12px;color:var(--text2);word-break:break-all">'+pageUrl+'</span>'
+      +'<button class="btn btn-ghost btn-sm" id="page-back-btn">查看完整域名 →</button>'
+      +'</div>'
+      +'<div class="grid-4" style="margin-bottom:20px">'
+      +'<div class="metric-card"><div class="metric-label">页面流量</div><div class="metric-val">'+fmt(Math.round(totalTraffic))+'</div><div class="metric-sub">月均有机访问</div></div>'
+      +'<div class="metric-card"><div class="metric-label">Organic 关键词</div><div class="metric-val">'+pageKws.length+'</div><div class="metric-sub">该页排名数量</div></div>'
+      +'<div class="metric-card"><div class="metric-label">引用域名数</div><div class="metric-val"><span class="link" onclick="showPageRdModal()">'+fmt(bk.referring_domains)+'</span></div><div class="metric-sub">点击查看</div></div>'
+      +'<div class="metric-card"><div class="metric-label">总外链数</div><div class="metric-val"><span class="link" onclick="showPageBkModal()">'+fmt(bk.backlinks)+'</span></div><div class="metric-sub">点击查看</div></div>'
+      +'</div>';
+
+    h+='<div class="sec-title">Organic 关键词 ('+pageKws.length+')</div>';
+    if(pageKws.length){
+      h+='<div class="table-wrap" style="margin-bottom:20px"><table><thead><tr>'
+        +'<th style="min-width:200px">关键词</th><th>月均搜索量</th><th>带来流量</th><th>难度 KD</th><th>CPC</th><th>排名</th>'
+        +'</tr></thead><tbody>';
+      pageKws.forEach(function(k){
+        h+='<tr><td class="td-kw">'+k.kw+'</td>'
+          +'<td>'+fmt(k.sv)+'</td>'
+          +'<td style="color:var(--green);font-weight:500">'+(k.etv>0?Math.round(k.etv):'—')+'</td>'
+          +'<td>'+kdBdg(k.kd)+'</td>'
+          +'<td>'+(k.cpc?'$'+Number(k.cpc).toFixed(2):'—')+'</td>'
+          +'<td>'+k.pos+'</td></tr>';
+      });
+      h+='</tbody></table></div>';
+    } else {
+      h+='<div class="empty-state" style="padding:1.5rem;margin-bottom:20px"><p>该页在美国市场暂无 Google 排名数据</p></div>';
+    }
+
+    if(topRd.length){
+      h+='<div class="sec-title">引用域名 (前10) <span class="link" style="font-size:12px;margin-left:8px" onclick="showPageRdModal()">查看全部 →</span></div>'
+        +'<div class="table-wrap"><table><thead><tr><th>引用域名</th><th>DR</th><th>引用域名数</th><th>总外链数</th></tr></thead><tbody>';
+      topRd.forEach(function(r){
+        var dm=r.domain||'';
+        h+='<tr><td class="td-dm"><span class="link" data-dm="'+dm+'" onclick="viewSite(this.dataset.dm)">'+dm+'</span></td>'
+          +'<td>'+drBdg(r.rank)+'</td><td>'+fmt(r.referring_domains)+'</td><td>'+fmt(r.backlinks)+'</td></tr>';
+      });
+      h+='</tbody></table></div>';
+    }
+
+    document.getElementById('se-res').innerHTML=h;
+    var backBtn=document.getElementById('page-back-btn');
+    if(backBtn){ backBtn.addEventListener('click',function(){document.getElementById('se-input').value=domain;runSiteExplorer();}); }
+  }catch(e){
+    document.getElementById('se-res').innerHTML='';
+    showErr('se-res',e.message);
+  }finally{hideProg('se');}
+}
+
+async function showPageRdModal(){
+  var pageUrl=window._currentPageUrl||'';
+  if(!pageUrl) return;
+  openModal('引用域名 — '+pageUrl);
+  try{
+    var data=await apiFetch('POST','/api/dataforseo/backlinks/referring_domains/live',[{target:pageUrl,limit:25,order_by:['rank,desc'],include_subdomains:false}]);
+    var items=[];(data.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){items.push.apply(items,r.items||[]);});});
+    if(!items.length){document.getElementById('modal-body').innerHTML='<div class="empty-state"><p>暂无引用域名数据</p></div>';return;}
+    var h='<div class="table-wrap"><table><thead><tr><th>引用域名</th><th>DR</th><th>引用域名数</th><th>总外链数</th></tr></thead><tbody>';
+    items.forEach(function(r){var dm=r.domain||'';h+='<tr><td class="td-dm"><span class="link" data-dm="'+dm+'" onclick="closeModal();viewSite(this.dataset.dm)">'+dm+'</span></td><td>'+drBdg(r.rank)+'</td><td>'+fmt(r.referring_domains)+'</td><td>'+fmt(r.backlinks)+'</td></tr>';});
+    h+='</tbody></table></div>';
+    document.getElementById('modal-body').innerHTML=h;
+  }catch(e){document.getElementById('modal-body').innerHTML='<div class="alert alert-err">⚠ '+e.message+'</div>';}
+}
+
+async function showPageBkModal(){
+  var pageUrl=window._currentPageUrl||'';
+  if(!pageUrl) return;
+  openModal('外链详情 — '+pageUrl);
+  try{
+    var data=await apiFetch('POST','/api/dataforseo/backlinks/backlinks/live',[{target:pageUrl,limit:25,order_by:['rank,desc'],mode:'as_is',include_subdomains:false}]);
+    var items=[];(data.tasks||[]).forEach(function(t){(t.result||[]).forEach(function(r){items.push.apply(items,r.items||[]);});});
+    if(!items.length){document.getElementById('modal-body').innerHTML='<div class="empty-state"><p>暂无外链数据</p></div>';return;}
+    var h='<div class="table-wrap"><table><thead><tr><th style="min-width:200px">来源页面</th><th>错文本</th><th>DR</th><th>类型</th></tr></thead><tbody>';
+    items.forEach(function(item){var df=item.dofollow?'<span class="bdg b-green">dofollow</span>':'<span class="bdg b-na">nofollow</span>';h+='<tr><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="'+(item.url_from||'')+'" target="_blank" class="link">'+(item.url_from||'').replace(/^https?:\/\//,'').slice(0,50)+'</a></td><td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(item.anchor||'—')+'</td><td>'+drBdg(item.rank)+'</td><td>'+df+'</td></tr>';});
+    h+='</tbody></table></div>';
+    document.getElementById('modal-body').innerHTML=h;
+  }catch(e){document.getElementById('modal-body').innerHTML='<div class="alert alert-err">⚠ '+e.message+'</div>';}
 }
 
 </script>
