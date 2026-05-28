@@ -654,7 +654,12 @@ function viewSite(domain){document.getElementById('se-input').value=domain;nav('
 
 /* SITE EXPLORER */
 async function runSiteExplorer(){
-  const domain=document.getElementById('se-input').value.trim().replace(/^https?:\/\//,'').replace(/\/$/,'');
+  var rawInput=document.getElementById('se-input').value.trim();
+  var urlObj=null;
+  try{ urlObj=new URL(rawInput.startsWith('http')?rawInput:'https://'+rawInput); }catch(e){}
+  const domain=urlObj?urlObj.hostname:rawInput.replace(/^https?:\/\//,'').replace(/\/.*/,'').replace(/\/$/,'');
+  const inputPath=urlObj&&urlObj.pathname&&urlObj.pathname!=='/'?urlObj.pathname:null;
+  if(inputPath) document.getElementById('se-input').value=domain;
   if(!domain){showErr('se-res','请输入域名');return;}
   if(!S.login||!S.pass){
     document.getElementById('se-res').innerHTML='';
@@ -776,6 +781,7 @@ function renderSiteExplorer(domain,bk,ov,topRd,topKws,histItems,dnsData,aRecords
   const hasOvData=ov&&(ov.etv!=null||ov.kws!=null);
   // Metrics row
   let noDataWarn='';
+  var pageUrlNote=(typeof inputPath!=='undefined'&&inputPath)?'<div class="alert alert-info" style="margin-bottom:12px">检测到你输入的是具体页面地址，已自动提取域名分析。点击「页面分析」标签可查看具体页面的外链和关键词。</div>':'';
   if(!hasBacklinkData&&!hasOvData){noDataWarn=`<div style="background:var(--abg);border:1px solid #92400e;border-radius:var(--rad);padding:20px;margin-bottom:20px">
     <div style="font-size:14px;font-weight:600;color:var(--amber);margin-bottom:8px">⚠ 暂无数据</div>
     <div style="font-size:13px;color:var(--text2);line-height:1.6">
