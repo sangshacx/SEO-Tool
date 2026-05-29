@@ -1680,38 +1680,41 @@ async function runBatch(){
         document.getElementById('batch-pl').textContent = '处理中 ' + (done+chunk.length) + '/' + total + '...';
         document.getElementById('batch-pf').style.width = (10 + 75*(done/total)) + '%';
 
-        var results = await Promise.all([
-          apiFetch('POST','/api/dataforseo/backlinks/summary/live',
-            chunk.map(function(d){ return {target:d,include_subdomains:true}; })).catch(function(){ return {tasks:[]}; }),
-          apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',
-            chunk.map(function(d){ return {target:d,location_code:2840,language_code:'en'}; })).catch(function(){ return {tasks:[]}; })
-        ]);
-        var bkData = results[0], ovData = results[1];
-
-        bkData.tasks && bkData.tasks.forEach(function(t, ti){
-          var dom=(t.data&&t.data.target)||chunk[ti]||'';
-          if(!dom) return;
-          if(t.result && t.result.length){
-            t.result.forEach(function(r){
-              var rd=r.referring_domains!=null?r.referring_domains:(r.referring_main_domains!=null?r.referring_main_domains:null);
-              bkMap[dom]={rank:r.rank,ref_domains:rd,backlinks:r.backlinks};
-            });
-          } else {
-            // Domain checked but no backlink data in DB
-            bkMap[dom]={rank:null,ref_domains:null,backlinks:null};
-          }
+        // backlinks/summary/live only supports ONE target per call
+        // Send parallel individual requests for each domain
+        var bkPromises = chunk.map(function(d){
+          return apiFetch('POST','/api/dataforseo/backlinks/summary/live',
+            [{target:d,include_subdomains:true}]).catch(function(){ return {tasks:[]}; });
         });
+        // domain_rank_overview supports batch
+        var ovPromise = apiFetch('POST','/api/dataforseo/dataforseo_labs/google/domain_rank_overview/live',
+          chunk.map(function(d){ return {target:d,location_code:2840,language_code:'en'}; })
+        ).catch(function(){ return {tasks:[]}; });
+
+        var allResults = await Promise.all(bkPromises.concat([ovPromise]));
+        var ovData = allResults[allResults.length - 1];
+
+        // Parse backlinks - one result per domain
+        chunk.forEach(function(d, ci){
+          var bkData = allResults[ci];
+          (bkData.tasks||[]).forEach(function(t){
+            if(t.result && t.result.length){
+              t.result.forEach(function(r){
+                var rd=r.referring_domains!=null?r.referring_domains:(r.referring_main_domains!=null?r.referring_main_domains:null);
+                bkMap[d]={rank:r.rank,ref_domains:rd,backlinks:r.backlinks};
+              });
+            }
+          });
+        });
+
+        // Parse domain overview (batch response)
         ovData.tasks && ovData.tasks.forEach(function(t){
-          var tgt = t.data && t.data.target || '';
+          var tgt = (t.data&&t.data.target) || '';
           if(!tgt) return;
-          if(t.result && t.result.length){
-            t.result.forEach(function(r){
-              var item = r.items && r.items[0];
-              if(item && item.metrics) ovMap[tgt]={etv:item.metrics.organic&&item.metrics.organic.etv,kws:item.metrics.organic&&item.metrics.organic.count};
-            });
-          } else {
-            ovMap[tgt]={etv:0,kws:0};
-          }
+          (t.result||[]).forEach(function(r){
+            var item = r.items && r.items[0];
+            if(item && item.metrics) ovMap[tgt]={etv:item.metrics.organic&&item.metrics.organic.etv,kws:item.metrics.organic&&item.metrics.organic.count};
+          });
         });
 
         done += chunk.length;
