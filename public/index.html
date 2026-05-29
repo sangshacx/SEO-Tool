@@ -217,6 +217,11 @@ th[data-col]:hover{color:var(--text) !important}
 .qa-card-desc{font-size:12px;color:var(--text3);line-height:1.5}
 
 /* SCROLLBAR */
+
+.kw-copy-cell:hover .copy-kw-btn{visibility:visible !important}
+.td-kw:hover .copy-kw-btn{visibility:visible !important}
+
+.td-kw:hover .copy-kw-btn, .kw-copy-cell:hover .copy-kw-btn, .td-kw-inner:hover .copy-kw-btn{visibility:visible !important}
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:3px}
@@ -415,12 +420,15 @@ th[data-col]:hover{color:var(--text) !important}
 
     <!-- BATCH ANALYSIS PAGE -->
     <div class="page" id="page-batch">
-      <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rad);padding:20px;margin-bottom:16px">
-        <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:6px">批量域名分析
-          <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:8px">最多200个，每域名约 $0.003</span>
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <span style="font-size:18px">🌐</span>
+          <div>
+            <div style="font-size:15px;font-weight:800;letter-spacing:-.3px">批量域名分析</div>
+            <div style="font-size:12px;color:var(--text3);margin-top:2px">最多200个 · 每域名约 $0.003 · 支持缓存</div>
+          </div>
         </div>
-        <p style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.6">每行输入一个域名，适合筛选 Guest Post 资源。分析完成后可一键导出 CSV。</p>
-        <textarea id="batch-input" placeholder="example.com&#10;blog.io&#10;industry-site.net&#10;（每行一个，最多200个）" style="width:100%;min-height:130px;font-size:13px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--rad-sm);color:var(--text);padding:10px;font-family:inherit;resize:vertical" oninput="updateBatchCnt()"></textarea>
+        <textarea id="batch-input" placeholder="每行输入一个域名，如：&#10;example.com&#10;blog.io&#10;industry-site.net" style="width:100%;min-height:150px;font-size:13px;background:#0f1525;border:1px solid #243352;border-radius:6px;color:#e8eeff;padding:12px 14px;font-family:inherit;resize:vertical;line-height:1.8;display:block" oninput="updateBatchCnt()"></textarea>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px">
           <span id="batch-cnt" style="font-size:12px;color:var(--text3)">0 个域名，预计费用 $0.000</span>
           <button class="btn btn-primary" id="batch-btn" onclick="runBatch()">
@@ -1166,7 +1174,7 @@ function kwRow(r,showPT,parentMap,inputSet){
   const isSeed=inputSet&&inputSet.has((r.kw||'').toLowerCase());
   const pt=showPT&&parentMap&&parentMap[(r.kw||'').toLowerCase()]?`<span class="pt-badge">${parentMap[(r.kw||'').toLowerCase()]}</span>`:'—';
   const kwCell=`<span class="link" onclick="openKwDetail('${(r.kw||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${isSeed?`<strong>${r.kw}</strong>`:r.kw||'—'}</span>`;
-  return`<tr><td class="td-kw" title="${r.kw||''}">${kwCell}</td><td>${fmt(r.sv)}</td><td>${kdBdg(r.kd)}</td><td>${r.cpc?'$'+Number(r.cpc).toFixed(2):'—'}</td><td>${spark(r.trend)}</td>${showPT?`<td>${pt}</td>`:''}</tr>`;
+  return`<tr onmouseenter="this.querySelector('.ckb').style.visibility='visible'" onmouseleave="this.querySelector('.ckb').style.visibility='hidden'"><td class="td-kw" title="${r.kw||''}">${kwCell}<button class="ckb copy-kw-btn" data-kw="${(r.kw||'').replace(/"/g,'&quot;')}" onclick="copyKw(this)" style="background:none;border:none;cursor:pointer;padding:1px 4px;color:var(--text3);font-size:12px;visibility:hidden;margin-left:4px;vertical-align:middle;border-radius:3px" title="\u590d\u5236">\u2398</button></td><td>${fmt(r.sv)}</td><td>${kdBdg(r.kd)}</td><td>${r.cpc?'$'+Number(r.cpc).toFixed(2):'—'}</td><td>${spark(r.trend)}</td>${showPT?`<td>${pt}</td>`:''}</tr>`;
 }
 
 function kwTable(rows,showPT,parentMap,inputSet,pageSize,page){
@@ -2198,7 +2206,7 @@ function mkBKRows(rows,loc){
   return rows.map(function(r){
     var kw=r.kw||'';
     return '<tr>'
-      +'<td class="td-kw"><span class="link" data-kw="'+kw.replace(/"/g,'&quot;')+'" onclick="document.getElementById(\'kw-input\').value=this.dataset.kw;switchKwMode(document.getElementById(\'kw-mode-single\'),0);runKw()">'+kw+'</span></td>'
+      +'<td class="td-kw kw-copy-cell"><span class="link" data-kw="'+kw.replace(/"/g,'&quot;')+'" onclick="document.getElementById(\'kw-input\').value=this.dataset.kw;switchKwMode(document.getElementById(\'kw-mode-single\'),0);runKw()">'+kw+'</span> <button class="copy-kw-btn" data-kw="'+kw.replace(/"/g,'&quot;')+'" onclick="copyKw(this)" title="复制" style="background:none;border:none;cursor:pointer;padding:1px 4px;border-radius:3px;color:var(--text3);font-size:11px;visibility:hidden">⎘</button></td>'
       +'<td>'+(r.sv!=null?fmt(r.sv):'\u2014')+'</td>'
       +'<td>'+kdBdg(r.kd)+'</td>'
       +'<td>'+(r.cpc?'$'+Number(r.cpc).toFixed(2):'\u2014')+'</td>'
@@ -2220,6 +2228,25 @@ function sortBKR(col){
 function expBKR(){
   if(!_bkR.length){alert('\u65e0\u6570\u636e');return;}
   dlCsv('\u5173\u952e\u8bcd,\u6708\u5747\u641c\u7d22\u91cf,\u96be\u5ea6KD,CPC\n'+_bkR.map(function(r){return (r.kw||'')+','+(r.sv!=null?r.sv:'')+','+(r.kd!=null?r.kd:'')+','+(r.cpc||'');}).join('\n'),'batch_keywords.csv');
+}
+
+function copyKw(btn){
+  var kw=btn.dataset.kw||'';
+  navigator.clipboard.writeText(kw).then(function(){
+    var orig=btn.textContent;
+    btn.textContent='✓';
+    btn.style.color='var(--green)';
+    btn.style.opacity='1';
+    setTimeout(function(){btn.textContent=orig;btn.style.color='';btn.style.opacity='0';},1200);
+  }).catch(function(){
+    // fallback
+    var ta=document.createElement('textarea');
+    ta.value=kw;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();document.execCommand('copy');
+    document.body.removeChild(ta);
+    btn.textContent='✓';btn.style.color='var(--green)';
+    setTimeout(function(){btn.textContent='⎘';btn.style.color='';},1200);
+  });
 }
 
 </script>
