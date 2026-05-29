@@ -1689,18 +1689,29 @@ async function runBatch(){
         var bkData = results[0], ovData = results[1];
 
         bkData.tasks && bkData.tasks.forEach(function(t, ti){
-          t.result && t.result.forEach(function(r){
-            var dom=chunk[ti]||(t.data&&t.data.target)||'';
-            var rd=r.referring_domains!=null?r.referring_domains:(r.referring_main_domains!=null?r.referring_main_domains:null);
-            bkMap[dom]={rank:r.rank,ref_domains:rd,backlinks:r.backlinks};
-          });
+          var dom=(t.data&&t.data.target)||chunk[ti]||'';
+          if(!dom) return;
+          if(t.result && t.result.length){
+            t.result.forEach(function(r){
+              var rd=r.referring_domains!=null?r.referring_domains:(r.referring_main_domains!=null?r.referring_main_domains:null);
+              bkMap[dom]={rank:r.rank,ref_domains:rd,backlinks:r.backlinks};
+            });
+          } else {
+            // Domain checked but no backlink data in DB
+            bkMap[dom]={rank:null,ref_domains:null,backlinks:null};
+          }
         });
         ovData.tasks && ovData.tasks.forEach(function(t){
           var tgt = t.data && t.data.target || '';
-          t.result && t.result.forEach(function(r){
-            var item = r.items && r.items[0];
-            if(item && item.metrics) ovMap[tgt] = {etv:item.metrics.organic&&item.metrics.organic.etv, kws:item.metrics.organic&&item.metrics.organic.count};
-          });
+          if(!tgt) return;
+          if(t.result && t.result.length){
+            t.result.forEach(function(r){
+              var item = r.items && r.items[0];
+              if(item && item.metrics) ovMap[tgt]={etv:item.metrics.organic&&item.metrics.organic.etv,kws:item.metrics.organic&&item.metrics.organic.count};
+            });
+          } else {
+            ovMap[tgt]={etv:0,kws:0};
+          }
         });
 
         done += chunk.length;
@@ -1708,7 +1719,9 @@ async function runBatch(){
       }
 
       toFetch.forEach(function(d){
-        cacheSet(cacheKey('batch',d), {bk:bkMap[d]||{}, ov:ovMap[d]||{}});
+        var bkE=bkMap[d]||{};var ovE=ovMap[d]||{};
+        var hasData=(bkE.rank!=null||bkE.ref_domains!=null)||(ovE.etv>0||ovE.kws>0);
+        if(hasData) cacheSet(cacheKey('batch',d),{bk:bkE,ov:ovE});
       });
       updateCacheStat();
     }
