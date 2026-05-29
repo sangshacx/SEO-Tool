@@ -114,7 +114,8 @@ tr:hover td{background:rgba(91,142,249,.04)}
 .btn-icon:hover{border-color:var(--border2);color:var(--text)}
 
 /* INPUTS */
-input,select,textarea{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rad-sm);color:var(--text);padding:10px 14px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s}
+input,textarea{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rad-sm);color:var(--text);padding:10px 14px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s,box-shadow .2s;width:100%;box-sizing:border-box}
+select{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rad-sm);color:var(--text);padding:8px 12px;font-size:13px;font-family:inherit;outline:none;transition:border-color .2s}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,142,249,.15)}
 input::placeholder,textarea::placeholder{color:var(--text3)}
 select option{background:var(--bg3)}
@@ -417,6 +418,8 @@ th[data-col]:hover{color:var(--text) !important}
       <button class="btn btn-primary" onclick="runDebug()">测试外链 API</button>
       <button class="btn btn-ghost" onclick="runDebugLabs()">测试 Labs API</button>
     </div>
+  </div>
+</div>
 
     <!-- BATCH ANALYSIS PAGE -->
     <div class="page" id="page-batch">
