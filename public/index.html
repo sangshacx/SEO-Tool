@@ -405,9 +405,6 @@ th[data-col]:hover{color:var(--text) !important}
       <div id="bl-res"></div>
     </div>
 
-  </div>
-</div>
-
 <!-- DEBUG MODAL -->
 <div class="modal-overlay" id="debug-modal">
   <div class="modal-box" style="max-width:800px">
@@ -442,7 +439,6 @@ th[data-col]:hover{color:var(--text) !important}
       </div>
       <div id="batch-res"></div>
     </div>
-
   </div>
 </div>
 
@@ -1694,7 +1690,9 @@ async function runBatch(){
 
         bkData.tasks && bkData.tasks.forEach(function(t, ti){
           t.result && t.result.forEach(function(r){
-            bkMap[chunk[ti]] = {rank:r.rank, ref_domains:r.referring_domains, backlinks:r.backlinks};
+            var dom=chunk[ti]||(t.data&&t.data.target)||'';
+            var rd=r.referring_domains!=null?r.referring_domains:(r.referring_main_domains!=null?r.referring_main_domains:null);
+            bkMap[dom]={rank:r.rank,ref_domains:rd,backlinks:r.backlinks};
           });
         });
         ovData.tasks && ovData.tasks.forEach(function(t){
