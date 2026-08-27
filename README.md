@@ -36,3 +36,5 @@ https://seo-tool-xxx.pages.dev
 
 ### 第三步：使用
 打开网址，填入 DataForSEO 的 Login 和 Password，点测试连接即可。
+
+SEO Pro V2 development branch.
