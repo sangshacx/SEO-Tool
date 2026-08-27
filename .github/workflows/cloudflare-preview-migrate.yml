@@ -1,0 +1,44 @@
+name: Apply Preview D1 Migration
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - .github/workflows/cloudflare-preview-migrate.yml
+
+permissions:
+  contents: read
+
+jobs:
+  migrate-preview-d1:
+    name: Migrate seo-pro-v2-preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Check out seo-pro-v2
+        uses: actions/checkout@v5
+
+      - name: Verify Preview credentials
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "CLOUDFLARE_API_TOKEN is missing"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "CLOUDFLARE_ACCOUNT_ID is missing"; exit 1; }
+
+      - name: Confirm Preview D1 target
+        run: npx --yes wrangler@4 d1 info seo-pro-v2-preview
+
+      - name: Apply alpha core schema to Preview D1
+        run: npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote --yes --file migrations/0001_alpha_core.sql
+
+      - name: Verify Preview D1 tables
+        run: >
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote
+          --command "SELECT name FROM sqlite_schema
+          WHERE type = 'table'
+          AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings')
+          ORDER BY name;"
