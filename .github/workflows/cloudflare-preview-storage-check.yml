@@ -1,0 +1,52 @@
+name: Cloudflare Preview Storage Check
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - .github/workflows/cloudflare-preview-storage-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify-preview-storage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Verify required secrets
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Verify keyword and metrics rows
+        shell: bash
+        run: >
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview
+          --remote --yes
+          --command "SELECT k.keyword, k.language_code, k.location_code,
+          m.search_volume, m.keyword_difficulty, m.cpc_usd, m.actual_cost_usd
+          FROM keywords k
+          JOIN keyword_metrics m ON m.keyword_id = k.id
+          WHERE k.normalized_keyword = 'waterproof membrane'
+          ORDER BY m.fetched_at DESC LIMIT 1;"
+
+      - name: Verify API usage rows
+        shell: bash
+        run: >
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview
+          --remote --yes
+          --command "SELECT request_id, task_count, result_count,
+          actual_cost_usd, cache_hit, status, http_status, duration_ms
+          FROM api_usage
+          WHERE request_id IN (
+          'c78eed77-579e-4a31-b533-9c2042b80b3f',
+          '919c0099-b0ba-4312-b4ff-1b3dcb047637'
+          )
+          ORDER BY created_at ASC;"
