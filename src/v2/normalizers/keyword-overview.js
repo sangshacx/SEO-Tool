@@ -21,7 +21,8 @@ function normalizeMonthlySearches(monthlySearches) {
       (a, b) =>
         b.year - a.year ||
         b.month - a.month,
-    );
+    )
+    .slice(0, 12);
 }
 
 export function normalizeKeywordOverview(providerResult) {
