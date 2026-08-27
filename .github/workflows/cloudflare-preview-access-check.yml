@@ -1,0 +1,38 @@
+name: Cloudflare Preview Access Check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-preview-access:
+    name: Check Preview resources
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - name: Check out seo-pro-v2
+        uses: actions/checkout@v4
+
+      - name: Verify required secrets exist
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo "CLOUDFLARE_API_TOKEN is missing"; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "CLOUDFLARE_ACCOUNT_ID is missing"; exit 1; }
+
+      - name: Verify Cloudflare authentication
+        run: npx --yes wrangler@4 whoami
+
+      - name: Check Pages Preview deployments
+        run: npx --yes wrangler@4 pages deployment list --project-name seo-tool --environment preview
+
+      - name: Check Preview D1 database
+        run: npx --yes wrangler@4 d1 info seo-pro-v2-preview
+
+      - name: Check KV namespaces
+        run: npx --yes wrangler@4 kv namespace list
