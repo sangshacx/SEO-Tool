@@ -47,6 +47,6 @@ jobs:
           FROM api_usage
           WHERE request_id IN (
           'c78eed77-579e-4a31-b533-9c2042b80b3f',
-          '919c0099-b0ba-4312-b4ff-1b3dcb047637'
+          '7bd0e603-4529-4333-9b47-c5a87328e24b'
           )
           ORDER BY created_at ASC;"
