@@ -1,6 +1,11 @@
 name: Cloudflare Preview Access Check
 
 on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - .github/workflows/cloudflare-preview-access-check.yml
   workflow_dispatch:
 
 permissions:
