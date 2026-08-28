@@ -16,3 +16,7 @@ export function backlinkSnapshotCacheKey(domain) {
 export function referringDomainsCacheKey({ domain, limit, offset, sort }) {
   return ["v2", "referring-domains", "v1", domain, "subdomains", "live", limit, offset, sort].join(":");
 }
+
+export function backlinkDetailsCacheKey({ domain, limit, offset, sort, status, follow }) {
+  return ["v2", "backlink-details", "v1", domain, "subdomains", status, follow, limit, offset, sort].join(":");
+}
