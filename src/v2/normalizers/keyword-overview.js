@@ -1,3 +1,5 @@
+import { scoreKeywordPotential } from "../scoring/keyword-potential.js";
+
 function normalizeMonthlySearches(monthlySearches) {
   if (!Array.isArray(monthlySearches)) {
     return [];
@@ -36,7 +38,7 @@ export function normalizeKeywordOverview(providerResult) {
   const properties = item.keyword_properties ?? {};
   const intent = item.search_intent_info ?? {};
 
-  return {
+  const overview = {
     keyword: item.keyword ?? null,
     location_code: item.location_code ?? providerResult.location_code ?? null,
     language_code: item.language_code ?? providerResult.language_code ?? null,
@@ -79,6 +81,13 @@ export function normalizeKeywordOverview(providerResult) {
     data_freshness: {
       keyword_metrics_updated_at:
         keywordInfo.last_updated_time ?? null,
+    },
+  };
+
+  return {
+    ...overview,
+    intelligence: {
+      keyword_potential: scoreKeywordPotential(overview),
     },
   };
 }
