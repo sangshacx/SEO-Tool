@@ -6,6 +6,10 @@ import {
   normalizeKeywordOverview,
 } from "../../../../src/v2/normalizers/keyword-overview.js";
 import {
+  KEYWORD_POTENTIAL_SCORE_VERSION,
+  scoreKeywordPotential,
+} from "../../../../src/v2/scoring/keyword-potential.js";
+import {
   buildKeywordOverviewCacheKey,
   persistKeywordOverview,
   readKeywordOverviewCache,
@@ -46,6 +50,26 @@ function normalizeKeyword(value) {
   return typeof value === "string"
     ? value.trim().replace(/\s+/g, " ")
     : "";
+}
+
+function ensureKeywordPotential(data) {
+  if (!data) {
+    return data;
+  }
+
+  const existingScore = data.intelligence?.keyword_potential;
+
+  if (existingScore?.version === KEYWORD_POTENTIAL_SCORE_VERSION) {
+    return data;
+  }
+
+  return {
+    ...data,
+    intelligence: {
+      ...(data.intelligence ?? {}),
+      keyword_potential: scoreKeywordPotential(data),
+    },
+  };
 }
 
 async function safelyRecordUsage(options) {
@@ -139,13 +163,19 @@ export async function onRequestPost({ request, env }) {
     const cachedEntry = await readKeywordOverviewCache(env.CACHE, cacheKey);
 
     if (cachedEntry && Object.hasOwn(cachedEntry, "data")) {
+      const cachedData = ensureKeywordPotential(cachedEntry.data);
+
+      if (cachedData !== cachedEntry.data) {
+        await writeKeywordOverviewCache(env.CACHE, cacheKey, cachedData);
+      }
+
       const durationMs = Date.now() - startedAt;
 
       await recordApiUsage({
         db: env.DB,
         requestId,
         taskCount: 0,
-        resultCount: cachedEntry.data ? 1 : 0,
+        resultCount: cachedData ? 1 : 0,
         actualCostUsd: 0,
         cacheHit: true,
         status: "success",
@@ -155,15 +185,15 @@ export async function onRequestPost({ request, env }) {
 
       return jsonResponse({
         ok: true,
-        data: cachedEntry.data,
+        data: cachedData,
         meta: {
           request_id: requestId,
           source: "dataforseo",
           cached: true,
           actual_cost_usd: 0,
           task_count: 0,
-          result_count: cachedEntry.data ? 1 : 0,
-          result_found: cachedEntry.data !== null,
+          result_count: cachedData ? 1 : 0,
+          result_found: cachedData !== null,
           duration_ms: Date.now() - startedAt,
         },
       });
