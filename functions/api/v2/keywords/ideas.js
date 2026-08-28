@@ -3,6 +3,7 @@ import {
   fetchKeywordIdeas,
 } from "../../../../src/v2/providers/dataforseo-keyword-ideas.js";
 import { normalizeKeywordOverview } from "../../../../src/v2/normalizers/keyword-overview.js";
+import { enrichKeywordIdeas } from "../../../../src/v2/scoring/keyword-relevance.js";
 import { recordApiUsage } from "../../../../src/v2/storage/keyword-overview.js";
 
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -82,19 +83,20 @@ export async function onRequestPost({ request, env }) {
   const key = cacheKey(seed, locationCode, languageCode, limit);
   const cached = await env.CACHE.get(key, "json");
   if (cached) {
-    await logUsage(env, { requestId, taskCount: 0, resultCount: cached.ideas?.length ?? 0, actualCostUsd: 0, cacheHit: true, status: "success", httpStatus: 200, durationMs: Date.now() - startedAt });
-    return json({ ok: true, data: cached, meta: { request_id: requestId, cached: true, cache_ttl_days: 30, actual_cost_usd: 0, result_count: cached.ideas?.length ?? 0 } });
+    const ideas = enrichKeywordIdeas(cached.ideas, seed);
+    const data = { ...cached, ideas };
+    await logUsage(env, { requestId, taskCount: 0, resultCount: ideas.length, actualCostUsd: 0, cacheHit: true, status: "success", httpStatus: 200, durationMs: Date.now() - startedAt });
+    return json({ ok: true, data, meta: { request_id: requestId, cached: true, cache_ttl_days: 30, actual_cost_usd: 0, result_count: ideas.length } });
   }
 
   try {
     const provider = await fetchKeywordIdeas({ env, seedKeyword: seed, locationCode, languageCode, limit });
     const seen = new Set();
-    const ideas = provider.items.map((item) => normalizeKeywordOverview({ items: [item], location_code: locationCode, language_code: languageCode }))
+    const normalizedIdeas = provider.items.map((item) => normalizeKeywordOverview({ items: [item], location_code: locationCode, language_code: languageCode }))
       .filter((idea) => idea?.keyword)
       .filter((idea) => { const key = idea.keyword.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; })
-      .map((idea) => ({ ...idea, group: groupFor(idea.keyword, idea.intent.primary, seed) }))
-      .sort((a, b) => (b.intelligence.keyword_potential?.score ?? -1) - (a.intelligence.keyword_potential?.score ?? -1) || (b.metrics.search_volume ?? -1) - (a.metrics.search_volume ?? -1))
-      .map((idea, index) => ({ ...idea, rank: index + 1 }));
+      .map((idea) => ({ ...idea, group: groupFor(idea.keyword, idea.intent.primary, seed) }));
+    const ideas = enrichKeywordIdeas(normalizedIdeas, seed);
 
     const data = { seed_keyword: seed, location_code: locationCode, language_code: languageCode, ideas };
     await persistRun(env, seed, locationCode, languageCode, limit, ideas, provider.usage.actual_cost_usd);
