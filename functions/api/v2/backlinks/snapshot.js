@@ -9,6 +9,7 @@ import {
   normalizeBacklinkDomain,
 } from "../../../../src/v2/backlinks/domain.js";
 import { recordApiUsage } from "../../../../src/v2/storage/keyword-overview.js";
+import { recordBacklinkSnapshot } from "../../../../src/v2/storage/backlink-history.js";
 
 const ENDPOINT_NAME = "backlinks/summary/live";
 const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -36,6 +37,18 @@ async function logUsage(env, values) {
       message: "backlink snapshot usage logging failed",
       error: error instanceof Error ? error.message : String(error),
     }));
+  }
+}
+
+async function saveHistory(env, values) {
+  try {
+    return await recordBacklinkSnapshot({ db: env.DB, ...values });
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "backlink history persistence failed",
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    return { inserted: false };
   }
 }
 
@@ -67,6 +80,11 @@ export async function onRequestPost({ request, env }) {
   const cached = await env.CACHE.get(key, "json");
   if (cached) {
     const enriched = enrichBacklinkSummary(cached);
+    const history = await saveHistory(env, {
+      snapshot: enriched,
+      source: "cache",
+      actualCostUsd: 0,
+    });
     await logUsage(env, {
       requestId,
       taskCount: 0,
@@ -80,7 +98,7 @@ export async function onRequestPost({ request, env }) {
     return json({
       ok: true,
       data: enriched,
-      meta: { request_id: requestId, cached: true, actual_cost_usd: 0, cache_ttl_days: 7 },
+      meta: { request_id: requestId, cached: true, actual_cost_usd: 0, cache_ttl_days: 7, history_inserted: history.inserted },
     });
   }
 
@@ -102,6 +120,11 @@ export async function onRequestPost({ request, env }) {
       target: domain,
     });
     await env.CACHE.put(key, JSON.stringify(provider.data), { expirationTtl: CACHE_TTL_SECONDS });
+    const history = await saveHistory(env, {
+      snapshot: provider.data,
+      source: "live",
+      actualCostUsd: provider.actualCostUsd,
+    });
     await logUsage(env, {
       requestId,
       taskCount: provider.taskCount,
@@ -120,6 +143,7 @@ export async function onRequestPost({ request, env }) {
         cached: false,
         actual_cost_usd: provider.actualCostUsd,
         cache_ttl_days: 7,
+        history_inserted: history.inserted,
       },
     });
   } catch (error) {
