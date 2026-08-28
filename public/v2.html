@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SEO Pro V2 — Keyword Explorer</title>
+<style>
+:root{--bg:#08111f;--panel:#101c2d;--panel2:#142238;--line:#223653;--text:#edf4ff;--muted:#8da3c2;--blue:#4f8cff;--green:#28d39a;--amber:#f7ba4b;--red:#ff6680}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 70% -20%,#1c3b70 0,transparent 42%),var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
+.wrap{max-width:1120px;margin:auto;padding:32px 22px 60px}.top{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:30px}.brand{font-weight:850;font-size:20px}.brand span{color:var(--blue)}.alpha{font-size:11px;padding:4px 9px;border:1px solid #31568c;border-radius:999px;color:#91b9ff;background:#11284a}
+h1{font-size:34px;line-height:1.15;margin:0 0 8px;letter-spacing:-1.2px}.lead{color:var(--muted);margin:0}.panel{background:linear-gradient(145deg,rgba(20,34,56,.96),rgba(13,25,42,.96));border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 18px 55px rgba(0,0,0,.22)}
+.search{display:grid;grid-template-columns:1fr 170px 118px;gap:10px;margin-top:26px}input,select,button{font:inherit;border-radius:9px}input,select{width:100%;background:#0b1728;color:var(--text);border:1px solid #29415f;padding:12px 14px;outline:none}input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(79,140,255,.15)}button{border:0;background:var(--blue);color:white;font-weight:750;padding:12px 17px;cursor:pointer}button:hover{filter:brightness(1.08)}button:disabled{opacity:.55;cursor:wait}.note{margin-top:10px;color:var(--muted);font-size:12px}.note b{color:var(--amber)}
+.status{display:none;margin-top:16px;padding:12px 14px;border-radius:9px}.status.on{display:block}.error{background:#351625;color:#ff9bad;border:1px solid #6a2841}.info{background:#102b45;color:#a9d4ff;border:1px solid #244b6d}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.metric{background:rgba(7,17,31,.56);border:1px solid var(--line);border-radius:12px;padding:17px}.label{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em}.value{font-size:26px;font-weight:850;margin-top:7px;letter-spacing:-.6px}.sub{color:var(--muted);font-size:12px;margin-top:5px}
+.detail{display:grid;grid-template-columns:1.4fr .8fr;gap:14px;margin-top:14px}.section-title{font-weight:750;margin-bottom:14px}.trend{display:flex;align-items:flex-end;gap:6px;height:150px;border-bottom:1px solid var(--line);padding-top:10px}.bar{flex:1;min-width:5px;background:linear-gradient(#6299ff,#3159b7);border-radius:5px 5px 0 0;position:relative}.bar:hover:after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:#020916;border:1px solid var(--line);padding:4px 7px;border-radius:5px;font-size:10px;white-space:nowrap;z-index:2}.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{padding:6px 9px;border-radius:7px;background:#0d2039;border:1px solid #29486c;color:#a9c8f7}.money{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:18px}.money .value{font-size:20px}.foot{margin-top:22px;color:var(--muted);font-size:12px;text-align:center}.hidden{display:none!important}
+@media(max-width:780px){.search{grid-template-columns:1fr}.metrics,.money{grid-template-columns:1fr 1fr}.detail{grid-template-columns:1fr}.top{align-items:flex-start}h1{font-size:28px}}
+@media(max-width:460px){.metrics,.money{grid-template-columns:1fr}.wrap{padding:20px 14px 40px}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<div class="top"><div class="brand">SEO Pro <span>V2</span></div><span class="alpha">ALPHA · PREVIEW</span></div>
+<h1>Keyword Explorer</h1>
+<p class="lead">输入关键词，查看标准化搜索指标、趋势、搜索意图与真实 API 成本。</p>
+<section class="panel">
+<form id="form" class="search">
+<input id="keyword" maxlength="80" required placeholder="例如：waterproof membrane" autocomplete="off">
+<select id="location"><option value="2840">United States</option></select>
+<button id="submit" type="submit">分析关键词</button>
+</form>
+<div class="note"><b>费用提示：</b>未缓存的关键词会调用 DataForSEO 并产生小额费用；相同关键词缓存命中时费用为 $0。</div>
+<div id="status" class="status"></div>
+<div id="result" class="hidden">
+<div class="metrics">
+<div class="metric"><div class="label">月搜索量</div><div class="value" id="volume">—</div><div class="sub">Monthly search volume</div></div>
+<div class="metric"><div class="label">关键词难度</div><div class="value" id="difficulty">—</div><div class="sub" id="difficultyText">Keyword difficulty</div></div>
+<div class="metric"><div class="label">CPC</div><div class="value" id="cpc">—</div><div class="sub">USD estimate</div></div>
+<div class="metric"><div class="label">搜索意图</div><div class="value" id="intent">—</div><div class="sub" id="competition">Competition</div></div>
+</div>
+<div class="detail">
+<div class="panel"><div class="section-title">近 12 个月搜索趋势</div><div id="trend" class="trend"></div></div>
+<div class="panel"><div class="section-title">本次请求</div><div class="chips"><span class="chip" id="cache">—</span><span class="chip" id="cost">—</span><span class="chip" id="duration">—</span></div><p class="sub" id="freshness"></p></div>
+</div>
+</div>
+</section>
+<section class="money">
+<div class="metric"><div class="label">今日费用</div><div class="value" id="todayCost">—</div><div class="sub" id="todayReq">加载中</div></div>
+<div class="metric"><div class="label">本月费用</div><div class="value" id="monthCost">—</div><div class="sub" id="monthReq">加载中</div></div>
+<div class="metric"><div class="label">缓存命中率</div><div class="value" id="hitRate">—</div><div class="sub" id="savedReq">加载中</div></div>
+<div class="metric"><div class="label">累计费用</div><div class="value" id="allCost">—</div><div class="sub" id="allReq">加载中</div></div>
+</section>
+<div class="foot">Preview 环境 · 数据成本为 DataForSEO 返回的实际费用 · 收益与商业价值评分尚未上线</div>
+</main>
+<script>
+const money=n=>"$"+Number(n||0).toFixed(5);
+const num=n=>n==null?"—":new Intl.NumberFormat("en-US").format(n);
+const text=(id,value)=>{document.getElementById(id).textContent=value};
+function status(message,type){const el=document.getElementById("status");el.textContent=message;el.className="status on "+type}
+function difficultyLabel(n){if(n==null)return"暂无难度数据";if(n<=29)return"较容易";if(n<=49)return"中等";if(n<=69)return"较难";return"很难"}
+function renderTrend(rows){const box=document.getElementById("trend");box.replaceChildren();const ordered=[...(rows||[])].reverse();const max=Math.max(1,...ordered.map(x=>x.search_volume||0));if(!ordered.length){box.textContent="暂无趋势数据";return}ordered.forEach(x=>{const bar=document.createElement("div");bar.className="bar";bar.style.height=Math.max(3,((x.search_volume||0)/max)*100)+"%";bar.dataset.tip=x.year+"-"+String(x.month).padStart(2,"0")+": "+num(x.search_volume);box.appendChild(bar)})}
+async function loadUsage(){try{const r=await fetch("/api/v2/usage/summary");const j=await r.json();if(!r.ok||!j.ok)return;const d=j.data;text("todayCost",money(d.today.actual_cost_usd));text("todayReq",d.today.requests+" 次请求");text("monthCost",money(d.this_month.actual_cost_usd));text("monthReq",d.this_month.requests+" 次请求");text("hitRate",d.this_month.cache_hit_rate_percent+"%");text("savedReq","缓存节省 "+d.this_month.saved_requests_by_cache+" 次");text("allCost",money(d.all_time.actual_cost_usd));text("allReq",d.all_time.requests+" 次请求")}catch{}}
+document.getElementById("form").addEventListener("submit",async e=>{e.preventDefault();const button=document.getElementById("submit");const keyword=document.getElementById("keyword").value.trim();if(!keyword)return;button.disabled=true;button.textContent="分析中…";status("正在读取缓存或获取关键词数据…","info");try{const r=await fetch("/api/v2/keywords/overview",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({keyword,location_code:Number(document.getElementById("location").value),language_code:"en"})});const j=await r.json();if(!r.ok||!j.ok)throw new Error(j.error?.message||"查询失败");if(!j.data)throw new Error("没有找到这个关键词的数据");const d=j.data,m=d.metrics||{},meta=j.meta||{};text("volume",num(m.search_volume));text("difficulty",num(m.keyword_difficulty));text("difficultyText",difficultyLabel(m.keyword_difficulty));text("cpc",m.cpc_usd==null?"—":"$"+Number(m.cpc_usd).toFixed(2));text("intent",d.intent?.primary||"—");text("competition","竞争度："+(m.competition_level||"—"));text("cache",meta.cached?"缓存命中":"DataForSEO 实时");text("cost","本次 "+money(meta.actual_cost_usd));text("duration",(meta.duration_ms||0)+" ms");text("freshness","指标更新时间："+(d.data_freshness?.keyword_metrics_updated_at||"未知"));renderTrend(d.trend?.monthly_searches);document.getElementById("result").classList.remove("hidden");status(meta.cached?"查询成功：本次使用缓存，费用为 $0。":"查询成功：已记录本次实际 API 费用。","info");await loadUsage()}catch(err){status(err.message||"查询失败","error")}finally{button.disabled=false;button.textContent="分析关键词"}});
+loadUsage();
+</script>
+</body>
+</html>
