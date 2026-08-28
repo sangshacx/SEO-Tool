@@ -1,0 +1,52 @@
+name: Verify Preview Keyword Ideas
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - .github/workflows/cloudflare-preview-keyword-ideas-test.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify-keyword-ideas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      API_URL: https://seo-pro-v2.seo-tool-dme.pages.dev/api/v2/keywords/ideas
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Wait for Preview route
+        shell: bash
+        run: |
+          for attempt in {1..18}; do
+            status=$(curl -sS -o /tmp/get.json -w "%{http_code}" "$API_URL" || true)
+            if [ "$status" = "405" ]; then exit 0; fi
+            sleep 10
+          done
+          echo "Preview route did not become ready"
+          cat /tmp/get.json || true
+          exit 1
+
+      - name: Run one live request and one cached request
+        shell: bash
+        run: |
+          payload='{"seed_keyword":"waterproof membrane","limit":10,"location_code":2840,"language_code":"en"}'
+          curl --fail-with-body -sS -X POST "$API_URL" -H "content-type: application/json" --data "$payload" > /tmp/first.json
+          jq -e '.ok == true and (.meta.result_count <= 10) and (.meta.actual_cost_usd >= 0)' /tmp/first.json > /dev/null
+          curl --fail-with-body -sS -X POST "$API_URL" -H "content-type: application/json" --data "$payload" > /tmp/second.json
+          jq -e '.ok == true and .meta.cached == true and .meta.actual_cost_usd == 0 and (.meta.result_count <= 10)' /tmp/second.json > /dev/null
+          jq '{first: {cached: .meta.cached, actual_cost_usd: .meta.actual_cost_usd, result_count: .meta.result_count}}' /tmp/first.json
+          jq '{second: {cached: .meta.cached, actual_cost_usd: .meta.actual_cost_usd, result_count: .meta.result_count}}' /tmp/second.json
+
+      - name: Verify D1 persistence
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote --command "SELECT (SELECT COUNT(*) FROM keyword_idea_runs) AS runs, (SELECT COUNT(*) FROM keyword_idea_members) AS members;"
