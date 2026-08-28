@@ -12,3 +12,7 @@ export function isValidBacklinkDomain(domain) {
 export function backlinkSnapshotCacheKey(domain) {
   return ["v2", "backlink-snapshot", "v1", domain, "subdomains", "live"].join(":");
 }
+
+export function referringDomainsCacheKey({ domain, limit, offset, sort }) {
+  return ["v2", "referring-domains", "v1", domain, "subdomains", "live", limit, offset, sort].join(":");
+}
