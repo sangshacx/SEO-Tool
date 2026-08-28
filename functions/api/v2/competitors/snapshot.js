@@ -7,7 +7,7 @@ const HEADERS = { "Content-Type": "application/json; charset=UTF-8", "Cache-Cont
 function json(body, status = 200) { return new Response(JSON.stringify(body), { status, headers: HEADERS }); }
 function normalizeDomain(value) { return typeof value === "string" ? value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0] : ""; }
 function validDomain(domain) { return domain.length <= 253 && /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain); }
-async function usage(env, values) { try { await recordApiUsage({ env, ...values, provider: "dataforseo", endpoint: "dataforseo_labs/google/ranked_keywords/live", operation: "competitor_snapshot" }); } catch {} }
+async function usage(env, values) { try { await recordApiUsage({ db: env.DB, ...values, provider: "dataforseo", endpoint: "dataforseo_labs/google/ranked_keywords/live", operation: "competitor_snapshot" }); } catch (error) { console.error(JSON.stringify({ message: "competitor snapshot usage logging failed", error: error instanceof Error ? error.message : String(error) })); } }
 
 function normalizeResult(result, domain) {
   const organic = result?.metrics?.organic ?? {};
