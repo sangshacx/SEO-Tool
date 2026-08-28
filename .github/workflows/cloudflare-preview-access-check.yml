@@ -6,6 +6,7 @@ on:
       - seo-pro-v2
     paths:
       - .github/workflows/cloudflare-preview-access-check.yml
+      - functions/api/v2/usage/summary.js
   workflow_dispatch:
 
 permissions:
@@ -19,7 +20,6 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
     steps:
       - name: Check out seo-pro-v2
         uses: actions/checkout@v4
@@ -35,6 +35,31 @@ jobs:
 
       - name: Check Pages Preview deployments
         run: npx --yes wrangler@4 pages deployment list --project-name seo-tool --environment preview
+
+      - name: Verify usage summary endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://seo-pro-v2.seo-tool-dme.pages.dev/api/v2/usage/summary"
+          response_file="$(mktemp)"
+          status="000"
+
+          for attempt in {1..12}; do
+            status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" "$endpoint" || true)"
+            if [ "$status" = "200" ]; then
+              break
+            fi
+            sleep 10
+          done
+
+          test "$status" = "200"
+          jq -e '
+            .ok == true
+            and .meta.source == "d1"
+            and (.data.today.requests | type == "number")
+            and (.data.this_month.cache_hit_rate_percent | type == "number")
+            and (.data.all_time.actual_cost_usd | type == "number")
+          ' "$response_file"
 
       - name: Check Preview D1 database
         run: npx --yes wrangler@4 d1 info seo-pro-v2-preview
