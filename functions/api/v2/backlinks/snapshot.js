@@ -2,6 +2,7 @@ import {
   BacklinkProviderError,
   fetchBacklinkSummary,
 } from "../../../../src/v2/providers/dataforseo-backlinks.js";
+import { enrichBacklinkSummary } from "../../../../src/v2/intelligence/backlink-health.js";
 import { recordApiUsage } from "../../../../src/v2/storage/keyword-overview.js";
 
 const ENDPOINT_NAME = "backlinks/summary/live";
@@ -75,6 +76,7 @@ export async function onRequestPost({ request, env }) {
   const key = cacheKey(domain);
   const cached = await env.CACHE.get(key, "json");
   if (cached) {
+    const enriched = enrichBacklinkSummary(cached);
     await logUsage(env, {
       requestId,
       taskCount: 0,
@@ -87,7 +89,7 @@ export async function onRequestPost({ request, env }) {
     });
     return json({
       ok: true,
-      data: cached,
+      data: enriched,
       meta: { request_id: requestId, cached: true, actual_cost_usd: 0, cache_ttl_days: 7 },
     });
   }
