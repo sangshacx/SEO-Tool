@@ -3,6 +3,11 @@ import {
   fetchBacklinkSummary,
 } from "../../../../src/v2/providers/dataforseo-backlinks.js";
 import { enrichBacklinkSummary } from "../../../../src/v2/intelligence/backlink-health.js";
+import {
+  backlinkSnapshotCacheKey,
+  isValidBacklinkDomain,
+  normalizeBacklinkDomain,
+} from "../../../../src/v2/backlinks/domain.js";
 import { recordApiUsage } from "../../../../src/v2/storage/keyword-overview.js";
 
 const ENDPOINT_NAME = "backlinks/summary/live";
@@ -15,21 +20,6 @@ const JSON_HEADERS = {
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: JSON_HEADERS });
-}
-
-function normalizeDomain(value) {
-  return typeof value === "string"
-    ? value.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[/?#]/)[0]
-    : "";
-}
-
-function validDomain(domain) {
-  return domain.length <= 253
-    && /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain);
-}
-
-function cacheKey(domain) {
-  return ["v2", "backlink-snapshot", "v1", domain, "subdomains", "live"].join(":");
 }
 
 async function logUsage(env, values) {
@@ -68,12 +58,12 @@ export async function onRequestPost({ request, env }) {
     return json({ ok: false, error: { code: "INVALID_JSON", message: "Request body must be valid JSON." } }, 400);
   }
 
-  const domain = normalizeDomain(body?.domain);
-  if (!validDomain(domain)) {
+  const domain = normalizeBacklinkDomain(body?.domain);
+  if (!isValidBacklinkDomain(domain)) {
     return json({ ok: false, error: { code: "VALIDATION_ERROR", field: "domain", message: "Enter a valid root domain without a path." } }, 400);
   }
 
-  const key = cacheKey(domain);
+  const key = backlinkSnapshotCacheKey(domain);
   const cached = await env.CACHE.get(key, "json");
   if (cached) {
     const enriched = enrichBacklinkSummary(cached);
