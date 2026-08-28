@@ -47,6 +47,7 @@ export async function fetchKeywordOverview({
   keyword,
   locationCode,
   languageCode,
+  includeSerpInfo = false,
 }) {
   const response = await fetch(
     `${DATAFORSEO_BASE_URL}/dataforseo_labs/google/keyword_overview/live`,
@@ -63,8 +64,10 @@ export async function fetchKeywordOverview({
           location_code: locationCode,
           language_code: languageCode,
           include_clickstream_data: false,
-          include_serp_info: false,
-          tag: "seo-pro-v2-keyword-overview",
+          include_serp_info: includeSerpInfo === true,
+          tag: includeSerpInfo
+            ? "seo-pro-v2-serp-weakness"
+            : "seo-pro-v2-keyword-overview",
         },
       ]),
     },
