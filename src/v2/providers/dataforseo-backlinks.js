@@ -1,3 +1,5 @@
+import { enrichBacklinkSummary } from "../intelligence/backlink-health.js";
+
 const DATAFORSEO_URL = "https://api.dataforseo.com/v3/backlinks/summary/live";
 const MAX_PROVIDER_RESPONSE_BYTES = 1024 * 1024;
 
@@ -34,7 +36,7 @@ export function normalizeBacklinkSummary(result, target) {
     ? Math.round((nofollowPages / referringPages) * 10000) / 100
     : null;
 
-  return {
+  return enrichBacklinkSummary({
     target,
     scope: "domain_with_subdomains",
     status: "live",
@@ -69,7 +71,7 @@ export function normalizeBacklinkSummary(result, target) {
     },
     first_seen: typeof result?.first_seen === "string" ? result.first_seen : null,
     generated_at: new Date().toISOString(),
-  };
+  });
 }
 
 export async function fetchBacklinkSummary({ login, password, target }) {
