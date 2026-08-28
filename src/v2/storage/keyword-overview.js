@@ -112,6 +112,9 @@ export async function persistKeywordOverview({
 export async function recordApiUsage({
   db,
   requestId,
+  provider = PROVIDER,
+  endpoint = ENDPOINT,
+  operation = OPERATION,
   taskCount = 0,
   resultCount = 0,
   actualCostUsd = 0,
@@ -138,9 +141,9 @@ export async function recordApiUsage({
     )
     .bind(
       requestId,
-      PROVIDER,
-      ENDPOINT,
-      OPERATION,
+      provider,
+      endpoint,
+      operation,
       taskCount,
       resultCount,
       actualCostUsd,
