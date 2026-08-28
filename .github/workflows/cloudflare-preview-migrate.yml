@@ -38,10 +38,13 @@ jobs:
       - name: Apply SERP weakness schema to Preview D1
         run: npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote --yes --file migrations/0002_serp_weakness.sql
 
+      - name: Apply keyword ideas schema to Preview D1
+        run: npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote --yes --file migrations/0003_keyword_ideas.sql
+
       - name: Verify Preview D1 tables
         run: >
           npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote
           --command "SELECT name FROM sqlite_schema
           WHERE type = 'table'
-          AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots')
+          AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots', 'keyword_idea_runs', 'keyword_idea_members')
           ORDER BY name;"
