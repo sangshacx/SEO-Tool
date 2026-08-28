@@ -1,0 +1,35 @@
+name: Cloudflare Preview Usage Audit
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - .github/workflows/cloudflare-preview-usage-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-preview-usage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Verify required secrets exist
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Read latest Preview API usage
+        run: >-
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote
+          --command "SELECT request_id, operation, endpoint, task_count, result_count,
+          actual_cost_usd, cache_hit, status, http_status, created_at
+          FROM api_usage ORDER BY created_at DESC LIMIT 10;"
