@@ -36,9 +36,9 @@ function cacheKey(seed, locationCode, languageCode, limit) {
 
 async function logUsage(env, values) {
   try {
-    await recordApiUsage({ env, ...values, provider: "dataforseo", endpoint: "dataforseo_labs/google/keyword_ideas/live", operation: "keyword_ideas" });
-  } catch {
-    // Analytics failure must not break the user request.
+    await recordApiUsage({ db: env.DB, ...values, provider: "dataforseo", endpoint: "dataforseo_labs/google/keyword_ideas/live", operation: "keyword_ideas" });
+  } catch (error) {
+    console.error(JSON.stringify({ message: "keyword ideas usage logging failed", error: error instanceof Error ? error.message : String(error) }));
   }
 }
 
