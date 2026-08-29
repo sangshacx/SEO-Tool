@@ -20,3 +20,7 @@ export function referringDomainsCacheKey({ domain, limit, offset, sort }) {
 export function backlinkDetailsCacheKey({ domain, limit, offset, sort, status, follow }) {
   return ["v2", "backlink-details", "v1", domain, "subdomains", status, follow, limit, offset, sort].join(":");
 }
+
+export function backlinkAnchorsCacheKey({ domain, limit, offset, sort, status }) {
+  return ["v2", "backlink-anchors", "v1", domain, "subdomains", status, limit, offset, sort].join(":");
+}
