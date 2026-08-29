@@ -45,10 +45,13 @@ jobs:
       - name: Apply backlink history schema to Preview D1
         run: npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote --yes --file migrations/0004_backlink_history.sql
 
+      - name: Apply saved link prospects schema to Preview D1
+        run: npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote --yes --file migrations/0005_backlink_opportunities.sql
+
       - name: Verify Preview D1 tables
         run: >
           npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote
           --command "SELECT name FROM sqlite_schema
           WHERE type = 'table'
-          AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots', 'keyword_idea_runs', 'keyword_idea_members', 'backlink_snapshots')
+          AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots', 'keyword_idea_runs', 'keyword_idea_members', 'backlink_snapshots', 'backlink_opportunities')
           ORDER BY name;"

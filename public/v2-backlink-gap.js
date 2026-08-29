@@ -68,7 +68,9 @@ export function backlinkGapStatusMessage(meta = {}) {
 }
 
 function quote(value) {
-  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const text = String(value ?? "");
+  const safe = /^\s*[=+\-@]/.test(text) ? `'${text}` : text;
+  return `"${safe.replaceAll('"', '""')}"`;
 }
 
 export function backlinkGapCsv(rows) {
@@ -103,6 +105,58 @@ export function backlinkGapCsv(rows) {
   return lines.map((row) => row.map(quote).join(",")).join("\n");
 }
 
+const PROSPECT_STATUS_LABELS = {
+  all: "全部",
+  new: "New",
+  researching: "Researching",
+  outreach: "Outreach Planned",
+  contacted: "Contacted",
+  won: "Link Won",
+  rejected: "Rejected",
+};
+
+export function backlinkProspectStatusLabel(status) {
+  return PROSPECT_STATUS_LABELS[status] ?? String(status ?? "");
+}
+
+export function selectedBacklinkOpportunityItems(items, selectedDomains) {
+  const selected = selectedDomains instanceof Set ? selectedDomains : new Set(selectedDomains ?? []);
+  return (Array.isArray(items) ? items : [])
+    .filter((item) => selected.has(item?.domain))
+    .map((item) => ({
+      referring_domain: item.domain,
+      competitor_domains: (item.competitors ?? []).map((competitor) => competitor?.domain).filter(Boolean),
+      opportunity_score: item.opportunity?.score ?? null,
+      opportunity_label: item.opportunity?.label ?? null,
+    }));
+}
+
+export function backlinkProspectsCsv(rows) {
+  const header = [
+    "Own Domain",
+    "Referring Domain",
+    "Competitors",
+    "Opportunity Score",
+    "Opportunity Label",
+    "Status",
+    "Notes",
+    "First Discovered",
+    "Updated At",
+  ];
+  const lines = [header, ...(Array.isArray(rows) ? rows : []).map((item) => [
+    item?.own_domain,
+    item?.referring_domain,
+    (item?.competitor_domains ?? []).join("; "),
+    item?.opportunity_score,
+    item?.opportunity_label,
+    backlinkProspectStatusLabel(item?.status),
+    item?.notes,
+    item?.first_discovered_at,
+    item?.updated_at,
+  ])];
+  return lines.map((row) => row.map(quote).join(",")).join("\n");
+}
+
 if (typeof window !== "undefined") {
   window.BacklinkGapView = {
     visibleBacklinkGapRows,
@@ -110,5 +164,8 @@ if (typeof window !== "undefined") {
     createBacklinkGapRequestGate,
     backlinkGapStatusMessage,
     backlinkGapCsv,
+    backlinkProspectStatusLabel,
+    selectedBacklinkOpportunityItems,
+    backlinkProspectsCsv,
   };
 }

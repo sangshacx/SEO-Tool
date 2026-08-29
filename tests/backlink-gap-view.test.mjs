@@ -110,3 +110,56 @@ test("warns when a paid result could not be stored in cache", async () => {
     "外链机会读取成功：缓存命中，本次费用 $0。",
   );
 });
+
+test("creates normalized save payloads only for selected backlink opportunities", async () => {
+  const { selectedBacklinkOpportunityItems } = await loadView();
+  assert.equal(typeof selectedBacklinkOpportunityItems, "function");
+
+  assert.deepEqual(
+    selectedBacklinkOpportunityItems(items, new Set(["industry-journal.com"])),
+    [{
+      referring_domain: "industry-journal.com",
+      competitor_domains: ["competitor-a.com", "competitor-b.com"],
+      opportunity_score: 87,
+      opportunity_label: "High priority",
+    }],
+  );
+});
+
+test("labels prospect workflow statuses and exports saved rows as CSV", async () => {
+  const { backlinkProspectStatusLabel, backlinkProspectsCsv } = await loadView();
+  assert.equal(typeof backlinkProspectStatusLabel, "function");
+  assert.equal(typeof backlinkProspectsCsv, "function");
+  assert.equal(backlinkProspectStatusLabel("outreach"), "Outreach Planned");
+  assert.equal(backlinkProspectStatusLabel("all"), "全部");
+  assert.equal(backlinkProspectStatusLabel("unknown"), "unknown");
+
+  const csv = backlinkProspectsCsv([{
+    own_domain: "own-site.com",
+    referring_domain: "industry-journal.com",
+    competitor_domains: ["competitor-a.com", "competitor-b.com"],
+    opportunity_score: 87,
+    opportunity_label: "High priority",
+    status: "researching",
+    notes: "Ask \"editor\"",
+    first_discovered_at: "2026-08-29 10:00:00",
+    updated_at: "2026-08-29 11:00:00",
+  }]);
+
+  assert.equal(csv, [
+    '"Own Domain","Referring Domain","Competitors","Opportunity Score","Opportunity Label","Status","Notes","First Discovered","Updated At"',
+    '"own-site.com","industry-journal.com","competitor-a.com; competitor-b.com","87","High priority","Researching","Ask ""editor""","2026-08-29 10:00:00","2026-08-29 11:00:00"',
+  ].join("\n"));
+});
+
+test("neutralizes spreadsheet formulas in exported prospect text", async () => {
+  const { backlinkProspectsCsv } = await loadView();
+  const csv = backlinkProspectsCsv([
+    { notes: "=HYPERLINK(\"https://evil.example\")" },
+    { notes: " \t@SUM(1,2)" },
+  ]);
+
+  const rows = csv.split("\n");
+  assert.match(rows[1], /,"'=HYPERLINK\(""https:\/\/evil\.example""\)",/);
+  assert.match(rows[2], /,"' \t@SUM\(1,2\)",/);
+});
