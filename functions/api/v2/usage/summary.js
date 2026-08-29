@@ -78,6 +78,7 @@ export async function onRequestGet({ env }) {
           COALESCE(SUM(CASE
             WHEN strftime('%Y-%m', created_at) = strftime('%Y-%m', 'now')
               AND cache_hit = 0
+              AND task_count > 0
             THEN 1 ELSE 0
           END), 0) AS month_provider_requests,
           COALESCE(SUM(CASE

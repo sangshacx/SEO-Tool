@@ -24,3 +24,15 @@ export function backlinkDetailsCacheKey({ domain, limit, offset, sort, status, f
 export function backlinkAnchorsCacheKey({ domain, limit, offset, sort, status }) {
   return ["v2", "backlink-anchors", "v1", domain, "subdomains", status, limit, offset, sort].join(":");
 }
+
+export async function backlinkGapCacheKey({ ownDomain, competitors, limit, offset }) {
+  const canonical = JSON.stringify({
+    own_domain: ownDomain,
+    competitor_domains: [...competitors].sort(),
+    limit,
+    offset,
+  });
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+  const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `v2:backlink-gap:v2:${hash}`;
+}
