@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cloudflare/workers-sdk/main/packages/wrangler/config-schema.json",
+  "name": "seo-pro-v2-preview-migrations",
+  "compatibility_date": "2026-08-30",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "seo-pro-v2-preview",
+      "database_id": "ba61a1f0-dd1d-4282-b1de-ad16d218c222",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

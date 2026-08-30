@@ -4,10 +4,14 @@ import test from "node:test";
 
 const workflow = await readFile(new URL("../.github/workflows/cloudflare-preview-migrate.yml", import.meta.url), "utf8");
 const migration = await readFile(new URL("../migrations/0006_backlink_outreach_intelligence.sql", import.meta.url), "utf8");
+const wrangler = await readFile(new URL("../wrangler.migrations.jsonc", import.meta.url), "utf8");
 
 test("uses Wrangler's tracked Preview migration workflow", () => {
   assert.match(workflow, /d1 migrations apply seo-pro-v2-preview --remote/);
+  assert.match(workflow, /--config wrangler\.migrations\.jsonc/);
   assert.match(workflow, /d1_migrations/);
+  assert.match(wrangler, /"database_name": "seo-pro-v2-preview"/);
+  assert.match(wrangler, /"migrations_dir": "migrations"/);
   assert.match(workflow, /quality_score/);
   assert.match(workflow, /relevance_checked_at/);
 });

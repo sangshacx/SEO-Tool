@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/cloudflare-preview-migrate.yml
       - migrations/*.sql
+      - wrangler.migrations.jsonc
 
 permissions:
   contents: read
@@ -53,7 +54,9 @@ jobs:
             '.success == true and (.result.deployment_configs.preview.compatibility_flags | index("global_fetch_strictly_public") != null)'
 
       - name: Apply tracked migrations to Preview D1
-        run: npx --yes wrangler@4 d1 migrations apply seo-pro-v2-preview --remote
+        run: >
+          npx --yes wrangler@4 d1 migrations apply seo-pro-v2-preview --remote
+          --config wrangler.migrations.jsonc
 
       - name: Verify Preview D1 tables
         run: >
