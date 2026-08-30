@@ -38,3 +38,11 @@ https://seo-tool-xxx.pages.dev
 打开网址，填入 DataForSEO 的 Login 和 Password，点测试连接即可。
 
 SEO Pro V2 development branch.
+
+## SEO Pro V2 interface
+
+The Preview entry at `/v2` uses a hash-routed personal dashboard. Stable views are `#overview`, `#website`, `#competitors`, `#keywords`, `#backlinks`, `#opportunities`, `#more`, `#sites`, and `#settings`.
+
+Managed site profiles are stored locally under `seo-pro-v2.site-profiles.v1`. Selecting a site only fills compatible domain fields; it never submits a form or authorizes a paid DataForSEO request.
+
+Static assets and API calls use relative or origin-relative URLs. Moving the application to a custom domain requires binding that domain to the same Cloudflare Pages project and configuring the existing environment bindings and secrets; source hostnames do not need rewriting.
