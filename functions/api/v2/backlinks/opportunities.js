@@ -13,6 +13,7 @@ const MAX_NOTES_LENGTH = 2000;
 const MAX_OFFSET = 10000;
 const ALLOWED_LIMITS = new Set([25, 50, 100, 200]);
 const STATUSES = new Set(["new", "researching", "outreach", "contacted", "won", "rejected"]);
+const OUTREACH_RECOMMENDATIONS = new Set(["research_first", "possible", "low_value", "skip"]);
 
 class RequestBodyError extends Error {
   constructor(code) {
@@ -95,14 +96,44 @@ function normalizedLabel(value) {
   return value.trim();
 }
 
-function mapProspect(row) {
-  let competitorDomains = [];
+function parseJsonArray(value) {
   try {
-    const parsed = JSON.parse(row.competitor_domains_json || "[]");
-    competitorDomains = Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    competitorDomains = [];
+    return [];
   }
+}
+
+function normalizedOutreach(item) {
+  const keys = ["quality_score", "relevance_score", "outreach_recommendation", "outreach_confidence", "outreach_reasons", "outreach_risk_types"];
+  if (!keys.some((key) => Object.hasOwn(item ?? {}, key))) return { value: null };
+  const qualityScore = normalizedScore(item?.quality_score);
+  const relevanceScore = item?.relevance_score == null ? null : normalizedScore(item.relevance_score);
+  const confidence = normalizedScore(item?.outreach_confidence);
+  const recommendation = String(item?.outreach_recommendation ?? "").trim().toLowerCase();
+  const reasons = item?.outreach_reasons;
+  const riskTypes = item?.outreach_risk_types;
+  const validReasons = Array.isArray(reasons) && reasons.length <= 20
+    && reasons.every((reason) => typeof reason === "string" && reason.trim().length > 0 && reason.trim().length <= 500);
+  const validRiskTypes = Array.isArray(riskTypes) && riskTypes.length <= 20
+    && riskTypes.every((risk) => typeof risk === "string" && /^[a-z][a-z0-9_]{0,49}$/.test(risk));
+  if (qualityScore === undefined || relevanceScore === undefined || confidence === undefined
+    || !OUTREACH_RECOMMENDATIONS.has(recommendation) || !validReasons || !validRiskTypes) {
+    return { error: true };
+  }
+  return { value: {
+    quality_score: qualityScore,
+    relevance_score: relevanceScore,
+    outreach_recommendation: recommendation,
+    outreach_confidence: confidence,
+    outreach_reasons: reasons.map((reason) => reason.trim()),
+    outreach_risk_types: [...new Set(riskTypes)],
+  } };
+}
+
+function mapProspect(row) {
+  const competitorDomains = parseJsonArray(row.competitor_domains_json);
   return {
     own_domain: row.own_domain,
     referring_domain: row.referring_domain,
@@ -111,6 +142,13 @@ function mapProspect(row) {
     opportunity_label: row.opportunity_label,
     status: row.status,
     notes: row.notes,
+    quality_score: row.quality_score ?? null,
+    relevance_score: row.relevance_score ?? null,
+    outreach_recommendation: row.outreach_recommendation ?? null,
+    outreach_confidence: row.outreach_confidence ?? null,
+    outreach_reasons: parseJsonArray(row.outreach_reasons_json),
+    outreach_risk_types: parseJsonArray(row.outreach_risk_types_json),
+    relevance_checked_at: row.relevance_checked_at ?? null,
     first_discovered_at: row.first_discovered_at,
     last_seen_at: row.last_seen_at,
     created_at: row.created_at,
@@ -157,7 +195,9 @@ export async function onRequestGet({ request, env }) {
     const rows = env.DB
       .prepare(
         `SELECT own_domain, referring_domain, competitor_domains_json, opportunity_score, opportunity_label,
-          status, notes, first_discovered_at, last_seen_at, created_at, updated_at
+          status, notes, quality_score, relevance_score, outreach_recommendation, outreach_confidence,
+          outreach_reasons_json, outreach_risk_types_json, relevance_checked_at,
+          first_discovered_at, last_seen_at, created_at, updated_at
         FROM backlink_opportunities
         WHERE ${where}
         ORDER BY updated_at DESC, referring_domain ASC
@@ -214,15 +254,18 @@ export async function onRequestPost({ request, env }) {
     const referringDomain = normalizeBacklinkDomain(item?.referring_domain);
     const score = normalizedScore(item?.opportunity_score);
     const label = normalizedLabel(item?.opportunity_label);
+    const outreach = normalizedOutreach(item);
     if (!isValidBacklinkDomain(referringDomain) || referringDomain === ownDomain
-      || score === undefined || label === undefined) {
+      || score === undefined || label === undefined || outreach.error) {
       return errorResponse("INVALID_ITEM", "Each opportunity must contain a valid referring domain and score.", 400, "items");
     }
+    const existing = unique.get(referringDomain);
     unique.set(referringDomain, {
       referring_domain: referringDomain,
       competitor_domains: normalizeCompetitors(item?.competitor_domains),
       opportunity_score: score,
       opportunity_label: label,
+      outreach: outreach.value ?? existing?.outreach ?? null,
     });
   }
   const items = [...unique.values()];
@@ -230,12 +273,21 @@ export async function onRequestPost({ request, env }) {
   try {
     const statements = items.map((item) => env.DB.prepare(
       `INSERT INTO backlink_opportunities (
-        own_domain, referring_domain, competitor_domains_json, opportunity_score, opportunity_label
-      ) VALUES (?, ?, ?, ?, ?)
+        own_domain, referring_domain, competitor_domains_json, opportunity_score, opportunity_label,
+        quality_score, relevance_score, outreach_recommendation, outreach_confidence,
+        outreach_reasons_json, outreach_risk_types_json, relevance_checked_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(own_domain, referring_domain) DO UPDATE SET
         competitor_domains_json = excluded.competitor_domains_json,
         opportunity_score = excluded.opportunity_score,
         opportunity_label = excluded.opportunity_label,
+        quality_score = COALESCE(excluded.quality_score, backlink_opportunities.quality_score),
+        relevance_score = COALESCE(excluded.relevance_score, backlink_opportunities.relevance_score),
+        outreach_recommendation = COALESCE(excluded.outreach_recommendation, backlink_opportunities.outreach_recommendation),
+        outreach_confidence = COALESCE(excluded.outreach_confidence, backlink_opportunities.outreach_confidence),
+        outreach_reasons_json = CASE WHEN excluded.outreach_recommendation IS NULL THEN backlink_opportunities.outreach_reasons_json ELSE excluded.outreach_reasons_json END,
+        outreach_risk_types_json = CASE WHEN excluded.outreach_recommendation IS NULL THEN backlink_opportunities.outreach_risk_types_json ELSE excluded.outreach_risk_types_json END,
+        relevance_checked_at = CASE WHEN excluded.relevance_score IS NULL THEN backlink_opportunities.relevance_checked_at ELSE CURRENT_TIMESTAMP END,
         last_seen_at = CURRENT_TIMESTAMP,
         updated_at = CURRENT_TIMESTAMP`,
     ).bind(
@@ -244,6 +296,13 @@ export async function onRequestPost({ request, env }) {
       JSON.stringify(item.competitor_domains),
       item.opportunity_score,
       item.opportunity_label,
+      item.outreach?.quality_score ?? null,
+      item.outreach?.relevance_score ?? null,
+      item.outreach?.outreach_recommendation ?? null,
+      item.outreach?.outreach_confidence ?? null,
+      JSON.stringify(item.outreach?.outreach_reasons ?? []),
+      JSON.stringify(item.outreach?.outreach_risk_types ?? []),
+      item.outreach?.relevance_score == null ? null : new Date().toISOString(),
     ));
     await env.DB.batch(statements);
     return json({

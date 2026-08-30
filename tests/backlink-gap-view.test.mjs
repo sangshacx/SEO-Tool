@@ -147,8 +147,8 @@ test("labels prospect workflow statuses and exports saved rows as CSV", async ()
   }]);
 
   assert.equal(csv, [
-    '"Own Domain","Referring Domain","Competitors","Opportunity Score","Opportunity Label","Status","Notes","First Discovered","Updated At"',
-    '"own-site.com","industry-journal.com","competitor-a.com; competitor-b.com","87","High priority","Researching","Ask ""editor""","2026-08-29 10:00:00","2026-08-29 11:00:00"',
+    '"Own Domain","Referring Domain","Competitors","Opportunity Score","Opportunity Label","Status","Notes","Outreach Recommendation","Quality Score","Relevance Score","Confidence","Reasons","First Discovered","Updated At"',
+    '"own-site.com","industry-journal.com","competitor-a.com; competitor-b.com","87","High priority","Researching","Ask ""editor""","","","","","","2026-08-29 10:00:00","2026-08-29 11:00:00"',
   ].join("\n"));
 });
 
@@ -162,4 +162,59 @@ test("neutralizes spreadsheet formulas in exported prospect text", async () => {
   const rows = csv.split("\n");
   assert.match(rows[1], /,"'=HYPERLINK\(""https:\/\/evil\.example""\)",/);
   assert.match(rows[2], /,"' \t@SUM\(1,2\)",/);
+});
+
+test("filters skip recommendations and prepares relevance-check batches", async () => {
+  const { visibleBacklinkGapRows, selectedRelevanceCheckDomains } = await loadView();
+  assert.equal(typeof selectedRelevanceCheckDomains, "function");
+  const assessed = structuredClone(items);
+  assessed[0].outreach = { recommendation: "skip", quality_score: 20 };
+  assessed[1].outreach = { recommendation: "research_first", quality_score: 86 };
+
+  assert.deepEqual(
+    visibleBacklinkGapRows(assessed, { priority: "all", sort: "outreach", hideSkip: true }).map((item) => item.domain),
+    ["industry-journal.com"],
+  );
+  assert.deepEqual(
+    selectedRelevanceCheckDomains(assessed, new Set(["directory.example", "industry-journal.com"])),
+    ["directory.example", "industry-journal.com"],
+  );
+});
+
+test("includes transparent outreach intelligence when saving and exporting prospects", async () => {
+  const { selectedBacklinkOpportunityItems, backlinkProspectsCsv } = await loadView();
+  const assessed = structuredClone(items[1]);
+  assessed.outreach = {
+    quality_score: 86,
+    relevance_score: 92,
+    recommendation: "research_first",
+    confidence: 82,
+    risk_types: [],
+    reasons: ["权威度信号较强", "公开页面匹配目标主题"],
+  };
+  const payload = selectedBacklinkOpportunityItems([assessed], new Set([assessed.domain]));
+
+  assert.equal(payload[0].outreach_recommendation, "research_first");
+  assert.equal(payload[0].relevance_score, 92);
+  assert.deepEqual(payload[0].outreach_reasons, ["权威度信号较强", "公开页面匹配目标主题"]);
+
+  const csv = backlinkProspectsCsv([{ ...payload[0], own_domain: "own-site.com", status: "new" }]);
+  assert.match(csv.split("\n")[0], /Outreach Recommendation.*Quality Score.*Relevance Score.*Confidence.*Reasons/);
+  assert.match(csv, /Research First.*86.*92.*82.*权威度信号较强/);
+});
+
+test("merges relevance results into current gap rows without mutating unrelated domains", async () => {
+  const { mergeBacklinkOutreachResults, backlinkOutreachLabel } = await loadView();
+  assert.equal(typeof mergeBacklinkOutreachResults, "function");
+  assert.equal(backlinkOutreachLabel("research_first"), "Research First");
+  assert.equal(backlinkOutreachLabel("skip"), "Skip");
+  const original = structuredClone(items);
+  const merged = mergeBacklinkOutreachResults(original, [{
+    domain: "industry-journal.com",
+    outreach: { quality_score: 86, relevance_score: 92, recommendation: "research_first", confidence: 82, reasons: ["Topic match"] },
+  }]);
+
+  assert.equal(merged[1].outreach.relevance_score, 92);
+  assert.equal(merged[0].outreach, undefined);
+  assert.deepEqual(original, items);
 });

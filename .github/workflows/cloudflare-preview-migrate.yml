@@ -33,20 +33,27 @@ jobs:
       - name: Confirm Preview D1 target
         run: npx --yes wrangler@4 d1 info seo-pro-v2-preview
 
-      - name: Apply alpha core schema to Preview D1
-        run: npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote --yes --file migrations/0001_alpha_core.sql
+      - name: Enforce public-only fetch routing for Preview
+        shell: bash
+        run: |
+          project_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/seo-tool"
+          project_json="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "$project_url")"
+          preview_flags="$(echo "$project_json" | jq --compact-output \
+            '[.result.deployment_configs.preview.compatibility_flags[]?] + ["global_fetch_strictly_public"] | unique')"
+          payload="$(jq --null-input --compact-output --argjson flags "$preview_flags" \
+            '{deployment_configs:{preview:{compatibility_flags:$flags}}}')"
+          updated_json="$(curl --fail --silent --show-error --request PATCH \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$payload" \
+            "$project_url")"
+          echo "$updated_json" | jq --exit-status \
+            '.success == true and (.result.deployment_configs.preview.compatibility_flags | index("global_fetch_strictly_public") != null)'
 
-      - name: Apply SERP weakness schema to Preview D1
-        run: npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote --yes --file migrations/0002_serp_weakness.sql
-
-      - name: Apply keyword ideas schema to Preview D1
-        run: npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote --yes --file migrations/0003_keyword_ideas.sql
-
-      - name: Apply backlink history schema to Preview D1
-        run: npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote --yes --file migrations/0004_backlink_history.sql
-
-      - name: Apply saved link prospects schema to Preview D1
-        run: npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote --yes --file migrations/0005_backlink_opportunities.sql
+      - name: Apply tracked migrations to Preview D1
+        run: npx --yes wrangler@4 d1 migrations apply seo-pro-v2-preview --remote
 
       - name: Verify Preview D1 tables
         run: >
@@ -55,3 +62,16 @@ jobs:
           WHERE type = 'table'
           AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots', 'keyword_idea_runs', 'keyword_idea_members', 'backlink_snapshots', 'backlink_opportunities')
           ORDER BY name;"
+
+      - name: Verify Preview outreach intelligence columns
+        run: >
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote
+          --command "SELECT name FROM pragma_table_info('backlink_opportunities')
+          WHERE name IN ('quality_score', 'relevance_score', 'outreach_recommendation', 'outreach_confidence', 'outreach_reasons_json', 'outreach_risk_types_json', 'relevance_checked_at')
+          ORDER BY name;"
+
+      - name: Verify Preview migration ledger
+        run: >
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote
+          --command "SELECT name FROM d1_migrations
+          WHERE name = '0006_backlink_outreach_intelligence.sql';"

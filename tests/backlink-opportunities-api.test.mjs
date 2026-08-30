@@ -46,6 +46,13 @@ test("lists saved prospects for one own domain with status filtering and paginat
             opportunity_label: "High priority",
             status: "researching",
             notes: "Find the editor",
+            quality_score: 86,
+            relevance_score: 92,
+            outreach_recommendation: "research_first",
+            outreach_confidence: 82,
+            outreach_reasons_json: "[\"Authority is strong\",\"Topic match\"]",
+            outreach_risk_types_json: "[]",
+            relevance_checked_at: "2026-08-29 10:30:00",
             first_discovered_at: "2026-08-29 10:00:00",
             last_seen_at: "2026-08-29 11:00:00",
             created_at: "2026-08-29 10:00:00",
@@ -61,6 +68,8 @@ test("lists saved prospects for one own domain with status filtering and paginat
   assert.equal(body.ok, true);
   assert.deepEqual(body.data.items[0].competitor_domains, ["competitor-a.com", "competitor-b.com"]);
   assert.equal(body.data.items[0].status, "researching");
+  assert.equal(body.data.items[0].outreach_recommendation, "research_first");
+  assert.deepEqual(body.data.items[0].outreach_reasons, ["Authority is strong", "Topic match"]);
   assert.deepEqual(body.data.pagination, {
     total_count: 1,
     items_count: 1,
@@ -89,6 +98,12 @@ test("batch upserts normalized unique prospects without overwriting workflow fie
           competitor_domains: ["Competitor-B.com", "competitor-a.com"],
           opportunity_score: 87,
           opportunity_label: "High priority",
+          quality_score: 86,
+          relevance_score: 92,
+          outreach_recommendation: "research_first",
+          outreach_confidence: 82,
+          outreach_reasons: ["Strong authority", "Relevant topic"],
+          outreach_risk_types: [],
         },
         {
           referring_domain: "industry-journal.com",
@@ -124,7 +139,43 @@ test("batch upserts normalized unique prospects without overwriting workflow fie
   assert.match(batched[0].sql, /ON CONFLICT\s*\(own_domain, referring_domain\)\s*DO UPDATE/i);
   assert.doesNotMatch(batched[0].sql, /status\s*=\s*excluded\.status/i);
   assert.doesNotMatch(batched[0].sql, /notes\s*=\s*excluded\.notes/i);
+  assert.match(batched[0].sql, /outreach_recommendation\s*=\s*COALESCE\(excluded\.outreach_recommendation/i);
+  assert.equal(batched[0].values.includes("research_first"), true);
   assert.equal(body.meta.actual_cost_usd, 0);
+});
+
+test("validates outreach intelligence without accepting arbitrary labels or reasons", async () => {
+  const { onRequestPost } = await loadApi();
+  const base = {
+    own_domain: "own.com",
+    items: [{
+      referring_domain: "source.com",
+      opportunity_score: 70,
+      opportunity_label: "Review",
+      quality_score: 70,
+      relevance_score: 80,
+      outreach_recommendation: "research_first",
+      outreach_confidence: 75,
+      outreach_reasons: ["Relevant industry site"],
+      outreach_risk_types: [],
+    }],
+  };
+  const invalid = [
+    { outreach_recommendation: "guaranteed_link" },
+    { quality_score: 101 },
+    { relevance_score: -1 },
+    { outreach_confidence: 101 },
+    { outreach_reasons: ["x".repeat(501)] },
+    { outreach_risk_types: ["<script>"] },
+  ];
+
+  for (const change of invalid) {
+    const body = structuredClone(base);
+    Object.assign(body.items[0], change);
+    const response = await onRequestPost({ request: jsonRequest("POST", body), env: { DB: {} } });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error.code, "INVALID_ITEM");
+  }
 });
 
 test("updates prospect status and notes while keeping the domain pair immutable", async () => {

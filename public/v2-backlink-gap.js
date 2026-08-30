@@ -8,9 +8,10 @@ const SORTERS = {
   rank: (left, right) => number(right.metrics?.strongest_rank) - number(left.metrics?.strongest_rank),
   backlinks: (left, right) => number(right.metrics?.total_backlinks) - number(left.metrics?.total_backlinks),
   spam: (left, right) => number(left.metrics?.average_spam_score, 101) - number(right.metrics?.average_spam_score, 101),
+  outreach: (left, right) => number(right.outreach?.quality_score, -1) - number(left.outreach?.quality_score, -1),
 };
 
-export function visibleBacklinkGapRows(items, { query = "", priority = "all", sort = "opportunity" } = {}) {
+export function visibleBacklinkGapRows(items, { query = "", priority = "all", sort = "opportunity", hideSkip = false } = {}) {
   const normalizedQuery = String(query).trim().toLowerCase();
   const rows = (Array.isArray(items) ? items : []).filter((item) => {
     const score = number(item?.opportunity?.score);
@@ -22,7 +23,7 @@ export function visibleBacklinkGapRows(items, { query = "", priority = "all", so
       : priority === "good" ? score >= 60
         : priority === "multi" ? coverage >= 2
           : true;
-    return matchesQuery && matchesPriority;
+    return matchesQuery && matchesPriority && (!hideSkip || item?.outreach?.recommendation !== "skip");
   });
   return rows.sort(SORTERS[sort] ?? SORTERS.opportunity);
 }
@@ -123,12 +124,46 @@ export function selectedBacklinkOpportunityItems(items, selectedDomains) {
   const selected = selectedDomains instanceof Set ? selectedDomains : new Set(selectedDomains ?? []);
   return (Array.isArray(items) ? items : [])
     .filter((item) => selected.has(item?.domain))
-    .map((item) => ({
-      referring_domain: item.domain,
-      competitor_domains: (item.competitors ?? []).map((competitor) => competitor?.domain).filter(Boolean),
-      opportunity_score: item.opportunity?.score ?? null,
-      opportunity_label: item.opportunity?.label ?? null,
-    }));
+    .map((item) => {
+      const outreach = item.outreach ?? {};
+      return {
+        referring_domain: item.domain,
+        competitor_domains: (item.competitors ?? []).map((competitor) => competitor?.domain).filter(Boolean),
+        opportunity_score: item.opportunity?.score ?? null,
+        opportunity_label: item.opportunity?.label ?? null,
+        ...(outreach.recommendation ? {
+          quality_score: outreach.quality_score ?? null,
+          relevance_score: outreach.relevance_score ?? null,
+          outreach_recommendation: outreach.recommendation,
+          outreach_confidence: outreach.confidence ?? null,
+          outreach_reasons: outreach.reasons ?? [],
+          outreach_risk_types: outreach.risk_types ?? [],
+        } : {}),
+      };
+    });
+}
+
+export function selectedRelevanceCheckDomains(items, selectedDomains) {
+  const selected = selectedDomains instanceof Set ? selectedDomains : new Set(selectedDomains ?? []);
+  return (Array.isArray(items) ? items : []).map((item) => item?.domain).filter((domain) => selected.has(domain)).slice(0, 10);
+}
+
+const OUTREACH_LABELS = {
+  research_first: "Research First",
+  possible: "Possible",
+  low_value: "Low Value",
+  skip: "Skip",
+};
+
+export function backlinkOutreachLabel(value) {
+  return OUTREACH_LABELS[value] ?? String(value ?? "");
+}
+
+export function mergeBacklinkOutreachResults(items, results) {
+  const byDomain = new Map((Array.isArray(results) ? results : []).map((item) => [item?.domain, item?.outreach]));
+  return (Array.isArray(items) ? items : []).map((item) => byDomain.has(item?.domain)
+    ? { ...item, outreach: structuredClone(byDomain.get(item.domain)) }
+    : { ...item });
 }
 
 export function backlinkProspectsCsv(rows) {
@@ -140,6 +175,11 @@ export function backlinkProspectsCsv(rows) {
     "Opportunity Label",
     "Status",
     "Notes",
+    "Outreach Recommendation",
+    "Quality Score",
+    "Relevance Score",
+    "Confidence",
+    "Reasons",
     "First Discovered",
     "Updated At",
   ];
@@ -151,6 +191,11 @@ export function backlinkProspectsCsv(rows) {
     item?.opportunity_label,
     backlinkProspectStatusLabel(item?.status),
     item?.notes,
+    backlinkOutreachLabel(item?.outreach_recommendation),
+    item?.quality_score,
+    item?.relevance_score,
+    item?.outreach_confidence,
+    (item?.outreach_reasons ?? []).join("; "),
     item?.first_discovered_at,
     item?.updated_at,
   ])];
@@ -166,6 +211,9 @@ if (typeof window !== "undefined") {
     backlinkGapCsv,
     backlinkProspectStatusLabel,
     selectedBacklinkOpportunityItems,
+    selectedRelevanceCheckDomains,
+    backlinkOutreachLabel,
+    mergeBacklinkOutreachResults,
     backlinkProspectsCsv,
   };
 }

@@ -8,6 +8,7 @@ import {
   fetchBacklinkGap,
 } from "../../../../src/v2/providers/dataforseo-backlink-gap.js";
 import { recordApiUsage } from "../../../../src/v2/storage/keyword-overview.js";
+import { assessBacklinkOutreach } from "../../../../src/v2/intelligence/backlink-outreach.js";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=UTF-8",
@@ -79,6 +80,16 @@ async function logUsage(env, values) {
 function normalizeCompetitors(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map(normalizeBacklinkDomain).filter(Boolean))].sort();
+}
+
+function addOutreachQuality(page) {
+  return {
+    ...page,
+    items: (Array.isArray(page?.items) ? page.items : []).map((item) => ({
+      ...item,
+      outreach: assessBacklinkOutreach(item),
+    })),
+  };
 }
 
 export async function onRequestPost({ request, env }) {
@@ -154,7 +165,7 @@ export async function onRequestPost({ request, env }) {
     });
     return json({
       ok: true,
-      data: cached,
+      data: addOutreachQuality(cached),
       meta: { request_id: requestId, cached: true, actual_cost_usd: 0, cache_ttl_days: 7, duration_ms: Date.now() - startedAt },
     });
   }
@@ -197,7 +208,7 @@ export async function onRequestPost({ request, env }) {
     });
     return json({
       ok: true,
-      data: provider.data,
+      data: addOutreachQuality(provider.data),
       meta: {
         request_id: requestId,
         cached: false,

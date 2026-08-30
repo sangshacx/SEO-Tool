@@ -70,7 +70,11 @@ test("returns a cached opportunity page and records a zero-cost hit", async () =
     competitor_domains: ["competitor-a.com"],
     pagination: { total_count: 1, items_count: 1, limit: 25, offset: 0, page: 1 },
     summary: { returned_domains: 1 },
-    items: [{ domain: "industry-journal.com", opportunity: { score: 80 } }],
+    items: [{
+      domain: "industry-journal.com",
+      metrics: { strongest_rank: 74, total_backlinks: 20, average_spam_score: 4, nofollow_share_percent: 10, broken_share_percent: 0 },
+      opportunity: { score: 80 },
+    }],
   };
   const response = await onRequestPost({
     request: postRequest({
@@ -93,6 +97,8 @@ test("returns a cached opportunity page and records a zero-cost hit", async () =
 
   assert.equal(response.status, 200);
   assert.equal(body.data.items[0].domain, "industry-journal.com");
+  assert.ok(body.data.items[0].outreach.quality_score >= 70);
+  assert.equal(body.data.items[0].outreach.recommendation, "research_first");
   assert.equal(body.meta.cached, true);
   assert.equal(body.meta.actual_cost_usd, 0);
   assert.equal(usageValues[3], "backlink_gap");
