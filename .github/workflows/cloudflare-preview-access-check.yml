@@ -46,23 +46,28 @@ jobs:
           endpoint="https://seo-pro-v2.seo-tool-dme.pages.dev/api/v2/usage/summary"
           response_file="$(mktemp)"
           status="000"
-
-          for attempt in {1..12}; do
-            status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" "$endpoint" || true)"
-            if [ "$status" = "200" ]; then
-              break
-            fi
-            sleep 10
-          done
-
-          test "$status" = "200"
-          jq -e '
-            .ok == true
-            and .meta.source == "d1"
-            and (.data.today.requests | type == "number")
-            and (.data.this_month.cache_hit_rate_percent | type == "number")
-            and (.data.all_time.actual_cost_usd | type == "number")
-          ' "$response_file"
+          if [ -n "$CF_ACCESS_CLIENT_ID" ] && [ -n "$CF_ACCESS_CLIENT_SECRET" ]; then
+            for attempt in {1..12}; do
+              status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" \
+                --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+                --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" \
+                "$endpoint" || true)"
+              [ "$status" = "200" ] && break
+              sleep 10
+            done
+            test "$status" = "200"
+            jq -e '
+              .ok == true
+              and .meta.source == "d1"
+              and (.data.today.requests | type == "number")
+              and (.data.this_month.cache_hit_rate_percent | type == "number")
+              and (.data.all_time.actual_cost_usd | type == "number")
+            ' "$response_file"
+          else
+            status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" "$endpoint")"
+            case "$status" in 301|302|303|307|308|403) ;; *) echo "Expected edge Access rejection, got HTTP $status"; exit 1;; esac
+            echo "Authenticated usage probe skipped because Access service-token secrets are not configured."
+          fi
 
       - name: Verify anonymous site-profile access is rejected at the Access edge
         shell: bash
