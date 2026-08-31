@@ -1,0 +1,1069 @@
+{
+  "version": "2026-08-06",
+  "locations": [
+    {
+      "location_code": 2008,
+      "country_iso_code": "AL",
+      "location_name": "Albania",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "sq"
+      ]
+    },
+    {
+      "location_code": 2012,
+      "country_iso_code": "DZ",
+      "location_name": "Algeria",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ar",
+        "fr"
+      ]
+    },
+    {
+      "location_code": 2024,
+      "country_iso_code": "AO",
+      "location_name": "Angola",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "pt"
+      ]
+    },
+    {
+      "location_code": 2031,
+      "country_iso_code": "AZ",
+      "location_name": "Azerbaijan",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "az"
+      ]
+    },
+    {
+      "location_code": 2032,
+      "country_iso_code": "AR",
+      "location_name": "Argentina",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2036,
+      "country_iso_code": "AU",
+      "location_name": "Australia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2040,
+      "country_iso_code": "AT",
+      "location_name": "Austria",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "de"
+      ]
+    },
+    {
+      "location_code": 2048,
+      "country_iso_code": "BH",
+      "location_name": "Bahrain",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ar"
+      ]
+    },
+    {
+      "location_code": 2050,
+      "country_iso_code": "BD",
+      "location_name": "Bangladesh",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "bn"
+      ]
+    },
+    {
+      "location_code": 2051,
+      "country_iso_code": "AM",
+      "location_name": "Armenia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "hy"
+      ]
+    },
+    {
+      "location_code": 2056,
+      "country_iso_code": "BE",
+      "location_name": "Belgium",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "de",
+        "fr",
+        "nl"
+      ]
+    },
+    {
+      "location_code": 2068,
+      "country_iso_code": "BO",
+      "location_name": "Bolivia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2070,
+      "country_iso_code": "BA",
+      "location_name": "Bosnia and Herzegovina",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "bs"
+      ]
+    },
+    {
+      "location_code": 2076,
+      "country_iso_code": "BR",
+      "location_name": "Brazil",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "pt"
+      ]
+    },
+    {
+      "location_code": 2100,
+      "country_iso_code": "BG",
+      "location_name": "Bulgaria",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "bg"
+      ]
+    },
+    {
+      "location_code": 2104,
+      "country_iso_code": "MM",
+      "location_name": "Myanmar (Burma)",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2116,
+      "country_iso_code": "KH",
+      "location_name": "Cambodia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2120,
+      "country_iso_code": "CM",
+      "location_name": "Cameroon",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "fr"
+      ]
+    },
+    {
+      "location_code": 2124,
+      "country_iso_code": "CA",
+      "location_name": "Canada",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en",
+        "fr"
+      ]
+    },
+    {
+      "location_code": 2144,
+      "country_iso_code": "LK",
+      "location_name": "Sri Lanka",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2152,
+      "country_iso_code": "CL",
+      "location_name": "Chile",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2158,
+      "country_iso_code": "TW",
+      "location_name": "Taiwan",
+      "location_type": "Region",
+      "supported_language_codes": [
+        "zh-TW"
+      ]
+    },
+    {
+      "location_code": 2170,
+      "country_iso_code": "CO",
+      "location_name": "Colombia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2188,
+      "country_iso_code": "CR",
+      "location_name": "Costa Rica",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2191,
+      "country_iso_code": "HR",
+      "location_name": "Croatia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "hr"
+      ]
+    },
+    {
+      "location_code": 2196,
+      "country_iso_code": "CY",
+      "location_name": "Cyprus",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "el",
+        "en"
+      ]
+    },
+    {
+      "location_code": 2203,
+      "country_iso_code": "CZ",
+      "location_name": "Czechia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "cs"
+      ]
+    },
+    {
+      "location_code": 2208,
+      "country_iso_code": "DK",
+      "location_name": "Denmark",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "da"
+      ]
+    },
+    {
+      "location_code": 2218,
+      "country_iso_code": "EC",
+      "location_name": "Ecuador",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2222,
+      "country_iso_code": "SV",
+      "location_name": "El Salvador",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2233,
+      "country_iso_code": "EE",
+      "location_name": "Estonia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "et"
+      ]
+    },
+    {
+      "location_code": 2246,
+      "country_iso_code": "FI",
+      "location_name": "Finland",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "fi"
+      ]
+    },
+    {
+      "location_code": 2250,
+      "country_iso_code": "FR",
+      "location_name": "France",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "fr"
+      ]
+    },
+    {
+      "location_code": 2276,
+      "country_iso_code": "DE",
+      "location_name": "Germany",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "de"
+      ]
+    },
+    {
+      "location_code": 2288,
+      "country_iso_code": "GH",
+      "location_name": "Ghana",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2300,
+      "country_iso_code": "GR",
+      "location_name": "Greece",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "el",
+        "en"
+      ]
+    },
+    {
+      "location_code": 2320,
+      "country_iso_code": "GT",
+      "location_name": "Guatemala",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2344,
+      "country_iso_code": "HK",
+      "location_name": "Hong Kong",
+      "location_type": "Region",
+      "supported_language_codes": [
+        "en",
+        "zh-TW"
+      ]
+    },
+    {
+      "location_code": 2348,
+      "country_iso_code": "HU",
+      "location_name": "Hungary",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "hu"
+      ]
+    },
+    {
+      "location_code": 2356,
+      "country_iso_code": "IN",
+      "location_name": "India",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en",
+        "hi"
+      ]
+    },
+    {
+      "location_code": 2360,
+      "country_iso_code": "ID",
+      "location_name": "Indonesia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en",
+        "id"
+      ]
+    },
+    {
+      "location_code": 2372,
+      "country_iso_code": "IE",
+      "location_name": "Ireland",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2376,
+      "country_iso_code": "IL",
+      "location_name": "Israel",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ar",
+        "he"
+      ]
+    },
+    {
+      "location_code": 2380,
+      "country_iso_code": "IT",
+      "location_name": "Italy",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "it"
+      ]
+    },
+    {
+      "location_code": 2384,
+      "country_iso_code": "CI",
+      "location_name": "Cote d'Ivoire",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "fr"
+      ]
+    },
+    {
+      "location_code": 2392,
+      "country_iso_code": "JP",
+      "location_name": "Japan",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ja"
+      ]
+    },
+    {
+      "location_code": 2398,
+      "country_iso_code": "KZ",
+      "location_name": "Kazakhstan",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ru"
+      ]
+    },
+    {
+      "location_code": 2400,
+      "country_iso_code": "JO",
+      "location_name": "Jordan",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ar"
+      ]
+    },
+    {
+      "location_code": 2404,
+      "country_iso_code": "KE",
+      "location_name": "Kenya",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2410,
+      "country_iso_code": "KR",
+      "location_name": "South Korea",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ko"
+      ]
+    },
+    {
+      "location_code": 2428,
+      "country_iso_code": "LV",
+      "location_name": "Latvia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "lv"
+      ]
+    },
+    {
+      "location_code": 2440,
+      "country_iso_code": "LT",
+      "location_name": "Lithuania",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "lt"
+      ]
+    },
+    {
+      "location_code": 2458,
+      "country_iso_code": "MY",
+      "location_name": "Malaysia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en",
+        "ms"
+      ]
+    },
+    {
+      "location_code": 2470,
+      "country_iso_code": "MT",
+      "location_name": "Malta",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2484,
+      "country_iso_code": "MX",
+      "location_name": "Mexico",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2492,
+      "country_iso_code": "MC",
+      "location_name": "Monaco",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "fr"
+      ]
+    },
+    {
+      "location_code": 2498,
+      "country_iso_code": "MD",
+      "location_name": "Moldova",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ro"
+      ]
+    },
+    {
+      "location_code": 2504,
+      "country_iso_code": "MA",
+      "location_name": "Morocco",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ar",
+        "fr"
+      ]
+    },
+    {
+      "location_code": 2528,
+      "country_iso_code": "NL",
+      "location_name": "Netherlands",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "nl"
+      ]
+    },
+    {
+      "location_code": 2554,
+      "country_iso_code": "NZ",
+      "location_name": "New Zealand",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2558,
+      "country_iso_code": "NI",
+      "location_name": "Nicaragua",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2566,
+      "country_iso_code": "NG",
+      "location_name": "Nigeria",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2578,
+      "country_iso_code": "NO",
+      "location_name": "Norway",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "nb"
+      ]
+    },
+    {
+      "location_code": 2586,
+      "country_iso_code": "PK",
+      "location_name": "Pakistan",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en",
+        "ur"
+      ]
+    },
+    {
+      "location_code": 2591,
+      "country_iso_code": "PA",
+      "location_name": "Panama",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2600,
+      "country_iso_code": "PY",
+      "location_name": "Paraguay",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2604,
+      "country_iso_code": "PE",
+      "location_name": "Peru",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2608,
+      "country_iso_code": "PH",
+      "location_name": "Philippines",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en",
+        "tl"
+      ]
+    },
+    {
+      "location_code": 2616,
+      "country_iso_code": "PL",
+      "location_name": "Poland",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "pl"
+      ]
+    },
+    {
+      "location_code": 2620,
+      "country_iso_code": "PT",
+      "location_name": "Portugal",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "pt"
+      ]
+    },
+    {
+      "location_code": 2642,
+      "country_iso_code": "RO",
+      "location_name": "Romania",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ro"
+      ]
+    },
+    {
+      "location_code": 2682,
+      "country_iso_code": "SA",
+      "location_name": "Saudi Arabia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ar"
+      ]
+    },
+    {
+      "location_code": 2686,
+      "country_iso_code": "SN",
+      "location_name": "Senegal",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "fr"
+      ]
+    },
+    {
+      "location_code": 2688,
+      "country_iso_code": "RS",
+      "location_name": "Serbia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "sr"
+      ]
+    },
+    {
+      "location_code": 2702,
+      "country_iso_code": "SG",
+      "location_name": "Singapore",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en",
+        "zh-CN"
+      ]
+    },
+    {
+      "location_code": 2703,
+      "country_iso_code": "SK",
+      "location_name": "Slovakia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "sk"
+      ]
+    },
+    {
+      "location_code": 2704,
+      "country_iso_code": "VN",
+      "location_name": "Vietnam",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en",
+        "vi"
+      ]
+    },
+    {
+      "location_code": 2705,
+      "country_iso_code": "SI",
+      "location_name": "Slovenia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "sl"
+      ]
+    },
+    {
+      "location_code": 2710,
+      "country_iso_code": "ZA",
+      "location_name": "South Africa",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2724,
+      "country_iso_code": "ES",
+      "location_name": "Spain",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2752,
+      "country_iso_code": "SE",
+      "location_name": "Sweden",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "sv"
+      ]
+    },
+    {
+      "location_code": 2756,
+      "country_iso_code": "CH",
+      "location_name": "Switzerland",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "de",
+        "fr",
+        "it"
+      ]
+    },
+    {
+      "location_code": 2764,
+      "country_iso_code": "TH",
+      "location_name": "Thailand",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "th"
+      ]
+    },
+    {
+      "location_code": 2784,
+      "country_iso_code": "AE",
+      "location_name": "United Arab Emirates",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ar",
+        "en"
+      ]
+    },
+    {
+      "location_code": 2788,
+      "country_iso_code": "TN",
+      "location_name": "Tunisia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ar"
+      ]
+    },
+    {
+      "location_code": 2792,
+      "country_iso_code": "TR",
+      "location_name": "Turkiye",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "tr"
+      ]
+    },
+    {
+      "location_code": 2804,
+      "country_iso_code": "UA",
+      "location_name": "Ukraine",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ru",
+        "uk"
+      ]
+    },
+    {
+      "location_code": 2807,
+      "country_iso_code": "MK",
+      "location_name": "North Macedonia",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "mk"
+      ]
+    },
+    {
+      "location_code": 2818,
+      "country_iso_code": "EG",
+      "location_name": "Egypt",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "ar",
+        "en"
+      ]
+    },
+    {
+      "location_code": 2826,
+      "country_iso_code": "GB",
+      "location_name": "United Kingdom",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en"
+      ]
+    },
+    {
+      "location_code": 2840,
+      "country_iso_code": "US",
+      "location_name": "United States",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "en",
+        "es"
+      ]
+    },
+    {
+      "location_code": 2854,
+      "country_iso_code": "BF",
+      "location_name": "Burkina Faso",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "fr"
+      ]
+    },
+    {
+      "location_code": 2858,
+      "country_iso_code": "UY",
+      "location_name": "Uruguay",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    },
+    {
+      "location_code": 2862,
+      "country_iso_code": "VE",
+      "location_name": "Venezuela",
+      "location_type": "Country",
+      "supported_language_codes": [
+        "es"
+      ]
+    }
+  ],
+  "languages": [
+    {
+      "language_code": "ar",
+      "language_name": "Arabic"
+    },
+    {
+      "language_code": "az",
+      "language_name": "Azeri"
+    },
+    {
+      "language_code": "bg",
+      "language_name": "Bulgarian"
+    },
+    {
+      "language_code": "bn",
+      "language_name": "Bengali"
+    },
+    {
+      "language_code": "bs",
+      "language_name": "Bosnian"
+    },
+    {
+      "language_code": "cs",
+      "language_name": "Czech"
+    },
+    {
+      "language_code": "da",
+      "language_name": "Danish"
+    },
+    {
+      "language_code": "de",
+      "language_name": "German"
+    },
+    {
+      "language_code": "el",
+      "language_name": "Greek"
+    },
+    {
+      "language_code": "en",
+      "language_name": "English"
+    },
+    {
+      "language_code": "es",
+      "language_name": "Spanish"
+    },
+    {
+      "language_code": "et",
+      "language_name": "Estonian"
+    },
+    {
+      "language_code": "fi",
+      "language_name": "Finnish"
+    },
+    {
+      "language_code": "fr",
+      "language_name": "French"
+    },
+    {
+      "language_code": "he",
+      "language_name": "Hebrew"
+    },
+    {
+      "language_code": "hi",
+      "language_name": "Hindi"
+    },
+    {
+      "language_code": "hr",
+      "language_name": "Croatian"
+    },
+    {
+      "language_code": "hu",
+      "language_name": "Hungarian"
+    },
+    {
+      "language_code": "hy",
+      "language_name": "Armenian"
+    },
+    {
+      "language_code": "id",
+      "language_name": "Indonesian"
+    },
+    {
+      "language_code": "it",
+      "language_name": "Italian"
+    },
+    {
+      "language_code": "ja",
+      "language_name": "Japanese"
+    },
+    {
+      "language_code": "ko",
+      "language_name": "Korean"
+    },
+    {
+      "language_code": "lt",
+      "language_name": "Lithuanian"
+    },
+    {
+      "language_code": "lv",
+      "language_name": "Latvian"
+    },
+    {
+      "language_code": "mk",
+      "language_name": "Macedonian"
+    },
+    {
+      "language_code": "ms",
+      "language_name": "Malay"
+    },
+    {
+      "language_code": "nb",
+      "language_name": "Norwegian (Bokmål)"
+    },
+    {
+      "language_code": "nl",
+      "language_name": "Dutch"
+    },
+    {
+      "language_code": "pl",
+      "language_name": "Polish"
+    },
+    {
+      "language_code": "pt",
+      "language_name": "Portuguese"
+    },
+    {
+      "language_code": "ro",
+      "language_name": "Romanian"
+    },
+    {
+      "language_code": "ru",
+      "language_name": "Russian"
+    },
+    {
+      "language_code": "sk",
+      "language_name": "Slovak"
+    },
+    {
+      "language_code": "sl",
+      "language_name": "Slovenian"
+    },
+    {
+      "language_code": "sq",
+      "language_name": "Albanian"
+    },
+    {
+      "language_code": "sr",
+      "language_name": "Serbian"
+    },
+    {
+      "language_code": "sv",
+      "language_name": "Swedish"
+    },
+    {
+      "language_code": "th",
+      "language_name": "Thai"
+    },
+    {
+      "language_code": "tl",
+      "language_name": "Tagalog"
+    },
+    {
+      "language_code": "tr",
+      "language_name": "Turkish"
+    },
+    {
+      "language_code": "uk",
+      "language_name": "Ukrainian"
+    },
+    {
+      "language_code": "ur",
+      "language_name": "Urdu"
+    },
+    {
+      "language_code": "vi",
+      "language_name": "Vietnamese"
+    },
+    {
+      "language_code": "zh-CN",
+      "language_name": "Chinese (Simplified)"
+    },
+    {
+      "language_code": "zh-TW",
+      "language_name": "Chinese (Traditional)"
+    }
+  ],
+  "pinned_location_codes": [
+    2840,
+    2826,
+    2124,
+    2036,
+    2682,
+    2784,
+    2702,
+    2356
+  ]
+}

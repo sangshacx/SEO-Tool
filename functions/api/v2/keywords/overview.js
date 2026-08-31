@@ -16,6 +16,7 @@ import {
   recordApiUsage,
   writeKeywordOverviewCache,
 } from "../../../../src/v2/storage/keyword-overview.js";
+import { normalizeMarketRequest } from "../../../../src/v2/markets/request-market.js";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=UTF-8",
@@ -102,8 +103,13 @@ export async function onRequestPost({ request, env }) {
 
   const keyword = normalizeKeyword(body?.keyword);
   const normalizedKeyword = keyword.toLowerCase();
-  const locationCode = body?.location_code ?? 2840;
-  const languageCode = body?.language_code ?? "en";
+  let locationCode;
+  let languageCode;
+  try {
+    ({ locationCode, languageCode } = normalizeMarketRequest(body));
+  } catch {
+    return validationError("Select a supported country and language combination.", "market");
+  }
 
   if (!keyword) {
     return validationError("Keyword is required.", "keyword");
@@ -120,23 +126,6 @@ export async function onRequestPost({ request, env }) {
     return validationError(
       "Keyword must not exceed 10 words.",
       "keyword",
-    );
-  }
-
-  if (!Number.isInteger(locationCode) || locationCode <= 0) {
-    return validationError(
-      "location_code must be a positive integer.",
-      "location_code",
-    );
-  }
-
-  if (
-    typeof languageCode !== "string" ||
-    !/^[a-z]{2,3}$/.test(languageCode)
-  ) {
-    return validationError(
-      "language_code must be a 2-3 letter lowercase code.",
-      "language_code",
     );
   }
 

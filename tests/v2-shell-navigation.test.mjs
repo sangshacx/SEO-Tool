@@ -14,6 +14,7 @@ import {
   activateView,
   toggleMobileNavigation,
   bindHashRouting,
+  activateSiteProfile,
 } from "../public/v2-shell.js";
 
 test("registers the approved navigation without promoting Content Brief", () => {
@@ -75,6 +76,35 @@ test("active site propagation changes only explicitly compatible fields", () => 
   assert.equal(compatible.value, "new.test");
   assert.deepEqual(compatible.events, ["input", "change"]);
   assert.equal(batch.value, "old.test\ncompetitor.test");
+});
+
+test("saved active site aligns select, domain, title, controls and context without submission", () => {
+  let submits = 0;
+  const domain = { value: "", events: [], dispatchEvent(event) { this.events.push(event.type); } };
+  const country = { value: "" };
+  const language = { value: "" };
+  const root = {
+    querySelectorAll(selector) {
+      if (selector === "[data-v2-domain-field]") return [domain];
+      if (selector === "[data-v2-location-code]") return [country];
+      if (selector === "[data-v2-language-code]") return [language];
+      return [];
+    },
+    dispatchEvent() { submits += 1; },
+  };
+  const select = { value: "" };
+  const title = { textContent: "" };
+  let current;
+  const context = { set(value) { current = value; return value; } };
+  const profile = { domain: "second.example" };
+  const market = { location_code: 2682, location_name: "Saudi Arabia", country_iso_code: "SA", language_code: "ar", language_name: "Arabic" };
+  activateSiteProfile({ root, select, title, context, profile, market });
+  assert.equal(select.value, "second.example");
+  assert.equal(domain.value, "second.example");
+  assert.equal(title.textContent, "second.example");
+  assert.equal(current.domain, "second.example");
+  assert.deepEqual([country.value, language.value], ["2682", "ar"]);
+  assert.equal(submits, 0);
 });
 
 test("activates one route while keeping shared usage visible", () => {

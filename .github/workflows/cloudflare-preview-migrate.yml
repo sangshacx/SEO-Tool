@@ -59,22 +59,47 @@ jobs:
           --config wrangler.migrations.jsonc
 
       - name: Verify Preview D1 tables
-        run: >
-          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote
+        shell: bash
+        run: |
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
+          --json \
           --command "SELECT name FROM sqlite_schema
           WHERE type = 'table'
-          AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots', 'keyword_idea_runs', 'keyword_idea_members', 'backlink_snapshots', 'backlink_opportunities')
-          ORDER BY name;"
+          AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots', 'keyword_idea_runs', 'keyword_idea_members', 'backlink_snapshots', 'backlink_opportunities', 'site_profiles')
+          ORDER BY name;" |
+          node scripts/assert-d1-query-names.mjs \
+          api_usage app_settings backlink_opportunities backlink_snapshots keyword_idea_members \
+          keyword_idea_runs keyword_metrics keywords serp_weakness_snapshots site_profiles
 
       - name: Verify Preview outreach intelligence columns
-        run: >
-          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote
+        shell: bash
+        run: |
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
+          --json \
           --command "SELECT name FROM pragma_table_info('backlink_opportunities')
           WHERE name IN ('quality_score', 'relevance_score', 'outreach_recommendation', 'outreach_confidence', 'outreach_reasons_json', 'outreach_risk_types_json', 'relevance_checked_at')
-          ORDER BY name;"
+          ORDER BY name;" |
+          node scripts/assert-d1-query-names.mjs \
+          outreach_confidence outreach_reasons_json outreach_recommendation outreach_risk_types_json \
+          quality_score relevance_checked_at relevance_score
+
+      - name: Verify Preview site profile columns
+        shell: bash
+        run: |
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
+          --json \
+          --command "SELECT name FROM pragma_table_info('site_profiles') ORDER BY cid;" |
+          node scripts/assert-d1-query-names.mjs \
+          id domain label location_code location_name country_iso_code language_code language_name \
+          include_subdomains competitors_json created_at updated_at
 
       - name: Verify Preview migration ledger
-        run: >
-          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote
+        shell: bash
+        run: |
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
+          --json \
           --command "SELECT name FROM d1_migrations
-          WHERE name = '0006_backlink_outreach_intelligence.sql';"
+          WHERE name IN ('0006_backlink_outreach_intelligence.sql', '0007_site_profiles.sql')
+          ORDER BY name;" |
+          node scripts/assert-d1-query-names.mjs \
+          0006_backlink_outreach_intelligence.sql 0007_site_profiles.sql

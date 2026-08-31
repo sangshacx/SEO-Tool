@@ -5,6 +5,7 @@ import {
 import { normalizeKeywordOverview } from "../../../../src/v2/normalizers/keyword-overview.js";
 import { enrichKeywordIdeas } from "../../../../src/v2/scoring/keyword-relevance.js";
 import { recordApiUsage } from "../../../../src/v2/storage/keyword-overview.js";
+import { normalizeMarketRequest } from "../../../../src/v2/markets/request-market.js";
 
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 30;
 const JSON_HEADERS = { "Content-Type": "application/json; charset=UTF-8", "Cache-Control": "no-store" };
@@ -30,7 +31,7 @@ function groupFor(keyword, intent, seed) {
   return modifier ? modifier.charAt(0).toUpperCase() + modifier.slice(1) : "Core topic";
 }
 
-function cacheKey(seed, locationCode, languageCode, limit) {
+export function buildKeywordIdeasCacheKey(seed, locationCode, languageCode, limit) {
   return ["v2", "keyword-ideas", encodeURIComponent(seed.toLowerCase()), locationCode, languageCode, limit].join(":");
 }
 
@@ -73,14 +74,19 @@ export async function onRequestPost({ request, env }) {
   try { body = await request.json(); } catch { return json({ ok: false, error: { code: "INVALID_JSON", message: "Request body must be valid JSON." } }, 400); }
 
   const seed = cleanKeyword(body?.seed_keyword ?? body?.keyword);
-  const locationCode = Number.isInteger(body?.location_code) ? body.location_code : 2840;
-  const languageCode = typeof body?.language_code === "string" ? body.language_code : "en";
+  let locationCode;
+  let languageCode;
+  try {
+    ({ locationCode, languageCode } = normalizeMarketRequest(body));
+  } catch {
+    return json({ ok: false, error: { code: "VALIDATION_ERROR", message: "Select a supported country and language combination.", field: "market" } }, 400);
+  }
   const limit = body?.limit === undefined ? 25 : body.limit;
 
   if (!seed || seed.length > 80 || seed.split(" ").length > 10) return json({ ok: false, error: { code: "VALIDATION_ERROR", message: "Seed keyword must be 1-80 characters and no more than 10 words.", field: "seed_keyword" } }, 400);
   if (!Number.isInteger(limit) || limit < 10 || limit > 50) return json({ ok: false, error: { code: "VALIDATION_ERROR", message: "Limit must be an integer from 10 to 50.", field: "limit" } }, 400);
 
-  const key = cacheKey(seed, locationCode, languageCode, limit);
+  const key = buildKeywordIdeasCacheKey(seed, locationCode, languageCode, limit);
   const cached = await env.CACHE.get(key, "json");
   if (cached) {
     const ideas = enrichKeywordIdeas(cached.ideas, seed);

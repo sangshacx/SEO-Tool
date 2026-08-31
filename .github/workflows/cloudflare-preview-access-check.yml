@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/cloudflare-preview-access-check.yml
       - functions/api/v2/usage/summary.js
+      - functions/api/v2/sites/index.js
   workflow_dispatch:
 
 permissions:
@@ -20,6 +21,8 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
     steps:
       - name: Check out seo-pro-v2
         uses: actions/checkout@v4
@@ -60,6 +63,32 @@ jobs:
             and (.data.this_month.cache_hit_rate_percent | type == "number")
             and (.data.all_time.actual_cost_usd | type == "number")
           ' "$response_file"
+
+      - name: Verify anonymous site-profile access is rejected at the Access edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://seo-pro-v2.seo-tool-dme.pages.dev/api/v2/sites"
+          status="$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" "$endpoint")"
+          case "$status" in 301|302|303|307|308|403) ;; *) echo "Expected edge Access rejection, got HTTP $status"; exit 1;; esac
+
+      - name: Verify authenticated site-profile access when service-token secrets are configured
+        if: ${{ env.CF_ACCESS_CLIENT_ID != '' && env.CF_ACCESS_CLIENT_SECRET != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://seo-pro-v2.seo-tool-dme.pages.dev/api/v2/sites"
+          response_file="$(mktemp)"
+          status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" \
+            --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}" \
+            --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}" \
+            "$endpoint")"
+          test "$status" = "200"
+          jq -e '.ok == true and (.data | type == "array") and .meta.actual_cost_usd == 0' "$response_file"
+
+      - name: Require explicit Access test configuration notice
+        if: ${{ env.CF_ACCESS_CLIENT_ID == '' || env.CF_ACCESS_CLIENT_SECRET == '' }}
+        run: echo "Anonymous rejection was verified; authenticated probe skipped because CF_ACCESS_CLIENT_ID/SECRET are not configured."
 
       - name: Check Preview D1 database
         run: npx --yes wrangler@4 d1 info seo-pro-v2-preview

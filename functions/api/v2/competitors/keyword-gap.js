@@ -1,5 +1,6 @@
 import { scoreKeywordPotential } from "../../../../src/v2/scoring/keyword-potential.js";
 import { recordApiUsage } from "../../../../src/v2/storage/keyword-overview.js";
+import { normalizeMarketRequest } from "../../../../src/v2/markets/request-market.js";
 
 const ENDPOINT = "https://api.dataforseo.com/v3/dataforseo_labs/google/domain_intersection/live";
 const ENDPOINT_NAME = "dataforseo_labs/google/domain_intersection/live";
@@ -24,7 +25,7 @@ function validDomain(domain) {
   return domain.length <= 253 && /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain);
 }
 
-function cacheKey(competitorDomain, ownDomain, locationCode, languageCode) {
+export function buildKeywordGapCacheKey(competitorDomain, ownDomain, locationCode, languageCode) {
   return ["v2", "keyword-gap", competitorDomain, ownDomain, locationCode, languageCode].join(":");
 }
 
@@ -129,8 +130,13 @@ export async function onRequestPost({ request, env }) {
 
   const competitorDomain = normalizeDomain(body?.competitor_domain);
   const ownDomain = normalizeDomain(body?.own_domain);
-  const locationCode = Number.isInteger(body?.location_code) ? body.location_code : 2840;
-  const languageCode = typeof body?.language_code === "string" ? body.language_code.trim().toLowerCase() : "en";
+  let locationCode;
+  let languageCode;
+  try {
+    ({ locationCode, languageCode } = normalizeMarketRequest(body));
+  } catch {
+    return json({ ok: false, error: { code: "VALIDATION_ERROR", field: "market", message: "Select a supported country and language combination." } }, 400);
+  }
 
   if (!validDomain(competitorDomain)) {
     return json({ ok: false, error: { code: "VALIDATION_ERROR", field: "competitor_domain", message: "Enter a valid competitor root domain." } }, 400);
@@ -142,7 +148,7 @@ export async function onRequestPost({ request, env }) {
     return json({ ok: false, error: { code: "VALIDATION_ERROR", field: "own_domain", message: "Own site and competitor must be different domains." } }, 400);
   }
 
-  const key = cacheKey(competitorDomain, ownDomain, locationCode, languageCode);
+  const key = buildKeywordGapCacheKey(competitorDomain, ownDomain, locationCode, languageCode);
   const cached = await env.CACHE.get(key, "json");
   if (cached) {
     await logUsage(env, {
