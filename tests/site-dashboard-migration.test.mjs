@@ -96,4 +96,11 @@ test("preview migration workflow tracks the dashboard schema and all recovery mi
   assert.doesNotMatch(migration0009, /task_count INTEGER NOT NULL/);
   assert.match(migration0010, /CREATE TABLE IF NOT EXISTS site_dashboard_modules/);
   assert.match(migration0010, /PRIMARY KEY \(site_domain, location_code, language_code, module_id\)/);
+  assert.doesNotMatch(migration0010, /UNION ALL|CROSS JOIN/);
+  for (const moduleId of [
+    "organic", "top_keywords", "backlinks", "backlink_history", "competitors",
+    "keyword_opportunities", "backlink_gap", "backlink_opportunities", "workflow",
+  ]) {
+    assert.match(migration0010, new RegExp(`SELECT[^;]+ '${moduleId}'[,\\s]`, "s"));
+  }
 });
