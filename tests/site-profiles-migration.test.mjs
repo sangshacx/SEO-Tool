@@ -71,6 +71,6 @@ test("uses exact, failing Preview migration verification commands", async () => 
   assert.match(workflow, /0007_site_profiles\.sql/);
   assert.match(workflow, /d1_migrations/);
   const verifierLines = workflow.split("\n").filter((line) => line.includes("node scripts/assert-d1-query-names.mjs"));
-  assert.equal(verifierLines.length, 4);
+  assert.equal(verifierLines.length, 8);
   assert.equal(verifierLines.every((line) => line.trimEnd().endsWith("\\")), true);
 });

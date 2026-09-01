@@ -15,6 +15,7 @@ import {
   toggleMobileNavigation,
   bindHashRouting,
   activateSiteProfile,
+  bindSiteSelection,
 } from "../public/v2-shell.js";
 
 test("registers the approved navigation without promoting Content Brief", () => {
@@ -165,4 +166,43 @@ test("registered hash routing follows forward and back history events", () => {
   listeners.get("hashchange")();
   assert.deepEqual(views.map((view) => view.hidden), [false, true]);
   assert.equal(title.textContent, "总览");
+});
+
+test("site select change follows the real Overview title node instead of a missing legacy id", () => {
+  const listeners = new Map();
+  const select = {
+    value: "second.example",
+    addEventListener(type, handler) {
+      listeners.set(type, handler);
+    },
+  };
+  const title = { textContent: "first.example" };
+  const storageWrites = [];
+  const storage = {
+    setItem(key, value) {
+      storageWrites.push([key, value]);
+    },
+  };
+  let activated = null;
+  const shell = {
+    querySelector(selector) {
+      return selector === "#v2DashboardSite" ? title : null;
+    },
+  };
+  bindSiteSelection({
+    shell,
+    select,
+    storage,
+    context: { set() {} },
+    activeProfile: () => ({ domain: "second.example" }),
+    marketForProfile: () => ({ location_code: 2682, location_name: "Saudi Arabia", country_iso_code: "SA", language_code: "ar", language_name: "Arabic" }),
+    activate(args) {
+      activated = args;
+      return true;
+    },
+  });
+  listeners.get("change")();
+  assert.deepEqual(storageWrites, [["seo-pro-v2.active-site.v1", "second.example"]]);
+  assert.equal(activated.title, title);
+  assert.equal(activated.profile.domain, "second.example");
 });

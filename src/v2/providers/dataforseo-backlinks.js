@@ -11,6 +11,7 @@ export class BacklinkProviderError extends Error {
     this.httpStatus = details.httpStatus ?? 502;
     this.providerStatus = details.providerStatus ?? null;
     this.actualCostUsd = details.actualCostUsd ?? null;
+    this.taskCount = details.taskCount ?? null;
   }
 }
 
@@ -74,7 +75,7 @@ export function normalizeBacklinkSummary(result, target) {
   });
 }
 
-export async function fetchBacklinkSummary({ login, password, target }) {
+export async function fetchBacklinkSummary({ login, password, target, signal }) {
   if (!login || !password) {
     throw new BacklinkProviderError("DataForSEO credentials are not configured.", {
       code: "PROVIDER_CREDENTIALS_MISSING",
@@ -84,6 +85,7 @@ export async function fetchBacklinkSummary({ login, password, target }) {
 
   const response = await fetch(DATAFORSEO_URL, {
     method: "POST",
+    signal,
     headers: {
       Authorization: `Basic ${btoa(`${login}:${password}`)}`,
       "Content-Type": "application/json",
@@ -127,6 +129,7 @@ export async function fetchBacklinkSummary({ login, password, target }) {
       httpStatus: 502,
       providerStatus: task?.status_code ?? payload?.status_code ?? null,
       actualCostUsd,
+      taskCount: Number.isInteger(payload?.tasks_count) ? payload.tasks_count : null,
     });
   }
 

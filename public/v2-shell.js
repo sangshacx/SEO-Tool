@@ -16,6 +16,7 @@ import {
   siteProfileFormPayload,
   marketRequestFields,
 } from "./v2-market-context.js";
+import { createDashboardOverview, mountDashboard } from "./v2-dashboard.js";
 
 export const V2_VIEWS = Object.freeze([
   { id: "overview", label: "总览", group: "primary" },
@@ -180,10 +181,36 @@ export function activateSiteProfile({ root, select, title, context, profile, mar
   if (!profile || !market) return false;
   select.value = profile.domain;
   applyActiveDomain(root, profile.domain);
-  title.textContent = profile.domain;
+  if (title) title.textContent = profile.domain;
   applyMarketToRoot(root, market);
   context.set({ domain: profile.domain, ...market });
   return true;
+}
+
+export function bindSiteSelection({
+  shell,
+  select,
+  storage,
+  context,
+  activeProfile,
+  marketForProfile,
+  activate = activateSiteProfile,
+} = {}) {
+  if (!select || typeof select.addEventListener !== "function") return () => {};
+  const handleChange = () => {
+    storage?.setItem?.(ACTIVE_SITE_KEY, select.value);
+    const profile = activeProfile?.();
+    activate({
+      root: shell,
+      select,
+      title: shell?.querySelector?.("#v2DashboardSite") || shell?.querySelector?.("#v2ActiveSiteTitle") || null,
+      context,
+      profile,
+      market: profile ? marketForProfile?.(profile) : null,
+    });
+  };
+  select.addEventListener("change", handleChange);
+  return handleChange;
 }
 
 const TOOL_GROUPS = Object.freeze({
@@ -214,10 +241,7 @@ function annotateExistingTools(root) {
 }
 
 function createOverview() {
-  const section = createElement("section", "v2-overview panel");
-  section.dataset.v2View = "overview";
-  section.innerHTML = `<div class="v2-overview-hero"><div><div class="label">当前网站</div><h1 id="v2ActiveSiteTitle">great-ocean-waterproof.com</h1><p class="lead">先查看网站和竞品概况，再进入需要的分析工具。</p></div><button type="button" data-v2-go="website">查看网站数据</button></div><div class="v2-quick-grid"><button type="button" data-v2-go="website"><b>网站数据</b><span>快照与历史趋势</span></button><button type="button" data-v2-go="competitors"><b>竞争对手</b><span>关键词与外链差距</span></button><button type="button" data-v2-go="keywords"><b>关键词研究</b><span>Explorer、Ideas 与计划</span></button><button type="button" data-v2-go="backlinks"><b>外链分析</b><span>引用域、详情与 Anchor</span></button><button type="button" data-v2-go="opportunities"><b>机会清单</b><span>筛选值得人工研究的域名</span></button></div><div class="note"><b>零费用首页：</b>打开总览不会调用 DataForSEO；只有你在具体工具中明确允许的实时查询才可能产生费用。</div>`;
-  return section;
+  return createDashboardOverview();
 }
 
 function createPlaceholder(view, title, description) {
@@ -477,14 +501,10 @@ async function initializeSites(shell) {
     }
     select.disabled = false;
     const profile = resolveActiveProfile(profiles, normalizeDomain(storage.getItem(ACTIVE_SITE_KEY)));
-    activateSiteProfile({ root: shell, select, title: shell.querySelector("#v2ActiveSiteTitle"), context, profile, market: marketForProfile(profile) });
+    activateSiteProfile({ root: shell, select, title: shell.querySelector("#v2DashboardSite"), context, profile, market: marketForProfile(profile) });
   };
 
-  select.addEventListener("change", () => {
-    storage.setItem(ACTIVE_SITE_KEY, select.value);
-    const profile = activeProfile();
-    activateSiteProfile({ root: shell, select, title: shell.querySelector("#v2ActiveSiteTitle"), context, profile, market: marketForProfile(profile) });
-  });
+  bindSiteSelection({ shell, select, storage, context, activeProfile, marketForProfile });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     showError();
@@ -605,11 +625,14 @@ function buildShell() {
   const marketInputs = [shell.querySelector("[data-v2-market-country]"), shell.querySelector("[data-v2-market-language]")].filter(Boolean);
   marketInputs.forEach((input) => { input.disabled = true; });
   const gate = window.__seoProV2ResearchGate;
+  let dashboardCleanup = () => {};
   const marketInitialization = createMarketInitializationCoordinator({
     initialize: () => initializeSites(shell),
     onReady: ({ context, fetchImpl }) => {
       gate.ready = true;
       gate.submit = (workflow, fields) => submitSeoResearchRequest(workflow, fields, { context, fetchImpl });
+      dashboardCleanup();
+      dashboardCleanup = mountDashboard({ root: shell, context, fetchImpl });
       setResearchControlsReady(shell, true);
       marketInputs.forEach((input) => { input.disabled = false; });
       retryMarket.hidden = true;

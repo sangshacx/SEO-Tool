@@ -176,6 +176,34 @@ test("preserves a merged result that links to only one requested competitor", as
   assert.equal(result.data.items[0].metrics.coverage_percent, 50);
 });
 
+test("provider failures preserve known cost and task accounting", async (context) => {
+  const { fetchBacklinkGap } = await loadProvider();
+  const originalFetch = globalThis.fetch;
+  context.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    status_code: 50000,
+    cost: 0.031,
+    tasks_count: 2,
+    tasks: [{ status_code: 50001, cost: 0.031 }],
+  }), { status: 502 });
+
+  await assert.rejects(
+    fetchBacklinkGap({
+      login: "login",
+      password: "password",
+      ownDomain: "own-site.com",
+      competitors: ["competitor-a.com"],
+      limit: 25,
+      offset: 0,
+    }),
+    (error) => {
+      assert.equal(error.actualCostUsd, 0.031);
+      assert.equal(error.taskCount, 2);
+      return true;
+    },
+  );
+});
+
 test("rejects an oversized provider response before buffering it", async (context) => {
   const { fetchBacklinkGap } = await loadProvider();
   const originalFetch = globalThis.fetch;

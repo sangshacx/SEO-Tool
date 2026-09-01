@@ -65,11 +65,11 @@ jobs:
           --json \
           --command "SELECT name FROM sqlite_schema
           WHERE type = 'table'
-          AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots', 'keyword_idea_runs', 'keyword_idea_members', 'backlink_snapshots', 'backlink_opportunities', 'site_profiles')
+          AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots', 'keyword_idea_runs', 'keyword_idea_members', 'backlink_snapshots', 'backlink_opportunities', 'site_profiles', 'site_dashboard_snapshots', 'dashboard_refresh_leases')
           ORDER BY name;" |
           node scripts/assert-d1-query-names.mjs \
-          api_usage app_settings backlink_opportunities backlink_snapshots keyword_idea_members \
-          keyword_idea_runs keyword_metrics keywords serp_weakness_snapshots site_profiles
+          api_usage app_settings backlink_opportunities backlink_snapshots dashboard_refresh_leases keyword_idea_members \
+          keyword_idea_runs keyword_metrics keywords serp_weakness_snapshots site_dashboard_snapshots site_profiles
 
       - name: Verify Preview outreach intelligence columns
         shell: bash
@@ -93,13 +93,37 @@ jobs:
           id domain label location_code location_name country_iso_code language_code language_name \
           include_subdomains competitors_json created_at updated_at
 
+      - name: Verify Preview dashboard tables and api_usage nullability
+        shell: bash
+        run: |
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
+          --json \
+          --command "SELECT name FROM pragma_table_info('site_dashboard_snapshots') ORDER BY cid;" |
+          node scripts/assert-d1-query-names.mjs \
+          id site_domain location_code language_code modules_json captured_at schema_version
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
+          --json \
+          --command "SELECT name FROM pragma_table_info('dashboard_refresh_leases') ORDER BY cid;" |
+          node scripts/assert-d1-query-names.mjs \
+          lease_key request_id expires_at created_at
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
+          --json \
+          --command "SELECT name FROM pragma_table_info('api_usage') WHERE name = 'task_count' AND \"notnull\" = 0;" |
+          node scripts/assert-d1-query-names.mjs \
+          task_count
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
+          --json \
+          --command "SELECT name FROM pragma_table_info('site_dashboard_modules') ORDER BY cid;" |
+          node scripts/assert-d1-query-names.mjs \
+          site_domain location_code language_code module_id module_json updated_at schema_version revision
+
       - name: Verify Preview migration ledger
         shell: bash
         run: |
           npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
           --json \
           --command "SELECT name FROM d1_migrations
-          WHERE name IN ('0006_backlink_outreach_intelligence.sql', '0007_site_profiles.sql')
+          WHERE name IN ('0006_backlink_outreach_intelligence.sql', '0007_site_profiles.sql', '0008_site_dashboard_snapshots.sql', '0009_nullable_api_usage_task_count.sql', '0010_atomic_dashboard_modules.sql')
           ORDER BY name;" |
           node scripts/assert-d1-query-names.mjs \
-          0006_backlink_outreach_intelligence.sql 0007_site_profiles.sql
+          0006_backlink_outreach_intelligence.sql 0007_site_profiles.sql 0008_site_dashboard_snapshots.sql 0009_nullable_api_usage_task_count.sql 0010_atomic_dashboard_modules.sql

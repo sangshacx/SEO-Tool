@@ -20,6 +20,7 @@
 </script>
 <link rel="stylesheet" href="./v2-shell.css">
 <link rel="stylesheet" href="./v2-market-selector.css">
+<link rel="stylesheet" href="./v2-dashboard.css">
 <style>
 :root{--bg:#08111f;--panel:#101c2d;--panel2:#142238;--line:#223653;--text:#edf4ff;--muted:#8da3c2;--blue:#4f8cff;--green:#28d39a;--amber:#f7ba4b;--red:#ff6680}
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 70% -20%,#1c3b70 0,transparent 42%),var(--bg);color:var(--text);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}
@@ -103,6 +104,8 @@ h1{font-size:34px;line-height:1.15;margin:0 0 8px;letter-spacing:-1.2px}.lead{co
 <div class="foot">Preview 环境 · 数据成本为 DataForSEO 返回的实际费用 · 收益与商业价值评分尚未上线</div>
 </main>
 <script type="module" src="./v2-shell.js"></script>
+<script type="module" src="./v2-dashboard.js"></script>
+<script type="module" src="./v2-dashboard-refresh.js"></script>
 <script type="module" src="./v2-backlink-gap.js"></script>
 <script>
 const money=n=>"$"+Number(n||0).toFixed(5);

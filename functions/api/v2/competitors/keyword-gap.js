@@ -1,6 +1,9 @@
 import { scoreKeywordPotential } from "../../../../src/v2/scoring/keyword-potential.js";
 import { recordApiUsage } from "../../../../src/v2/storage/keyword-overview.js";
 import { normalizeMarketRequest } from "../../../../src/v2/markets/request-market.js";
+import { buildKeywordGapCacheKey } from "../../../../src/v2/dashboard/cache-keys.js";
+
+export { buildKeywordGapCacheKey };
 
 const ENDPOINT = "https://api.dataforseo.com/v3/dataforseo_labs/google/domain_intersection/live";
 const ENDPOINT_NAME = "dataforseo_labs/google/domain_intersection/live";
@@ -23,10 +26,6 @@ function normalizeDomain(value) {
 
 function validDomain(domain) {
   return domain.length <= 253 && /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain);
-}
-
-export function buildKeywordGapCacheKey(competitorDomain, ownDomain, locationCode, languageCode) {
-  return ["v2", "keyword-gap", competitorDomain, ownDomain, locationCode, languageCode].join(":");
 }
 
 async function logUsage(env, values) {
@@ -209,7 +208,7 @@ export async function onRequestPost({ request, env }) {
     await env.CACHE.put(key, JSON.stringify(data), { expirationTtl: CACHE_TTL_SECONDS });
     await logUsage(env, {
       requestId,
-      taskCount: payload.tasks_count ?? 1,
+      taskCount: Number.isInteger(payload.tasks_count) ? payload.tasks_count : null,
       resultCount: data.opportunities.length,
       actualCostUsd: cost,
       cacheHit: false,
@@ -228,7 +227,7 @@ export async function onRequestPost({ request, env }) {
     const status = code === "PROVIDER_CREDENTIALS_MISSING" ? 503 : 502;
     await logUsage(env, {
       requestId,
-      taskCount: 1,
+      taskCount: null,
       resultCount: 0,
       actualCostUsd: null,
       cacheHit: false,

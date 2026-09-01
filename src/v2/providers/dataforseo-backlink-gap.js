@@ -13,6 +13,7 @@ export class BacklinkGapProviderError extends Error {
     this.httpStatus = details.httpStatus ?? 502;
     this.providerStatus = details.providerStatus ?? null;
     this.actualCostUsd = details.actualCostUsd ?? null;
+    this.taskCount = details.taskCount ?? null;
   }
 }
 
@@ -111,7 +112,7 @@ function normalizeResult(result, request) {
   });
 }
 
-export async function fetchBacklinkGap({ login, password, ownDomain, competitors, limit, offset }) {
+export async function fetchBacklinkGap({ login, password, ownDomain, competitors, limit, offset, signal }) {
   if (!login || !password) {
     throw new BacklinkGapProviderError("DataForSEO credentials are not configured.", { code: "PROVIDER_CREDENTIALS_MISSING", httpStatus: 503 });
   }
@@ -141,6 +142,7 @@ export async function fetchBacklinkGap({ login, password, ownDomain, competitors
   };
   const response = await fetch(DATAFORSEO_URL, {
     method: "POST",
+    signal,
     headers: {
       Authorization: `Basic ${btoa(`${login}:${password}`)}`,
       "Content-Type": "application/json",
@@ -156,6 +158,7 @@ export async function fetchBacklinkGap({ login, password, ownDomain, competitors
       code: "PROVIDER_REQUEST_FAILED",
       providerStatus: providerTask?.status_code ?? payload?.status_code ?? null,
       actualCostUsd,
+      taskCount: Number.isInteger(payload?.tasks_count) ? payload.tasks_count : null,
     });
   }
   const result = providerTask?.result?.[0] ?? null;
