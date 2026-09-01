@@ -8,6 +8,11 @@ on:
       - .github/workflows/cloudflare-preview-access-check.yml
       - functions/api/v2/usage/summary.js
       - functions/api/v2/sites/index.js
+      - functions/api/v2/dashboard/**
+      - public/v2-dashboard*.js
+      - public/v2-dashboard.css
+      - src/v2/dashboard/**
+      - src/v2/storage/site-dashboard.js
   workflow_dispatch:
 
 permissions:
