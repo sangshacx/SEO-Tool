@@ -8,7 +8,7 @@ export { buildKeywordGapCacheKey };
 const ENDPOINT = "https://api.dataforseo.com/v3/dataforseo_labs/google/domain_intersection/live";
 const ENDPOINT_NAME = "dataforseo_labs/google/domain_intersection/live";
 const CACHE_TTL_SECONDS = 60 * 60 * 24 * 7;
-const RESULT_LIMIT = 10;
+const RESULT_LIMIT = 50;
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=UTF-8",
   "Cache-Control": "no-store",
