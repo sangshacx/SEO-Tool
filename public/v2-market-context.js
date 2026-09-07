@@ -1,3 +1,5 @@
+import "./v2-keyword-detail.js";
+
 const DEFAULT_MARKET = Object.freeze({
   location_code: 2840,
   location_name: "United States",
