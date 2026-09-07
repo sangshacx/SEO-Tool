@@ -78,6 +78,36 @@ test("keyword gap opportunities paginate locally after global scoring order", as
   assert.equal(secondPage.has_next, true);
 });
 
+test("keyword gap filtering combines keyword, intent, and priority without mutating source rows", async () => {
+  const { filterAndSortKeywordGap } = await import("../public/v2-keyword-gap.js");
+  const rows = [
+    { keyword: "roof membrane price", competitor_position: 8, metrics: { search_volume: 900, keyword_difficulty: 42, cpc_usd: 2.1 }, intent: { primary: "commercial" }, intelligence: { gap_priority: { score: 82 } } },
+    { keyword: "roof membrane installation", competitor_position: 3, metrics: { search_volume: 1200, keyword_difficulty: 28, cpc_usd: 0.8 }, intent: { primary: "informational" }, intelligence: { gap_priority: { score: 74 } } },
+    { keyword: "basement coating price", competitor_position: 12, metrics: { search_volume: 500, keyword_difficulty: 19, cpc_usd: 1.5 }, intent: { primary: "commercial" }, intelligence: { gap_priority: { score: 68 } } },
+  ];
+
+  const result = filterAndSortKeywordGap(rows, { query: "roof", intent: "commercial", preset: "high", sort: "difficulty" });
+
+  assert.deepEqual(result.map((row) => row.keyword), ["roof membrane price"]);
+  assert.equal(rows[0].keyword, "roof membrane price");
+  assert.equal(rows.length, 3);
+});
+
+test("keyword gap sorting is deterministic for priority, volume, difficulty, cpc, and competitor rank", async () => {
+  const { filterAndSortKeywordGap } = await import("../public/v2-keyword-gap.js");
+  const rows = [
+    { keyword: "alpha", competitor_position: 9, metrics: { search_volume: 100, keyword_difficulty: 30, cpc_usd: 0.5 }, intelligence: { gap_priority: { score: 70 } } },
+    { keyword: "bravo", competitor_position: 2, metrics: { search_volume: 500, keyword_difficulty: 45, cpc_usd: 1.5 }, intelligence: { gap_priority: { score: 90 } } },
+    { keyword: "charlie", competitor_position: 5, metrics: { search_volume: 300, keyword_difficulty: 10, cpc_usd: 3 }, intelligence: { gap_priority: { score: 80 } } },
+  ];
+
+  assert.deepEqual(filterAndSortKeywordGap(rows, { sort: "priority" }).map((row) => row.keyword), ["bravo", "charlie", "alpha"]);
+  assert.deepEqual(filterAndSortKeywordGap(rows, { sort: "volume" }).map((row) => row.keyword), ["bravo", "charlie", "alpha"]);
+  assert.deepEqual(filterAndSortKeywordGap(rows, { sort: "difficulty" }).map((row) => row.keyword), ["charlie", "alpha", "bravo"]);
+  assert.deepEqual(filterAndSortKeywordGap(rows, { sort: "cpc" }).map((row) => row.keyword), ["charlie", "bravo", "alpha"]);
+  assert.deepEqual(filterAndSortKeywordGap(rows, { sort: "rank" }).map((row) => row.keyword), ["bravo", "charlie", "alpha"]);
+});
+
 function fakeElement(tagName = "div") {
   return {
     tagName: tagName.toUpperCase(),
@@ -144,6 +174,10 @@ test("V2 mounts the zero-request pager while bulk actions keep all gap rows", as
   assert.match(html, /id="gapPrev"/);
   assert.match(html, /id="gapPageLabel"/);
   assert.match(html, /id="gapNext"/);
+  assert.match(html, /id="gapFilter"/);
+  assert.match(html, /id="gapIntent"/);
+  assert.match(html, /id="gapPreset"/);
+  assert.match(html, /id="gapSort"/);
   assert.match(html, /v2-keyword-gap\.js/);
   assert.match(html, /keywordGapTable\.setRows\(gapRows\)/);
   assert.match(html, /最多返回 50 个高价值机会/);

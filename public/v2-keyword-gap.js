@@ -1,5 +1,36 @@
 const DEFAULT_PAGE_SIZE = 10;
 
+function numericValue(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+export function filterAndSortKeywordGap(rows, { query = "", intent = "", preset = "all", sort = "priority" } = {}) {
+  const normalizedQuery = String(query).trim().toLowerCase();
+  const normalizedIntent = String(intent).trim().toLowerCase();
+  const filtered = (Array.isArray(rows) ? rows : []).filter((item) => {
+    const keyword = String(item?.keyword || "").toLowerCase();
+    const primaryIntent = String(item?.intent?.primary || "").toLowerCase();
+    const priority = numericValue(item?.intelligence?.gap_priority?.score, 0);
+    const difficulty = numericValue(item?.metrics?.keyword_difficulty, Infinity);
+    const rank = numericValue(item?.competitor_position, Infinity);
+    if (normalizedQuery && !keyword.includes(normalizedQuery)) return false;
+    if (normalizedIntent && primaryIntent !== normalizedIntent) return false;
+    if (preset === "high" && priority < 75) return false;
+    if (preset === "quick" && !(priority >= 65 && difficulty <= 35 && rank <= 10)) return false;
+    return true;
+  });
+  const values = {
+    priority: (item) => -numericValue(item?.intelligence?.gap_priority?.score, -Infinity),
+    volume: (item) => -numericValue(item?.metrics?.search_volume, -Infinity),
+    difficulty: (item) => numericValue(item?.metrics?.keyword_difficulty, Infinity),
+    cpc: (item) => -numericValue(item?.metrics?.cpc_usd, -Infinity),
+    rank: (item) => numericValue(item?.competitor_position, Infinity),
+  };
+  const valueFor = values[sort] || values.priority;
+  return [...filtered].sort((left, right) => valueFor(left) - valueFor(right) || String(left.keyword || "").localeCompare(String(right.keyword || "")));
+}
+
 export function paginateKeywordGap(rows, requestedPage, pageSize = DEFAULT_PAGE_SIZE) {
   const items = Array.isArray(rows) ? rows : [];
   const size = Number.isInteger(pageSize) && pageSize > 0 ? pageSize : DEFAULT_PAGE_SIZE;
@@ -32,13 +63,23 @@ export function createKeywordGapTable({
   pageLabel,
   selectedKeywords,
   onSelectionChange = () => {},
+  queryInput,
+  intentSelect,
+  presetSelect,
+  sortSelect,
   documentLike = globalThis.document,
 } = {}) {
   let rows = [];
   let page = 1;
 
   const render = () => {
-    const model = paginateKeywordGap(rows, page);
+    const visibleRows = filterAndSortKeywordGap(rows, {
+      query: queryInput?.value,
+      intent: intentSelect?.value,
+      preset: presetSelect?.value,
+      sort: sortSelect?.value,
+    });
+    const model = paginateKeywordGap(visibleRows, page);
     page = model.page;
     body.replaceChildren();
     if (!model.rows.length) {
@@ -114,6 +155,9 @@ export function createKeywordGapTable({
 
   previousButton.addEventListener("click", () => { page -= 1; render(); });
   nextButton.addEventListener("click", () => { page += 1; render(); });
+  [queryInput, intentSelect, presetSelect, sortSelect].forEach((control) => {
+    control?.addEventListener(control === queryInput ? "input" : "change", () => { page = 1; render(); });
+  });
 
   return Object.freeze({
     setRows(nextRows) {
