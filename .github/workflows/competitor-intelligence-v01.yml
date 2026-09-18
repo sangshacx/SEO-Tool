@@ -406,8 +406,8 @@ jobs:
           text = path.read_text()
           text = replace_once(
               text,
-              'import { createKeywordLibrarySection, mountKeywordLibrary } from "./v2-keyword-library.js";',
-              'import { createKeywordLibrarySection, mountKeywordLibrary } from "./v2-keyword-library.js";\nimport { mountCompetitorIntelligence } from "./v2-competitor-intelligence-ui.js";',
+              '} from "./v2-keyword-library.js";',
+              '} from "./v2-keyword-library.js";\nimport { mountCompetitorIntelligence } from "./v2-competitor-intelligence-ui.js";',
               "competitor intelligence UI import",
           )
           text = replace_once(
@@ -418,8 +418,8 @@ jobs:
           )
           text = replace_once(
               text,
-              '  let dashboardCleanup = () => {};\n  let keywordLibraryCleanup = () => {};',
-              '  let dashboardCleanup = () => {};\n  let keywordLibraryCleanup = () => {};\n  let competitorIntelligenceCleanup = () => {};',
+              '  let dashboardCleanup = () => {};\n  let keywordLibraryCleanup = () => {};\n  let clusterSerpVerificationCleanup = () => {};',
+              '  let dashboardCleanup = () => {};\n  let keywordLibraryCleanup = () => {};\n  let competitorIntelligenceCleanup = () => {};\n  let clusterSerpVerificationCleanup = () => {};',
               "competitor intelligence cleanup",
           )
           text = replace_once(
