@@ -78,15 +78,18 @@ export function buildKeywordClusterAssignments({
   if (!Number.isInteger(primary) || primary < 1) {
     throw new Error("请选择一个 Primary Keyword。");
   }
-  if (!selected.some((item) => Number(item?.id) === primary)) {
-    throw new Error("Primary Keyword 必须来自当前已选关键词。");
-  }
 
-  const roles = new Map();
   const existingMembers = [
     ...(cluster?.primary ? [cluster.primary] : []),
     ...(Array.isArray(cluster?.supporting) ? cluster.supporting : []),
   ];
+  const primaryIsSelected = selected.some((item) => Number(item?.id) === primary);
+  const primaryIsExisting = existingMembers.some((item) => Number(item?.saved_keyword_id) === primary);
+  if (!primaryIsSelected && !primaryIsExisting) {
+    throw new Error("Primary Keyword 必须来自已选关键词或当前 Cluster 现有成员。");
+  }
+
+  const roles = new Map();
   existingMembers.forEach((member) => {
     const id = Number(member?.saved_keyword_id);
     if (Number.isInteger(id) && id > 0) roles.set(id, "supporting");
@@ -117,6 +120,28 @@ export function clusterIntelligenceDecisionLabel(code, fallback = "") {
     review_cluster_fit: "需要人工复核",
     new_cluster_candidate: "更适合新建 Cluster",
   })[String(code || "").toLowerCase()] || fallback || "—";
+}
+
+export function clusterSuggestionPrefill({ suggestion, cluster } = {}) {
+  const savedKeywordId = Number(suggestion?.saved_keyword_id);
+  const clusterId = Number(suggestion?.suggested_cluster?.id);
+  if (!Number.isInteger(savedKeywordId) || savedKeywordId < 1) {
+    throw new Error("建议关键词缺少有效 Saved Keyword ID。");
+  }
+  if (!Number.isInteger(clusterId) || clusterId < 1 || !cluster) {
+    throw new Error("此建议没有可预填的现有 Topic Cluster。");
+  }
+  const existingPrimaryId = Number(cluster?.primary?.saved_keyword_id);
+  const hasExistingPrimary = Number.isInteger(existingPrimaryId) && existingPrimaryId > 0;
+  return {
+    selected_item: {
+      id: savedKeywordId,
+      keyword: String(suggestion?.keyword || "").trim(),
+    },
+    cluster_id: clusterId,
+    primary_id: hasExistingPrimary ? existingPrimaryId : savedKeywordId,
+    suggested_role: hasExistingPrimary ? "supporting" : "primary",
+  };
 }
 
 export function buildSavedKeywordListUrl({
@@ -475,10 +500,11 @@ export function createKeywordLibrarySection(documentLike = globalThis.document) 
                 <th>Cannibalization</th>
                 <th>原因</th>
                 <th>下一步</th>
+                <th>操作</th>
               </tr>
             </thead>
             <tbody data-v2-cluster-intelligence-body>
-              <tr><td colspan="7" class="emptyrow">点击“分析 Cluster 建议”生成只读建议。本次 $0。</td></tr>
+              <tr><td colspan="8" class="emptyrow">点击“分析 Cluster 建议”生成只读建议。本次 $0。</td></tr>
             </tbody>
           </table>
         </div>
@@ -550,6 +576,7 @@ export function mountKeywordLibrary({
   const selectedLibraryIds = new Set();
   const selectedLibraryItems = new Map();
   let refreshClusterControls = () => {};
+  let prefillClusterSuggestion = async () => {};
 
   const showStatus = (message = "", type = "info") => {
     status.textContent = message;
@@ -573,7 +600,7 @@ export function mountKeywordLibrary({
     intelligenceBody.replaceChildren();
     const row = documentLike.createElement("tr");
     const cell = documentLike.createElement("td");
-    cell.colSpan = 7;
+    cell.colSpan = 8;
     cell.className = "emptyrow";
     cell.textContent = "点击“分析 Cluster 建议”生成只读建议。本次 $0。";
     row.appendChild(cell);
@@ -615,13 +642,46 @@ export function mountKeywordLibrary({
         }
         row.appendChild(cell);
       });
+
+      const actionCell = documentLike.createElement("td");
+      if (item.suggested_cluster?.id) {
+        const adopt = documentLike.createElement("button");
+        adopt.type = "button";
+        adopt.className = "v2-cluster-adopt";
+        adopt.dataset.v2ClusterAdopt = String(item.saved_keyword_id);
+        adopt.textContent = "采用此建议";
+        adopt.title = "只预填关键词、Cluster 和 Primary/Supporting；不会立即写入数据库。";
+        adopt.addEventListener("click", async () => {
+          adopt.disabled = true;
+          const original = adopt.textContent;
+          adopt.textContent = "预填中…";
+          try {
+            await prefillClusterSuggestion(item);
+            adopt.textContent = "已预填";
+          } catch (error) {
+            adopt.textContent = "重试";
+            adopt.title = error?.message || "预填失败";
+            showIntelligenceStatus(error?.message || "建议预填失败", "error");
+          } finally {
+            if (adopt.textContent !== "已预填") adopt.disabled = false;
+            if (!adopt.textContent) adopt.textContent = original;
+          }
+        });
+        actionCell.appendChild(adopt);
+      } else {
+        const hint = documentLike.createElement("span");
+        hint.className = "sub";
+        hint.textContent = "需手动新建 Cluster";
+        actionCell.appendChild(hint);
+      }
+      row.appendChild(actionCell);
       intelligenceBody.appendChild(row);
     });
 
     if (!suggestions.length) {
       const row = documentLike.createElement("tr");
       const cell = documentLike.createElement("td");
-      cell.colSpan = 7;
+      cell.colSpan = 8;
       cell.className = "emptyrow";
       cell.textContent = summaryData.unassigned_keywords === 0
         ? "当前分析范围内没有未分配关键词。"
@@ -958,28 +1018,48 @@ export function mountKeywordLibrary({
     const market = context.get();
     const selectedItems = [...selectedLibraryItems.values()];
     const previousPrimary = clusterPrimarySelect.value;
+    const cluster = keywordClusters.find((item) => String(item.id) === clusterSelect.value);
 
     clusterPrimarySelect.replaceChildren();
     const placeholder = documentLike.createElement("option");
     placeholder.value = "";
     placeholder.textContent = "选择 Primary Keyword";
     clusterPrimarySelect.appendChild(placeholder);
-    selectedItems
-      .slice()
+
+    const primaryOptions = new Map();
+    selectedItems.forEach((item) => {
+      const id = Number(item.id);
+      if (Number.isInteger(id) && id > 0) {
+        primaryOptions.set(id, { id, keyword: item.keyword, existing: false });
+      }
+    });
+    const existingPrimaryId = Number(cluster?.primary?.saved_keyword_id);
+    if (Number.isInteger(existingPrimaryId) && existingPrimaryId > 0) {
+      primaryOptions.set(existingPrimaryId, {
+        id: existingPrimaryId,
+        keyword: cluster.primary.keyword,
+        existing: true,
+      });
+    }
+
+    [...primaryOptions.values()]
       .sort((a, b) => String(a.keyword).localeCompare(String(b.keyword)))
       .forEach((item) => {
         const option = documentLike.createElement("option");
         option.value = String(item.id);
-        option.textContent = item.keyword;
+        option.textContent = item.existing
+          ? `现有 Primary：${item.keyword}`
+          : item.keyword;
         clusterPrimarySelect.appendChild(option);
       });
-    if (selectedItems.some((item) => String(item.id) === previousPrimary)) {
+
+    if (primaryOptions.has(Number(previousPrimary))) {
       clusterPrimarySelect.value = previousPrimary;
+    } else if (Number.isInteger(existingPrimaryId) && existingPrimaryId > 0) {
+      clusterPrimarySelect.value = String(existingPrimaryId);
     } else if (selectedItems.length === 1) {
       clusterPrimarySelect.value = String(selectedItems[0].id);
     }
-
-    const cluster = keywordClusters.find((item) => String(item.id) === clusterSelect.value);
     let assignments = [];
     try {
       if (cluster && clusterPrimarySelect.value) {
@@ -1009,6 +1089,47 @@ export function mountKeywordLibrary({
             : tooMany
               ? "合并现有成员后最多允许 100 个关键词"
               : `把已选 ${selectedItems.length} 个关键词分配到 ${cluster.name}`;
+  };
+
+  prefillClusterSuggestion = async (suggestion) => {
+    const clusterId = Number(suggestion?.suggested_cluster?.id);
+    if (!Number.isInteger(clusterId) || clusterId < 1) {
+      throw new Error("此建议没有可预填的现有 Topic Cluster。");
+    }
+
+    let cluster = keywordClusters.find((item) => Number(item.id) === clusterId);
+    if (!cluster) {
+      await loadClusters(clusterId);
+      cluster = keywordClusters.find((item) => Number(item.id) === clusterId);
+    }
+    if (!cluster) throw new Error("建议 Cluster 当前不可用，请刷新后重试。");
+
+    const prefill = clusterSuggestionPrefill({ suggestion, cluster });
+    selectedLibraryIds.add(prefill.selected_item.id);
+    selectedLibraryItems.set(prefill.selected_item.id, prefill.selected_item);
+    clusterSelect.value = String(prefill.cluster_id);
+
+    renderRows({
+      documentLike,
+      body,
+      items: currentItems,
+      keywordInput,
+      locationLike,
+      selectedIds: selectedLibraryIds,
+      onSelectionChange: handleLibrarySelectionChange,
+    });
+    updateLibrarySelection();
+    refreshClusterControls();
+    clusterPrimarySelect.value = String(prefill.primary_id);
+    refreshClusterControls();
+
+    const roleText = prefill.suggested_role === "primary" ? "Primary" : "Supporting";
+    showClusterStatus(
+      `已预填“${prefill.selected_item.keyword}” → “${cluster.name}” 为 ${roleText}。尚未保存，请检查后点击“分配已选关键词”。`,
+      "success",
+    );
+    showIntelligenceStatus("建议已预填到手动分配区；尚未修改数据库。", "success");
+    clusterSelect.scrollIntoView?.({ behavior: "smooth", block: "center" });
   };
 
   clusterRefreshButton.addEventListener("click", () => loadClusters());

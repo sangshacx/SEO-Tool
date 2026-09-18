@@ -9,6 +9,7 @@ import {
   buildSavedKeywordListUrl,
   clusterIntelligenceDecisionLabel,
   clusterIntelligenceRiskLabel,
+  clusterSuggestionPrefill,
   normalizeBatchTagInput,
   researchSurfaceKeyword,
   savedKeywordCreatePayload,
@@ -257,8 +258,20 @@ test("Keyword Library cluster assignments preserve existing members and promote 
       selectedItems: [{ id: 5, keyword: "roof coating" }],
       primaryId: 6,
     }),
-    /必须来自当前已选关键词/,
+    /必须来自已选关键词或当前 Cluster 现有成员/,
   );
+
+  assert.deepEqual(buildKeywordClusterAssignments({
+    cluster: {
+      primary: { saved_keyword_id: 9, keyword: "roof coating" },
+      supporting: [],
+    },
+    selectedItems: [{ id: 10, keyword: "roof coating supplier" }],
+    primaryId: 9,
+  }), [
+    { saved_keyword_id: 9, role: "primary" },
+    { saved_keyword_id: 10, role: "supporting" },
+  ]);
 });
 
 test("Keyword Library exposes manual Topic Cluster creation, primary selection, assignment, and overview at zero provider cost", async () => {
@@ -297,4 +310,43 @@ test("Keyword Library Cluster Intelligence UI is read-only and zero-provider-cos
   assert.match(source, /未修改任何 Cluster/);
   assert.match(source, /本次 \$0/);
   assert.doesNotMatch(source, /dataforseo\.com|submitSeoResearchRequest/i);
+});
+
+
+test("Cluster Intelligence suggestion prefill preserves an existing Primary and makes the suggested keyword Supporting", () => {
+  assert.deepEqual(clusterSuggestionPrefill({
+    suggestion: {
+      saved_keyword_id: 12,
+      keyword: "waterproof membrane supplier",
+      suggested_cluster: { id: 4, name: "Waterproof Membrane" },
+    },
+    cluster: {
+      id: 4,
+      primary: { saved_keyword_id: 3, keyword: "waterproof membrane" },
+      supporting: [],
+    },
+  }), {
+    selected_item: { id: 12, keyword: "waterproof membrane supplier" },
+    cluster_id: 4,
+    primary_id: 3,
+    suggested_role: "supporting",
+  });
+
+  assert.equal(clusterSuggestionPrefill({
+    suggestion: {
+      saved_keyword_id: 20,
+      keyword: "epoxy floor coating",
+      suggested_cluster: { id: 7, name: "Floor Coating" },
+    },
+    cluster: { id: 7, primary: null, supporting: [] },
+  }).suggested_role, "primary");
+});
+
+test("Adopting Cluster Intelligence advice only prefills the manual assignment UI before explicit confirmation", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /采用此建议/);
+  assert.match(source, /尚未保存，请检查后点击“分配已选关键词”/);
+  assert.match(source, /尚未修改数据库/);
+  assert.match(source, /现有 Primary：/);
+  assert.match(source, /data-v2-cluster-adopt/);
 });
