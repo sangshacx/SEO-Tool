@@ -11,16 +11,23 @@ async function resolveSiteProfile(db, domain) {
   return row;
 }
 
-function memberFromRow(row) {
+function serpFor(serpMap, savedKeywordId) {
+  return serpMap.get(Number(savedKeywordId)) ?? null;
+}
+
+function memberFromRow(row, serpMap) {
   return {
     saved_keyword_id: Number(row.saved_keyword_id),
     keyword: row.keyword,
     role: row.role,
     intent_primary: row.intent_primary ?? null,
+    location_code: Number(row.location_code),
+    language_code: row.language_code,
+    serp: serpFor(serpMap, row.saved_keyword_id),
   };
 }
 
-function groupClusters(rows) {
+function groupClusters(rows, serpMap) {
   const clusters = new Map();
   for (const row of rows) {
     const clusterId = Number(row.cluster_id);
@@ -34,7 +41,7 @@ function groupClusters(rows) {
     }
     if (row.saved_keyword_id == null) continue;
     const cluster = clusters.get(clusterId);
-    const member = memberFromRow(row);
+    const member = memberFromRow(row, serpMap);
     if (member.role === "primary") cluster.primary = member;
     else cluster.supporting.push(member);
   }
@@ -53,6 +60,8 @@ export async function loadClusterIntelligenceInput(db, input) {
     SELECT
       sk.id AS saved_keyword_id,
       k.keyword,
+      k.location_code,
+      k.language_code,
       km.intent_primary
     FROM saved_keywords sk
     JOIN keywords k ON k.id = sk.keyword_id
@@ -75,6 +84,8 @@ export async function loadClusterIntelligenceInput(db, input) {
       m.saved_keyword_id,
       m.role,
       k.keyword,
+      k.location_code,
+      k.language_code,
       km.intent_primary
     FROM topic_clusters c
     LEFT JOIN topic_cluster_members m ON m.cluster_id = c.id
@@ -93,6 +104,40 @@ export async function loadClusterIntelligenceInput(db, input) {
       k.normalized_keyword ASC
   `).bind(site.id).all();
 
+  const serpRows = await db.prepare(`
+    SELECT
+      sk.id AS saved_keyword_id,
+      s.id AS snapshot_id,
+      s.fetched_at,
+      p.organic_position,
+      p.url
+    FROM saved_keywords sk
+    JOIN keywords k ON k.id = sk.keyword_id
+    JOIN serp_competitor_snapshots s ON s.id = (
+      SELECT latest.id
+      FROM serp_competitor_snapshots latest
+      WHERE latest.keyword_id = k.id
+      ORDER BY latest.fetched_at DESC, latest.id DESC
+      LIMIT 1
+    )
+    JOIN serp_competitor_pages p ON p.snapshot_id = s.id
+    WHERE sk.site_profile_id = ?
+    ORDER BY sk.id ASC, p.organic_position ASC
+  `).bind(site.id).all();
+
+  const serpMap = new Map();
+  for (const row of serpRows?.results ?? []) {
+    const id = Number(row.saved_keyword_id);
+    if (!serpMap.has(id)) {
+      serpMap.set(id, {
+        snapshot_id: row.snapshot_id,
+        fetched_at: row.fetched_at,
+        urls: [],
+      });
+    }
+    serpMap.get(id).urls.push(row.url);
+  }
+
   return {
     site_domain: input.site_domain,
     total_saved_keywords: total,
@@ -101,7 +146,10 @@ export async function loadClusterIntelligenceInput(db, input) {
       saved_keyword_id: Number(row.saved_keyword_id),
       keyword: row.keyword,
       intent_primary: row.intent_primary ?? null,
+      location_code: Number(row.location_code),
+      language_code: row.language_code,
+      serp: serpFor(serpMap, row.saved_keyword_id),
     })),
-    clusters: groupClusters(clusterRows?.results ?? []),
+    clusters: groupClusters(clusterRows?.results ?? [], serpMap),
   };
 }

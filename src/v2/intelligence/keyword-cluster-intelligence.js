@@ -1,4 +1,6 @@
-export const CLUSTER_INTELLIGENCE_VERSION = "cluster-intelligence-v0.1";
+import { compareSerpOverlap } from "./serp-overlap.js";
+
+export const CLUSTER_INTELLIGENCE_VERSION = "cluster-intelligence-v0.2";
 
 const STOP_WORDS = new Set([
   "a", "an", "and", "are", "as", "at", "best", "buy", "by", "cost", "for", "from",
@@ -105,7 +107,7 @@ function clusterMembers(cluster) {
   });
 }
 
-function scoreAgainstCluster(keyword, cluster) {
+function scoreAgainstCluster(keyword, cluster, analysisTime) {
   const candidateTokens = clusterKeywordTokens(keyword.keyword);
   const members = clusterMembers(cluster);
   if (!members.length) return null;
@@ -146,16 +148,40 @@ function scoreAgainstCluster(keyword, cluster) {
   const primaryIntent = intentCompatibility(keyword.intent_primary, primary.intent_primary);
   const bestIntent = best.intent.score >= primaryIntent.score ? best.intent : primaryIntent;
 
-  const score = roundScore(
+  const baseScore = roundScore(
     best.similarity.score * 0.55
     + primarySimilarity.score * 0.25
     + bestIntent.score * 0.20,
   );
 
+  const serpCandidates = members.map((member) => ({
+    member,
+    evidence: compareSerpOverlap(keyword, member, { analysisTime }),
+  }));
+  const priority = { available: 5, stale: 4, insufficient: 3, market_mismatch: 2, unavailable: 1 };
+  serpCandidates.sort((a, b) =>
+    (priority[b.evidence.status] ?? 0) - (priority[a.evidence.status] ?? 0)
+    || b.evidence.score - a.evidence.score
+  );
+  const strongestSerp = serpCandidates[0] ?? null;
+  const serpEvidence = strongestSerp
+    ? {
+        ...strongestSerp.evidence,
+        matched_keyword: strongestSerp.member.keyword,
+        matched_role: strongestSerp.member.role
+          ?? (Number(strongestSerp.member.saved_keyword_id) === Number(cluster.primary?.saved_keyword_id) ? "primary" : "supporting"),
+      }
+    : null;
+  const score = serpEvidence?.status === "available"
+    ? roundScore(baseScore * 0.60 + serpEvidence.score * 0.40)
+    : baseScore;
+
   return {
     cluster_id: Number(cluster.id),
     cluster_name: cluster.name,
     score,
+    base_score: baseScore,
+    serp_overlap: serpEvidence,
     best_member_similarity: best.similarity.score,
     primary_similarity: primarySimilarity.score,
     intent_compatibility: bestIntent.score,
@@ -166,7 +192,14 @@ function scoreAgainstCluster(keyword, cluster) {
   };
 }
 
-function decisionFor(score) {
+function decisionFor(score, serpOverlap) {
+  if (serpOverlap?.status === "available" && serpOverlap.strength === "strong" && score >= 65) {
+    return {
+      code: "assign_to_existing",
+      label: "建议归入现有 Cluster",
+      next_action: "SERP URL 重叠较强；复核页面目标后，可手动分配到该 Topic Cluster。",
+    };
+  }
   if (score >= 75) {
     return {
       code: "assign_to_existing",
@@ -197,6 +230,26 @@ function cannibalizationFor(match) {
     };
   }
 
+  if (match.serp_overlap?.status === "available") {
+    const strength = match.serp_overlap.strength;
+    const level = strength === "strong" ? "high" : strength === "moderate" ? "medium" : "none";
+    const score = strength === "strong"
+      ? Math.max(85, match.serp_overlap.score)
+      : strength === "moderate"
+        ? Math.max(70, match.serp_overlap.score)
+        : Math.min(54, match.serp_overlap.score);
+    return {
+      level,
+      score,
+      evidence_source: "serp_overlap",
+      reason: strength === "strong"
+        ? "真实 Top 10 SERP URL 高度重叠；若为两个关键词分别创建页面，存在较高的潜在页面重叠风险。"
+        : strength === "moderate"
+          ? "真实 Top 10 SERP 存在中等 URL 重叠；独立建页前应人工复核页面目标。"
+          : "真实 Top 10 SERP URL 重叠较低，暂不支持较高的页面蚕食风险判断。",
+    };
+  }
+
   const intentBoost = match.intent_relation === "same"
     ? 20
     : match.intent_relation === "adjacent_commercial"
@@ -215,7 +268,7 @@ function cannibalizationFor(match) {
         ? "存在一定关键词结构重叠，但不足以单独判断为页面蚕食。"
         : "当前确定性信号不足以提示明显的页面重叠风险。";
 
-  return { level, score, reason };
+  return { level, score, evidence_source: "lexical_intent", reason };
 }
 
 function reasonsFor(match, keyword) {
@@ -226,6 +279,18 @@ function reasonsFor(match, keyword) {
       ? "与“" + match.best_overlap_keyword + "”共享：" + match.shared_tokens.join("、") + "。"
       : "与最接近的 Cluster 成员没有明显有效词元重叠。",
   );
+  if (match.serp_overlap?.status === "available") {
+    reasons.push(
+      "SERP overlap：" + match.serp_overlap.shared_url_count + " 个共享 URL，"
+      + match.serp_overlap.score + "% 重叠（"
+      + match.serp_overlap.strength + "）。",
+    );
+  } else if (match.serp_overlap?.status === "stale") {
+    reasons.push("已有 SERP 快照过旧，因此没有参与最终评分。");
+  } else if (match.serp_overlap?.status === "insufficient") {
+    reasons.push("已有 SERP 结果不足，暂时不能作为可靠聚类证据。");
+  }
+
   if (match.intent_relation === "same") {
     reasons.push("当前关键词与最匹配成员的 Intent 一致（" + (keyword.intent_primary || "unknown") + "）。");
   } else if (match.intent_relation === "adjacent_commercial") {
@@ -244,6 +309,7 @@ export function buildClusterIntelligence({
   clusters = [],
   total_saved_keywords = null,
   truncated = false,
+  analysis_time = new Date().toISOString(),
 } = {}) {
   const assignedIds = new Set();
   clusters.forEach((cluster) => {
@@ -253,11 +319,11 @@ export function buildClusterIntelligence({
   const unassigned = keywords.filter((keyword) => !assignedIds.has(Number(keyword.saved_keyword_id)));
   const suggestions = unassigned.map((keyword) => {
     const matches = clusters
-      .map((cluster) => scoreAgainstCluster(keyword, cluster))
+      .map((cluster) => scoreAgainstCluster(keyword, cluster, analysis_time))
       .filter(Boolean)
       .sort((a, b) => b.score - a.score || b.best_member_similarity - a.best_member_similarity || a.cluster_id - b.cluster_id);
     const best = matches[0] ?? null;
-    const decision = decisionFor(best?.score ?? 0);
+    const decision = decisionFor(best?.score ?? 0, best?.serp_overlap);
     const cannibalization = cannibalizationFor(best);
 
     return {
@@ -274,6 +340,8 @@ export function buildClusterIntelligence({
         : null,
       components: best
         ? {
+            lexical_intent_score: best.base_score,
+            final_match_score: best.score,
             best_member_similarity: best.best_member_similarity,
             primary_similarity: best.primary_similarity,
             intent_compatibility: best.intent_compatibility,
@@ -283,6 +351,24 @@ export function buildClusterIntelligence({
             shared_tokens: best.shared_tokens,
           }
         : null,
+      serp_overlap: best?.serp_overlap ?? null,
+      confidence: best?.serp_overlap?.status === "available"
+        ? {
+            level: "high",
+            score: 90,
+            reason: "最终建议包含有效期内的真实 SERP URL 重叠证据。",
+          }
+        : best?.serp_overlap?.status === "stale"
+          ? {
+              level: "low",
+              score: 45,
+              reason: "存在 SERP 快照，但已过时；当前建议主要依赖词面与 Intent。",
+            }
+          : {
+              level: "medium",
+              score: 60,
+              reason: "当前建议主要依赖关键词结构与已缓存 Intent，尚缺可靠 SERP overlap 证据。",
+            },
       cannibalization,
       reasons: reasonsFor(best, keyword),
     };
@@ -295,6 +381,7 @@ export function buildClusterIntelligence({
   return {
     version: CLUSTER_INTELLIGENCE_VERSION,
     site_domain,
+    analysis_time,
     summary: {
       total_saved_keywords: Number(total_saved_keywords ?? keywords.length),
       analyzed_keywords: keywords.length,
@@ -305,19 +392,31 @@ export function buildClusterIntelligence({
       manual_review: suggestions.filter((item) => item.decision.code === "review_cluster_fit").length,
       new_cluster_candidates: suggestions.filter((item) => item.decision.code === "new_cluster_candidate").length,
       potential_cannibalization_high: suggestions.filter((item) => item.cannibalization.level === "high").length,
+      serp_evidence_available: suggestions.filter((item) => item.serp_overlap?.status === "available").length,
+      serp_evidence_strong: suggestions.filter((item) => item.serp_overlap?.strength === "strong").length,
+      serp_evidence_stale: suggestions.filter((item) => item.serp_overlap?.status === "stale").length,
+      serp_evidence_coverage_pct: suggestions.length
+        ? Math.round((suggestions.filter((item) => item.serp_overlap?.status === "available").length / suggestions.length) * 100)
+        : 0,
       truncated: Boolean(truncated),
     },
     suggestions,
     thresholds: {
       assign_to_existing_min_score: 75,
+      assign_with_strong_serp_min_score: 65,
       manual_review_min_score: 55,
+      serp_overlap_strong_min_shared_urls: 3,
+      serp_overlap_strong_min_score: 30,
+      serp_overlap_min_results: 5,
+      serp_overlap_max_age_days: 30,
       cannibalization_high_min_score: 85,
       cannibalization_medium_min_score: 70,
       cannibalization_low_min_score: 55,
     },
     limitations: [
-      "v0.1 uses deterministic keyword-token similarity and cached search intent only.",
-      "SERP URL overlap is not included, so cannibalization labels are potential risks rather than confirmed cannibalization.",
+      "v0.2 combines deterministic keyword-token similarity, cached search intent, and cached Top 10 SERP URL overlap when available.",
+      "SERP overlap is evidence of search-intent similarity, not proof that the user's existing pages are cannibalizing each other.",
+      "No new provider request is triggered by this analysis; missing or stale SERP evidence remains missing until the user explicitly refreshes it elsewhere.",
       "The engine never modifies Topic Cluster assignments automatically.",
     ],
   };

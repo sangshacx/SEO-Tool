@@ -565,8 +565,8 @@ export function createKeywordLibrarySection(documentLike = globalThis.document) 
     <div class="v2-library-panel" data-v2-library-panel="intelligence" hidden>
       <div class="v2-workspace-section-head">
         <div>
-          <h3>Cluster Intelligence <span>v0.1</span></h3>
-          <p>基于关键词结构与已缓存 Intent 的只读建议。Cannibalization 仅表示潜在风险。</p>
+          <h3>Cluster Intelligence <span>v0.2</span></h3>
+          <p>基于关键词结构、已缓存 Intent，并在可用时加入真实 Top 10 SERP URL overlap。Cannibalization 仍表示潜在风险。</p>
         </div>
         <button type="button" class="primary-action" data-v2-cluster-intelligence-run>分析 Cluster 建议</button>
       </div>

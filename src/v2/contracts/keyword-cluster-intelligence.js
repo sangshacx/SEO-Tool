@@ -1,6 +1,6 @@
 import { normalizeRegistrableDomain } from "../storage/registrable-domain.js";
 
-export const CLUSTER_INTELLIGENCE_CONTRACT_VERSION = "cluster-intelligence-v0.1";
+export const CLUSTER_INTELLIGENCE_CONTRACT_VERSION = "cluster-intelligence-v0.2";
 export const CLUSTER_INTELLIGENCE_MAX_KEYWORDS = 250;
 
 export class ClusterIntelligenceContractError extends Error {
