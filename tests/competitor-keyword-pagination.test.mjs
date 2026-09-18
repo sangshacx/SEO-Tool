@@ -316,6 +316,10 @@ test("V2 competitor snapshot mounts the local pager and describes the 50-keyword
   assert.match(html, /value="commercial-demand">机会：商业词 \+ 搜索量 ≥ 100/);
   assert.match(html, /value="high-cpc-commercial">机会：商业词 \+ CPC ≥ \$1/);
   assert.match(html, /id="competitorSort"/);
+  assert.match(html, /<th>下一步<\/th>/);
+  assert.match(html, /gapCompetitorInput:document.getElementById\("gapCompetitorDomain"\)/);
+  assert.match(html, /gapFilterInput:document.getElementById\("gapFilter"\)/);
+  assert.match(html, /gapForm:document.getElementById\("gapForm"\)/);
   assert.match(html, /v2-competitor-keywords\.js/);
   assert.match(html, /competitorKeywordTable\.setRows\(data\.top_keywords\|\|\[\]\)/);
   assert.match(html, /最多 50 个排名关键词/);
