@@ -15,6 +15,19 @@ export const RESEARCH_SAVE_SURFACES = Object.freeze({
   gapBody: Object.freeze({ source: "keyword_gap", keyword_cell_index: 2 }),
 });
 
+export const BATCH_SAVE_SURFACES = Object.freeze({
+  ideasBody: Object.freeze({
+    source: "keyword_ideas",
+    controls_selector: ".ideasselection",
+    label: "保存已选到关键词库",
+  }),
+  gapBody: Object.freeze({
+    source: "keyword_gap",
+    controls_selector: ".gapactions",
+    label: "保存已选到关键词库",
+  }),
+});
+
 function clean(value) {
   return String(value ?? "").trim();
 }
@@ -87,6 +100,78 @@ export function researchSurfaceKeyword(row, spec) {
     .filter(Boolean);
   const direct = clean(textNodes.join(" "));
   return (direct || clean(cell.textContent)).replace(/\s+/g, " ");
+}
+
+export function selectedResearchKeywords(body, spec) {
+  const seen = new Set();
+  const keywords = [];
+  [...(body?.children || [])].forEach((row) => {
+    const checkbox = row.children?.[0]?.querySelector?.('input[type="checkbox"]');
+    if (!checkbox?.checked) return;
+    const keyword = researchSurfaceKeyword(row, spec);
+    const key = keyword.toLowerCase();
+    if (!keyword || seen.has(key)) return;
+    seen.add(key);
+    keywords.push(keyword);
+  });
+  return keywords;
+}
+
+export async function saveKeywordSelection({
+  keywords,
+  saveOne,
+  concurrency = 5,
+} = {}) {
+  const unique = [];
+  const seen = new Set();
+  for (const raw of Array.isArray(keywords) ? keywords : []) {
+    const keyword = clean(raw).replace(/\s+/g, " ");
+    const key = keyword.toLowerCase();
+    if (!keyword || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(keyword);
+  }
+  if (typeof saveOne !== "function") throw new Error("saveOne is required.");
+  if (!unique.length) return { attempted: 0, saved: 0, failed: 0, failures: [] };
+
+  const failures = [];
+  let saved = 0;
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(Number(concurrency) || 1, 5, unique.length));
+  const workers = Array.from({ length: workerCount }, async () => {
+    while (cursor < unique.length) {
+      const index = cursor++;
+      const keyword = unique[index];
+      try {
+        await saveOne(keyword);
+        saved += 1;
+      } catch (error) {
+        failures.push({ keyword, message: error?.message || "保存失败" });
+      }
+    }
+  });
+  await Promise.all(workers);
+  return {
+    attempted: unique.length,
+    saved,
+    failed: failures.length,
+    failures,
+  };
+}
+
+function markSurfaceKeywordsSaved(body, spec, keywords, siteDomain) {
+  const saved = new Set((keywords || []).map((keyword) => clean(keyword).toLowerCase()));
+  [...(body?.children || [])].forEach((row) => {
+    const keyword = researchSurfaceKeyword(row, spec);
+    if (!saved.has(keyword.toLowerCase())) return;
+    const button = row.children?.[spec.keyword_cell_index]?.querySelector?.("[data-v2-inline-save-keyword]");
+    if (!button) return;
+    button.dataset.savedSiteDomain = siteDomain || "";
+    button.textContent = "已保存";
+    button.disabled = true;
+    button.classList?.remove?.("error");
+    button.classList?.add?.("saved");
+  });
 }
 
 export function decorateResearchKeywordRows({
@@ -344,17 +429,21 @@ export function mountKeywordLibrary({
     return load();
   };
 
-  const saveToLibrary = async ({ keyword, source }) => {
+  const postSavedKeyword = async ({ keyword, source }) => {
     const payload = savedKeywordCreatePayload({
       market: context.get(),
       keyword,
       source,
     });
-    const result = await readJson(await fetchImpl(SAVED_KEYWORDS_URL, {
+    return readJson(await fetchImpl(SAVED_KEYWORDS_URL, {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify(payload),
     }));
+  };
+
+  const saveToLibrary = async ({ keyword, source }) => {
+    const result = await postSavedKeyword({ keyword, source });
     await resetAndLoad();
     return result;
   };
@@ -471,17 +560,85 @@ export function mountKeywordLibrary({
   });
 
   const surfaceEntries = Object.entries(RESEARCH_SAVE_SURFACES)
-    .map(([bodyId, spec]) => ({ body: root.querySelector(`#${bodyId}`), spec }))
+    .map(([bodyId, spec]) => ({ bodyId, body: root.querySelector(`#${bodyId}`), spec }))
     .filter(({ body }) => Boolean(body));
+
+  const batchControls = [];
+  const updateBatchControl = (control) => {
+    const market = context.get();
+    const keywords = selectedResearchKeywords(control.body, control.spec);
+    control.button.disabled = !market?.domain || !keywords.length;
+    control.button.title = !market?.domain
+      ? "请先在网站管理添加并选择当前网站"
+      : keywords.length
+        ? `保存已选 ${keywords.length} 个关键词到当前网站关键词库`
+        : "请先选择关键词";
+  };
+
+  Object.entries(BATCH_SAVE_SURFACES).forEach(([bodyId, batchSpec]) => {
+    const surface = surfaceEntries.find((entry) => entry.bodyId === bodyId);
+    const controls = root.querySelector(batchSpec.controls_selector);
+    if (!surface || !controls || controls.querySelector?.(`[data-v2-batch-save-keywords="${bodyId}"]`)) return;
+
+    const button = documentLike.createElement("button");
+    button.type = "button";
+    button.dataset.v2BatchSaveKeywords = bodyId;
+    button.className = "v2-batch-save-keywords";
+    button.textContent = batchSpec.label;
+
+    const status = documentLike.createElement("span");
+    status.dataset.v2BatchSaveStatus = bodyId;
+    status.className = "v2-batch-save-status";
+    controls.append(button, status);
+
+    const control = { ...surface, ...batchSpec, button, status };
+    batchControls.push(control);
+    button.addEventListener("click", async () => {
+      const market = context.get();
+      const keywords = selectedResearchKeywords(surface.body, surface.spec);
+      if (!market?.domain || !keywords.length) {
+        updateBatchControl(control);
+        return;
+      }
+      button.disabled = true;
+      button.textContent = `保存 ${keywords.length} 条中…`;
+      status.textContent = "";
+      status.className = "v2-batch-save-status";
+      const result = await saveKeywordSelection({
+        keywords,
+        concurrency: 5,
+        saveOne: (keyword) => postSavedKeyword({ keyword, source: batchSpec.source }),
+      });
+      if (result.saved) {
+        markSurfaceKeywordsSaved(surface.body, surface.spec, keywords.filter((keyword) =>
+          !result.failures.some((failure) => failure.keyword.toLowerCase() === keyword.toLowerCase())
+        ), market.domain);
+      }
+      await resetAndLoad();
+      status.textContent = result.failed
+        ? `已保存 ${result.saved} 条，失败 ${result.failed} 条 · 本次 $0`
+        : `已保存 ${result.saved} 条到关键词库 · 本次 $0`;
+      status.className = `v2-batch-save-status ${result.failed ? "error-text" : "success"}`;
+      button.textContent = batchSpec.label;
+      updateBatchControl(control);
+    });
+
+    surface.body.addEventListener("change", () => updateBatchControl(control));
+    updateBatchControl(control);
+  });
 
   refreshResearchSurfaceButtons = () => {
     surfaceEntries.forEach(({ body, spec }) => decorateSurface(body, spec));
+    batchControls.forEach(updateBatchControl);
   };
   refreshResearchSurfaceButtons();
 
   surfaceEntries.forEach(({ body, spec }) => {
     if (typeof globalThis.MutationObserver === "function") {
-      const observer = new globalThis.MutationObserver(() => decorateSurface(body, spec));
+      const observer = new globalThis.MutationObserver(() => {
+        decorateSurface(body, spec);
+        batchControls.filter((control) => control.body === body).forEach(updateBatchControl);
+      });
       observer.observe(body, { childList: true });
       surfaceObservers.push(observer);
     }

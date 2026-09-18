@@ -3,10 +3,13 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 
 import {
+  BATCH_SAVE_SURFACES,
   RESEARCH_SAVE_SURFACES,
   buildSavedKeywordListUrl,
   researchSurfaceKeyword,
   savedKeywordCreatePayload,
+  saveKeywordSelection,
+  selectedResearchKeywords,
 } from "../public/v2-keyword-library.js";
 
 test("Keyword Library list URL is site scoped and keeps filters explicit", () => {
@@ -108,5 +111,84 @@ test("research surface saves stay on the zero-provider-cost Saved Keywords API",
   assert.match(source, /competitorBody[\s\S]*competitor_snapshot/);
   assert.match(source, /gapBody[\s\S]*keyword_gap/);
   assert.match(source, /data-v2-inline-save-keyword/);
+  assert.doesNotMatch(source, /submitSeoResearchRequest|dataforseo\.com/i);
+});
+
+
+test("batch-save surfaces are limited to selectable Ideas and Keyword Gap results", () => {
+  assert.deepEqual(BATCH_SAVE_SURFACES, {
+    ideasBody: {
+      source: "keyword_ideas",
+      controls_selector: ".ideasselection",
+      label: "保存已选到关键词库",
+    },
+    gapBody: {
+      source: "keyword_gap",
+      controls_selector: ".gapactions",
+      label: "保存已选到关键词库",
+    },
+  });
+});
+
+test("selectedResearchKeywords returns checked keywords once", () => {
+  const row = (keyword, checked) => ({
+    children: [
+      { querySelector: () => ({ checked }) },
+      {},
+      {
+        querySelector(selector) {
+          if (selector === ".emptyrow") return null;
+          if (selector === "a") return { textContent: keyword };
+          return null;
+        },
+        childNodes: [],
+        textContent: keyword,
+      },
+    ],
+  });
+  const body = {
+    children: [
+      row("waterproof membrane", true),
+      row("roof coating", false),
+      row("Waterproof Membrane", true),
+      row("bitumen membrane", true),
+    ],
+  };
+  assert.deepEqual(
+    selectedResearchKeywords(body, RESEARCH_SAVE_SURFACES.ideasBody),
+    ["waterproof membrane", "bitumen membrane"],
+  );
+});
+
+test("saveKeywordSelection bounds concurrency, deduplicates, and reports partial failures", async () => {
+  let active = 0;
+  let maxActive = 0;
+  const seen = [];
+  const result = await saveKeywordSelection({
+    keywords: ["a", "b", "A", "c", "d", "e", "f"],
+    concurrency: 3,
+    async saveOne(keyword) {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      seen.push(keyword);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      active -= 1;
+      if (keyword === "d") throw new Error("failed d");
+    },
+  });
+  assert.equal(result.attempted, 6);
+  assert.equal(result.saved, 5);
+  assert.equal(result.failed, 1);
+  assert.deepEqual(result.failures, [{ keyword: "d", message: "failed d" }]);
+  assert.ok(maxActive <= 3);
+  assert.deepEqual(new Set(seen), new Set(["a", "b", "c", "d", "e", "f"]));
+});
+
+test("batch saves use only the zero-cost Saved Keywords API and refresh library once", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /data-v2-batch-save-keywords/);
+  assert.match(source, /保存已选到关键词库/);
+  assert.match(source, /saveKeywordSelection/);
+  assert.match(source, /本次 \$0/);
   assert.doesNotMatch(source, /submitSeoResearchRequest|dataforseo\.com/i);
 });
