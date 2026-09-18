@@ -259,6 +259,9 @@ test("V2 competitor snapshot mounts the local pager and describes the 50-keyword
   assert.match(html, /id="competitorFilter"/);
   assert.match(html, /id="competitorIntent"/);
   assert.match(html, /id="competitorPreset"/);
+  assert.match(html, /value="quick-opportunity">机会：Top 10 \+ KD ≤ 35/);
+  assert.match(html, /value="commercial-demand">机会：商业词 \+ 搜索量 ≥ 100/);
+  assert.match(html, /value="high-cpc-commercial">机会：商业词 \+ CPC ≥ \$1/);
   assert.match(html, /id="competitorSort"/);
   assert.match(html, /v2-competitor-keywords\.js/);
   assert.match(html, /competitorKeywordTable\.setRows\(data\.top_keywords\|\|\[\]\)/);
