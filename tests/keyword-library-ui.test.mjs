@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import {
   BATCH_SAVE_SURFACES,
   RESEARCH_SAVE_SURFACES,
+  buildClusterSerpVerificationQueue,
   buildKeywordClusterAssignments,
   buildSavedKeywordListUrl,
   clusterConfidencePresentation,
@@ -12,6 +13,7 @@ import {
   clusterIntelligenceRiskLabel,
   clusterSerpEvidencePresentation,
   clusterSuggestionPrefill,
+  handoffClusterSerpVerification,
   newClusterSuggestionPrefill,
   normalizeBatchTagInput,
   researchSurfaceKeyword,
@@ -433,4 +435,109 @@ test("Cluster Intelligence table exposes SERP overlap, shared URLs, confidence, 
   assert.match(source, /dataset\.confidence/);
   assert.match(source, /colSpan = 11/);
   assert.doesNotMatch(source, /submitSeoResearchRequest|dataforseo\.com/i);
+});
+
+
+test("SERP Evidence Coverage queue targets the keyword side that actually needs verification", () => {
+  const queue = buildClusterSerpVerificationQueue({
+    analysisTime: "2026-09-18T00:00:00Z",
+    suggestions: [
+      {
+        keyword: "waterproof membrane supplier",
+        decision: { code: "assign_to_existing" },
+        suggested_cluster: { id: 3, name: "Waterproof Membrane", score: 78 },
+        components: { final_match_score: 78 },
+        serp_overlap: {
+          status: "unavailable",
+          matched_keyword: "waterproof membrane",
+          candidate_result_count: 8,
+          member_result_count: 0,
+          candidate_fetched_at: "2026-09-15T00:00:00Z",
+          member_fetched_at: null,
+        },
+      },
+      {
+        keyword: "roof coating guide",
+        decision: { code: "new_cluster_candidate" },
+        suggested_cluster: { id: 4, name: "Roof Coating", score: 48 },
+        components: { final_match_score: 48 },
+        serp_overlap: {
+          status: "insufficient",
+          matched_keyword: "roof coating",
+          candidate_result_count: 3,
+          member_result_count: 7,
+          candidate_fetched_at: "2026-09-15T00:00:00Z",
+          member_fetched_at: "2026-09-15T00:00:00Z",
+        },
+      },
+    ],
+  });
+  assert.deepEqual(queue.map((item) => [item.keyword, item.priority, item.evidence_status]), [
+    ["waterproof membrane", "high", "unavailable"],
+    ["roof coating guide", "normal", "insufficient"],
+  ]);
+});
+
+test("SERP Evidence Coverage deduplicates stale keywords and only sends a manual prefill handoff", () => {
+  const queue = buildClusterSerpVerificationQueue({
+    analysisTime: "2026-09-18T00:00:00Z",
+    suggestions: [
+      {
+        keyword: "membrane manufacturer",
+        decision: { code: "review_cluster_fit" },
+        suggested_cluster: { id: 2, name: "Membrane", score: 65 },
+        components: { final_match_score: 65 },
+        serp_overlap: {
+          status: "stale",
+          matched_keyword: "waterproof membrane",
+          candidate_result_count: 8,
+          member_result_count: 8,
+          candidate_fetched_at: "2026-07-01T00:00:00Z",
+          member_fetched_at: "2026-09-10T00:00:00Z",
+        },
+      },
+      {
+        keyword: "membrane manufacturer",
+        decision: { code: "review_cluster_fit" },
+        suggested_cluster: { id: 5, name: "Waterproofing", score: 60 },
+        components: { final_match_score: 60 },
+        serp_overlap: {
+          status: "stale",
+          matched_keyword: "bitumen membrane",
+          candidate_result_count: 8,
+          member_result_count: 8,
+          candidate_fetched_at: "2026-07-01T00:00:00Z",
+          member_fetched_at: "2026-09-10T00:00:00Z",
+        },
+      },
+    ],
+  });
+  assert.equal(queue.length, 1);
+  assert.equal(queue[0].keyword, "membrane manufacturer");
+
+  const keywordInput = { value: "", focused: false, focus() { this.focused = true; } };
+  const locationLike = { hash: "" };
+  assert.deepEqual(handoffClusterSerpVerification({
+    keyword: "  membrane   manufacturer ",
+    keywordInput,
+    locationLike,
+  }), {
+    keyword: "membrane manufacturer",
+    view: "keywords",
+    submitted: false,
+  });
+  assert.equal(keywordInput.value, "membrane manufacturer");
+  assert.equal(keywordInput.focused, true);
+  assert.equal(locationLike.hash, "keywords");
+});
+
+test("Cluster Intelligence UI exposes a manual SERP Evidence Coverage queue without automatic provider requests", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /SERP Evidence Coverage/);
+  assert.match(source, /data-v2-serp-verification-count/);
+  assert.match(source, /data-v2-serp-verification-list/);
+  assert.match(source, /去验证 SERP/);
+  assert.match(source, /不会自动提交或产生 DataForSEO 费用/);
+  assert.match(source, /handoffClusterSerpVerification/);
+  assert.doesNotMatch(source, /\.requestSubmit\(|\.submit\(\)|submitSeoResearchRequest|dataforseo\.com/i);
 });

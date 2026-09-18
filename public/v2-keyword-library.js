@@ -168,6 +168,145 @@ export function clusterConfidencePresentation(confidence = {}) {
   };
 }
 
+
+function clusterEvidenceNeedsRefresh(fetchedAt, analysisTime, maxAgeDays = 30) {
+  const fetched = Date.parse(fetchedAt || "");
+  const analysis = Date.parse(analysisTime || "");
+  if (!Number.isFinite(fetched) || !Number.isFinite(analysis)) return false;
+  return Math.max(0, analysis - fetched) > maxAgeDays * 86400000;
+}
+
+export function buildClusterSerpVerificationQueue({
+  suggestions = [],
+  analysisTime = new Date().toISOString(),
+  maxAgeDays = 30,
+  minResults = 5,
+} = {}) {
+  const queue = new Map();
+  const add = ({ keyword, status, reason, suggestion, side }) => {
+    const value = clean(keyword).replace(/\s+/g, " ");
+    if (!value) return;
+    const key = value.toLowerCase();
+    const decisionCode = String(suggestion?.decision?.code || "");
+    const priority = ["assign_to_existing", "review_cluster_fit"].includes(decisionCode) ? "high" : "normal";
+    const matchScore = Number(suggestion?.components?.final_match_score ?? suggestion?.suggested_cluster?.score ?? 0) || 0;
+    const candidate = {
+      keyword: value,
+      evidence_status: status,
+      evidence_label: ({
+        unavailable: "暂无 SERP",
+        stale: "SERP 已过期",
+        insufficient: "SERP 证据不足",
+      })[status] || "需要验证",
+      priority,
+      priority_label: priority === "high" ? "优先验证" : "可稍后验证",
+      match_score: matchScore,
+      decision_code: decisionCode,
+      source_keyword: clean(suggestion?.keyword),
+      suggested_cluster: suggestion?.suggested_cluster?.name || null,
+      side,
+      reason,
+    };
+    const existing = queue.get(key);
+    if (
+      !existing
+      || (candidate.priority === "high" && existing.priority !== "high")
+      || candidate.match_score > existing.match_score
+    ) {
+      queue.set(key, candidate);
+    }
+  };
+
+  for (const suggestion of Array.isArray(suggestions) ? suggestions : []) {
+    if (!suggestion?.suggested_cluster?.id) continue;
+    const evidence = suggestion?.serp_overlap || {};
+    const status = String(evidence.status || "unavailable").toLowerCase();
+    if (!["unavailable", "stale", "insufficient"].includes(status)) continue;
+
+    const candidateKeyword = suggestion.keyword;
+    const memberKeyword = evidence.matched_keyword;
+    const candidateCount = Number(evidence.candidate_result_count || 0);
+    const memberCount = Number(evidence.member_result_count || 0);
+
+    if (status === "unavailable") {
+      if (!evidence.candidate_fetched_at || candidateCount === 0) {
+        add({
+          keyword: candidateKeyword,
+          status,
+          side: "candidate",
+          suggestion,
+          reason: "候选关键词没有可用的已缓存 Top 10 SERP。",
+        });
+      }
+      if (memberKeyword && (!evidence.member_fetched_at || memberCount === 0)) {
+        add({
+          keyword: memberKeyword,
+          status,
+          side: "cluster_member",
+          suggestion,
+          reason: "用于比较的现有 Cluster 成员没有可用的已缓存 Top 10 SERP。",
+        });
+      }
+    } else if (status === "insufficient") {
+      if (candidateCount < minResults) {
+        add({
+          keyword: candidateKeyword,
+          status,
+          side: "candidate",
+          suggestion,
+          reason: `候选关键词只有 ${candidateCount} 个可比较 organic 结果，少于 ${minResults} 个最低要求。`,
+        });
+      }
+      if (memberKeyword && memberCount < minResults) {
+        add({
+          keyword: memberKeyword,
+          status,
+          side: "cluster_member",
+          suggestion,
+          reason: `现有 Cluster 成员只有 ${memberCount} 个可比较 organic 结果，少于 ${minResults} 个最低要求。`,
+        });
+      }
+    } else if (status === "stale") {
+      if (clusterEvidenceNeedsRefresh(evidence.candidate_fetched_at, analysisTime, maxAgeDays)) {
+        add({
+          keyword: candidateKeyword,
+          status,
+          side: "candidate",
+          suggestion,
+          reason: `候选关键词的 SERP 快照超过 ${maxAgeDays} 天。`,
+        });
+      }
+      if (memberKeyword && clusterEvidenceNeedsRefresh(evidence.member_fetched_at, analysisTime, maxAgeDays)) {
+        add({
+          keyword: memberKeyword,
+          status,
+          side: "cluster_member",
+          suggestion,
+          reason: `现有 Cluster 成员的 SERP 快照超过 ${maxAgeDays} 天。`,
+        });
+      }
+    }
+  }
+
+  return [...queue.values()].sort((a, b) => {
+    const priority = (b.priority === "high" ? 1 : 0) - (a.priority === "high" ? 1 : 0);
+    return priority || b.match_score - a.match_score || a.keyword.localeCompare(b.keyword);
+  });
+}
+
+export function handoffClusterSerpVerification({
+  keyword,
+  keywordInput,
+  locationLike,
+} = {}) {
+  const value = clean(keyword).replace(/\s+/g, " ");
+  if (!value) throw new Error("待验证关键词为空。");
+  if (keywordInput) keywordInput.value = value;
+  if (locationLike) locationLike.hash = "keywords";
+  keywordInput?.focus?.();
+  return { keyword: value, view: "keywords", submitted: false };
+}
+
 export function clusterSuggestionPrefill({ suggestion, cluster } = {}) {
   const savedKeywordId = Number(suggestion?.saved_keyword_id);
   const clusterId = Number(suggestion?.suggested_cluster?.id);
@@ -618,6 +757,15 @@ export function createKeywordLibrarySection(documentLike = globalThis.document) 
       </div>
       <div data-v2-cluster-intelligence-status class="v2-cluster-intelligence-status"></div>
       <div data-v2-cluster-intelligence-summary class="v2-cluster-intelligence-summary"></div>
+      <details class="v2-serp-verification-queue" data-v2-serp-verification-queue>
+        <summary>
+          <span><b>SERP Evidence Coverage</b><small>仅列出真正缺失、过期或证据不足的关键词</small></span>
+          <span data-v2-serp-verification-count>待验证 0</span>
+        </summary>
+        <div data-v2-serp-verification-list class="v2-serp-verification-list">
+          <div class="v2-serp-verification-empty">先运行 Cluster Intelligence，系统会在这里列出值得手动验证 SERP 的关键词。</div>
+        </div>
+      </details>
       <div class="v2-library-table-shell">
         <div class="tablewrap v2-cluster-intelligence-tablewrap">
           <table class="ideastable v2-cluster-intelligence-table">
@@ -687,6 +835,9 @@ export function mountKeywordLibrary({
   const intelligenceStatus = section.querySelector("[data-v2-cluster-intelligence-status]");
   const intelligenceSummary = section.querySelector("[data-v2-cluster-intelligence-summary]");
   const intelligenceBody = section.querySelector("[data-v2-cluster-intelligence-body]");
+  const serpVerificationQueue = section.querySelector("[data-v2-serp-verification-queue]");
+  const serpVerificationCount = section.querySelector("[data-v2-serp-verification-count]");
+  const serpVerificationList = section.querySelector("[data-v2-serp-verification-list]");
   const libraryTabs = [...section.querySelectorAll("[data-v2-library-tab]")];
   const libraryPanels = [...section.querySelectorAll("[data-v2-library-panel]")];
   const keywordInput = root.querySelector("#keyword");
@@ -738,8 +889,69 @@ export function mountKeywordLibrary({
       : "v2-cluster-intelligence-status";
   };
 
+  const renderSerpVerificationQueue = (data = {}) => {
+    const queue = buildClusterSerpVerificationQueue({
+      suggestions: data.suggestions || [],
+      analysisTime: data.analysis_time,
+      maxAgeDays: Number(data.thresholds?.serp_overlap_max_age_days || 30),
+      minResults: Number(data.thresholds?.serp_overlap_min_results || 5),
+    });
+    serpVerificationCount.textContent = `待验证 ${queue.length}`;
+    serpVerificationList.replaceChildren();
+
+    queue.forEach((item) => {
+      const row = documentLike.createElement("div");
+      row.className = "v2-serp-verification-item";
+      row.dataset.priority = item.priority;
+
+      const main = documentLike.createElement("div");
+      main.className = "v2-serp-verification-main";
+      const keyword = documentLike.createElement("b");
+      keyword.textContent = item.keyword;
+      const meta = documentLike.createElement("span");
+      meta.textContent = [
+        item.priority_label,
+        item.evidence_label,
+        item.suggested_cluster ? `影响 Cluster：${item.suggested_cluster}` : null,
+      ].filter(Boolean).join(" · ");
+      const reason = documentLike.createElement("small");
+      reason.textContent = item.reason;
+      main.append(keyword, meta, reason);
+
+      const action = documentLike.createElement("button");
+      action.type = "button";
+      action.className = "v2-serp-verification-action";
+      action.textContent = "去验证 SERP";
+      action.title = "只跳转到关键词研究并预填关键词；不会自动提交或产生 DataForSEO 费用。";
+      action.addEventListener("click", () => {
+        handoffClusterSerpVerification({
+          keyword: item.keyword,
+          keywordInput,
+          locationLike,
+        });
+      });
+
+      row.append(main, action);
+      serpVerificationList.appendChild(row);
+    });
+
+    if (!queue.length) {
+      const empty = documentLike.createElement("div");
+      empty.className = "v2-serp-verification-empty";
+      empty.textContent = "当前没有需要补充的 SERP 证据。已有证据足够，或当前建议没有可比较的现有 Cluster。";
+      serpVerificationList.appendChild(empty);
+      serpVerificationQueue.open = false;
+    } else {
+      serpVerificationQueue.open = true;
+    }
+    return queue;
+  };
+
   const clearClusterIntelligence = () => {
     intelligenceSummary.textContent = "";
+    serpVerificationCount.textContent = "待验证 0";
+    serpVerificationList.innerHTML = '<div class="v2-serp-verification-empty">先运行 Cluster Intelligence，系统会在这里列出值得手动验证 SERP 的关键词。</div>';
+    serpVerificationQueue.open = false;
     intelligenceBody.replaceChildren();
     const row = documentLike.createElement("tr");
     const cell = documentLike.createElement("td");
@@ -753,6 +965,7 @@ export function mountKeywordLibrary({
 
   const renderClusterIntelligence = (data = {}) => {
     const summaryData = data.summary || {};
+    renderSerpVerificationQueue(data);
     intelligenceSummary.textContent = [
       `未分配 ${summaryData.unassigned_keywords ?? 0}`,
       `建议现有 Cluster ${summaryData.suggested_existing_cluster ?? 0}`,
@@ -1366,7 +1579,7 @@ export function mountKeywordLibrary({
 
     intelligenceRunButton.disabled = true;
     intelligenceRunButton.textContent = "分析中…";
-    showIntelligenceStatus("正在读取 D1 中的 Saved Keywords、Cluster 和已缓存 Intent；不会调用 DataForSEO。");
+    showIntelligenceStatus("正在读取 D1 中的 Saved Keywords、Cluster、已缓存 Intent 与已有 SERP 证据；不会调用 DataForSEO。");
     try {
       const response = await fetchImpl(
         CLUSTER_INTELLIGENCE_URL + "?site_domain=" + encodeURIComponent(market.domain),
