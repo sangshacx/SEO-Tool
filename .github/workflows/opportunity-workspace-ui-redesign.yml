@@ -1,0 +1,505 @@
+name: Opportunity Workspace UI Redesign
+on:
+  push:
+    branches: [seo-pro-v2]
+    paths:
+      - ".github/workflows/opportunity-workspace-ui-redesign.yml"
+permissions:
+  contents: write
+jobs:
+  edit-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: seo-pro-v2
+          fetch-depth: 0
+      - name: Redesign Opportunity workspace
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"missing anchor: {label}")
+              return text.replace(old, new, 1)
+
+          shell_path = Path("public/v2-shell.js")
+          shell = shell_path.read_text()
+
+          anchor = '''function createPlaceholder(view, title, description) {
+            const section = createElement("section", "panel v2-placeholder");
+            section.dataset.v2View = view;
+            section.innerHTML = `<div class="section-title">${title}</div><p class="lead">${description}</p>`;
+            return section;
+          }
+          '''
+          helper = r'''
+          export function createOpportunityWorkspace(root) {
+            const gap = root.querySelector(".backlinkgap");
+            const prospects = root.querySelector(".backlinkprospects");
+            if (!gap || !prospects) return null;
+
+            const workspace = createElement("section", "v2-opportunity-workspace");
+            workspace.dataset.v2View = "opportunities";
+
+            const hero = createElement("div", "v2-opportunity-hero");
+            hero.innerHTML = `
+              <div>
+                <div class="v2-opportunity-eyebrow">OPPORTUNITY WORKSPACE</div>
+                <h2>机会清单</h2>
+                <p>从竞争对手外链中发现可争取的引用域，筛选高价值机会，再保存到 D1 持续推进。</p>
+              </div>
+              <div class="v2-opportunity-pipeline" aria-label="机会工作流">
+                <span><b>1</b>发现</span>
+                <i>→</i>
+                <span><b>2</b>保存</span>
+                <i>→</i>
+                <span><b>3</b>推进</span>
+              </div>
+            `;
+
+            const tabs = createElement("div", "v2-opportunity-tabs");
+            tabs.setAttribute("role", "tablist");
+            tabs.setAttribute("aria-label", "机会清单视图");
+            const tabConfig = [
+              ["discover", "发现外链机会"],
+              ["saved", "Saved Link Prospects"],
+            ];
+            tabConfig.forEach(([id, label], index) => {
+              const button = createElement("button", index === 0 ? "active" : "", label);
+              button.type = "button";
+              button.setAttribute("role", "tab");
+              button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+              button.dataset.v2OpportunityTab = id;
+              tabs.appendChild(button);
+            });
+
+            const stage = createElement("div", "v2-opportunity-stage");
+            const panels = [
+              [gap, "discover", "v2-opportunity-discover-panel"],
+              [prospects, "saved", "v2-opportunity-saved-panel"],
+            ];
+            panels.forEach(([panel, id, className], index) => {
+              panel.classList.add("v2-opportunity-panel", className);
+              panel.dataset.v2OpportunityPanel = id;
+              delete panel.dataset.v2View;
+              panel.hidden = index !== 0;
+            });
+
+            const activateTab = (tabId) => {
+              const target = tabConfig.some(([id]) => id === tabId) ? tabId : "discover";
+              tabs.querySelectorAll("[data-v2-opportunity-tab]").forEach((button) => {
+                const active = button.dataset.v2OpportunityTab === target;
+                button.classList.toggle("active", active);
+                button.setAttribute("aria-selected", active ? "true" : "false");
+              });
+              stage.querySelectorAll("[data-v2-opportunity-panel]").forEach((panel) => {
+                const active = panel.dataset.v2OpportunityPanel === target;
+                panel.hidden = !active;
+                panel.classList.toggle("active", active);
+              });
+              return target;
+            };
+
+            tabs.addEventListener("click", (event) => {
+              const button = event.target.closest("[data-v2-opportunity-tab]");
+              if (button) activateTab(button.dataset.v2OpportunityTab);
+            });
+
+            gap.before(workspace);
+            workspace.append(hero, tabs, stage);
+            stage.append(gap, prospects);
+            activateTab("discover");
+            return { workspace, activateTab };
+          }
+          '''
+          shell = replace_once(shell, anchor, helper + "\n" + anchor, "opportunity workspace helper")
+
+          mount_anchor = '''  createCompetitorResearchWorkspace(content);
+            createBacklinkResearchWorkspace(content);
+            content.querySelector(".top")?.classList.add("v2-legacy-heading");'''
+          mount_new = '''  createCompetitorResearchWorkspace(content);
+            createBacklinkResearchWorkspace(content);
+            createOpportunityWorkspace(content);
+            content.querySelector(".top")?.classList.add("v2-legacy-heading");'''
+          shell = replace_once(shell, mount_anchor, mount_new, "opportunity workspace mount")
+          shell_path.write_text(shell)
+
+          css_path = Path("public/v2-shell.css")
+          css = css_path.read_text()
+          css += r'''
+
+          /* Opportunity workspace redesign */
+          .v2-opportunity-workspace{
+            margin-top:0;
+          }
+          .v2-opportunity-hero{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:20px;
+            padding:4px 2px 18px;
+          }
+          .v2-opportunity-eyebrow{
+            margin-bottom:6px;
+            color:#6f93c6;
+            font-size:10px;
+            font-weight:800;
+            letter-spacing:.16em;
+          }
+          .v2-opportunity-hero h2{
+            margin:0;
+            color:#edf4ff;
+            font-size:24px;
+            line-height:1.2;
+          }
+          .v2-opportunity-hero p{
+            max-width:760px;
+            margin:7px 0 0;
+            color:#8098b9;
+            font-size:13px;
+          }
+          .v2-opportunity-pipeline{
+            display:flex;
+            align-items:center;
+            gap:7px;
+            flex-wrap:wrap;
+            justify-content:flex-end;
+          }
+          .v2-opportunity-pipeline span{
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+            min-height:30px;
+            padding:0 9px;
+            border:1px solid #203b5d;
+            border-radius:999px;
+            background:#0c1c30;
+            color:#8ea8ca;
+            font-size:10px;
+            font-weight:750;
+            white-space:nowrap;
+          }
+          .v2-opportunity-pipeline b{
+            display:inline-grid;
+            place-items:center;
+            width:17px;
+            height:17px;
+            border-radius:50%;
+            background:#173966;
+            color:#bcd3f5;
+            font-size:9px;
+          }
+          .v2-opportunity-pipeline i{
+            color:#4f6787;
+            font-style:normal;
+          }
+          .v2-opportunity-tabs{
+            display:flex;
+            gap:4px;
+            width:max-content;
+            max-width:100%;
+            margin-bottom:14px;
+            padding:4px;
+            border:1px solid #1d3554;
+            border-radius:10px;
+            background:#0b1829;
+          }
+          .v2-opportunity-tabs button{
+            min-height:34px;
+            padding:0 14px;
+            border:0;
+            border-radius:7px;
+            background:transparent;
+            color:#7188a9;
+            font-size:12px;
+            font-weight:750;
+          }
+          .v2-opportunity-tabs button.active{
+            background:#172b49;
+            color:#e8f1ff;
+            box-shadow:inset 0 0 0 1px #294d77;
+          }
+          .v2-opportunity-stage{
+            border:1px solid #1b3352;
+            border-radius:12px;
+            background:#0c192b;
+            overflow:hidden;
+          }
+          .v2-opportunity-panel[hidden]{display:none!important}
+          .v2-opportunity-panel{
+            margin:0!important;
+            padding:0!important;
+            border:0!important;
+            border-radius:0!important;
+            background:transparent!important;
+            box-shadow:none!important;
+          }
+          .v2-opportunity-panel>.section-title{
+            margin:0;
+            padding:17px 18px 4px;
+            color:#e8f1ff;
+            font-size:17px;
+          }
+          .v2-opportunity-panel>.section-title+.sub{
+            padding:0 18px 13px;
+            color:#7189aa;
+            font-size:12px;
+          }
+          .v2-opportunity-discover-panel>.backlinkgapform{
+            display:grid;
+            grid-template-columns:minmax(220px,1fr) minmax(260px,1.3fr) 110px auto;
+            gap:9px;
+            margin:0;
+            padding:13px 18px;
+            border-top:1px solid #172d49;
+            border-bottom:1px solid #172d49;
+            background:#0d1d32;
+          }
+          .v2-opportunity-discover-panel>.backlinkgapform input,
+          .v2-opportunity-discover-panel>.backlinkgapform textarea,
+          .v2-opportunity-discover-panel>.backlinkgapform select,
+          .v2-opportunity-saved-panel>.prospectactions input,
+          .v2-opportunity-saved-panel>.prospectactions select{
+            min-height:40px;
+            border:1px solid #274563;
+            border-radius:8px;
+            background:#0b1728;
+            color:#dbe7f7;
+          }
+          .v2-opportunity-discover-panel>.backlinkgapform textarea{
+            min-height:72px;
+            resize:vertical;
+          }
+          .v2-opportunity-discover-panel>.backlinkgapform button,
+          .v2-opportunity-saved-panel>.prospectactions button{
+            min-height:40px;
+            padding:0 13px;
+            border:1px solid #3c6ee6;
+            border-radius:8px;
+            background:#4f78e8;
+            color:#fff;
+            font-weight:800;
+            white-space:nowrap;
+          }
+          .v2-opportunity-panel>.paidtoggle{
+            display:flex;
+            align-items:center;
+            gap:7px;
+            margin:0;
+            padding:9px 18px 0;
+            color:#8aa1c0;
+            font-size:11px;
+          }
+          .v2-opportunity-panel>.paidtoggle input{
+            width:auto;
+          }
+          .v2-opportunity-panel>.note{
+            margin:0;
+            padding:9px 18px;
+            border:0;
+            border-bottom:1px solid #152b47;
+            border-radius:0;
+            background:#0a1727;
+            color:#7189aa;
+            font-size:11px;
+          }
+          .v2-opportunity-panel>.status{
+            margin:0 18px;
+          }
+          .v2-opportunity-panel>#backlinkGapResult,
+          .v2-opportunity-panel>#prospectResult{
+            padding:14px 18px 18px;
+          }
+          .v2-opportunity-panel .backlinkmetrics{
+            gap:8px;
+            margin:0 0 10px;
+          }
+          .v2-opportunity-panel .metric{
+            padding:13px;
+            border:1px solid #1d3554;
+            border-radius:9px;
+            background:#0b1728;
+          }
+          .v2-opportunity-panel .metric .value{
+            margin-top:6px;
+            color:#eef5ff;
+          }
+          .v2-opportunity-panel .backlinkgaptools{
+            display:grid;
+            grid-template-columns:minmax(260px,1.5fr) 180px 190px auto;
+            gap:7px;
+            margin:0;
+            padding:10px;
+            border:1px solid #1b3352;
+            border-radius:10px 10px 0 0;
+            background:#0d1d32;
+          }
+          .v2-opportunity-panel .backlinkgaptools input,
+          .v2-opportunity-panel .backlinkgaptools select,
+          .v2-opportunity-panel .outreachtools input{
+            min-height:35px;
+            border:1px solid #233d5d;
+            border-radius:7px;
+            background:#0b1728;
+            color:#cdd9eb;
+          }
+          .v2-opportunity-panel .backlinkgaptools button,
+          .v2-opportunity-panel .outreachtools button,
+          .v2-opportunity-panel .gapopportunityselection button,
+          .v2-opportunity-panel .backlinkgappager button,
+          .v2-opportunity-panel .prospectpager button,
+          .v2-opportunity-panel .prospectsave{
+            min-height:31px;
+            padding:0 9px;
+            border:1px solid #294d77;
+            border-radius:7px;
+            background:#10243c;
+            color:#a9bdd8;
+            font-size:11px;
+            font-weight:750;
+          }
+          .v2-opportunity-panel .outreachtools{
+            display:grid;
+            grid-template-columns:minmax(300px,1.5fr) auto auto;
+            gap:8px;
+            align-items:center;
+            margin:0;
+            padding:9px 10px;
+            border-left:1px solid #1b3352;
+            border-right:1px solid #1b3352;
+            background:#0a1727;
+          }
+          .v2-opportunity-panel .outreachsummary{
+            grid-column:1/-1;
+            color:#6982a4;
+            font-size:10px;
+          }
+          .v2-opportunity-panel .gapopportunityselection{
+            margin:0;
+            padding:9px 10px;
+            border-left:1px solid #1b3352;
+            border-right:1px solid #1b3352;
+            background:#0a1727;
+          }
+          .v2-opportunity-panel .tablewrap{
+            margin-top:0;
+            border:1px solid #1b3352;
+            background:#0b1728;
+          }
+          .v2-opportunity-panel .ideastable thead th{
+            background:#0d1d32;
+            color:#6f8cb3;
+            font-size:10px;
+            text-transform:uppercase;
+            letter-spacing:.05em;
+          }
+          .v2-opportunity-panel .ideastable tbody tr:hover{
+            background:#0f2036;
+          }
+          .v2-opportunity-panel .opportunitypill{
+            border:1px solid transparent;
+          }
+          .v2-opportunity-panel .opportunitypill.high{
+            border-color:#28594e;
+          }
+          .v2-opportunity-panel .opportunitypill.good{
+            border-color:#294d77;
+          }
+          .v2-opportunity-panel .opportunitybreakdown,
+          .v2-opportunity-panel .outreachmetrics,
+          .v2-opportunity-panel .outreachreasons{
+            color:#7189aa;
+          }
+          .v2-opportunity-panel .backlinkgappager,
+          .v2-opportunity-panel .prospectpager{
+            display:flex;
+            align-items:center;
+            justify-content:flex-end;
+            gap:8px;
+            margin-top:10px;
+          }
+          .v2-opportunity-saved-panel>.prospectactions{
+            display:grid;
+            grid-template-columns:minmax(250px,1.4fr) 190px auto auto;
+            gap:9px;
+            margin:0;
+            padding:13px 18px;
+            border-top:1px solid #172d49;
+            border-bottom:1px solid #172d49;
+            background:#0d1d32;
+          }
+          .v2-opportunity-saved-panel>#prospectResult .backlinkmetrics{
+            grid-template-columns:repeat(3,minmax(0,1fr));
+          }
+          .v2-opportunity-saved-panel .prospectstatus,
+          .v2-opportunity-saved-panel .prospectnotes{
+            border:1px solid #233d5d;
+            background:#0b1728;
+            color:#d2deee;
+          }
+          .v2-opportunity-saved-panel .prospectsave{
+            border-color:#28594e;
+            background:#102d29;
+            color:#92d7bd;
+          }
+          .v2-opportunity-saved-panel .prospectdate{
+            color:#7189aa;
+          }
+          @media(max-width:1000px){
+            .v2-opportunity-discover-panel>.backlinkgapform,
+            .v2-opportunity-panel .backlinkgaptools,
+            .v2-opportunity-panel .outreachtools,
+            .v2-opportunity-saved-panel>.prospectactions{
+              grid-template-columns:1fr 1fr;
+            }
+          }
+          @media(max-width:720px){
+            .v2-opportunity-hero{flex-direction:column}
+            .v2-opportunity-pipeline{justify-content:flex-start}
+            .v2-opportunity-tabs{width:100%;overflow:auto}
+            .v2-opportunity-tabs button{flex:0 0 auto}
+            .v2-opportunity-discover-panel>.backlinkgapform,
+            .v2-opportunity-panel .backlinkgaptools,
+            .v2-opportunity-panel .outreachtools,
+            .v2-opportunity-saved-panel>.prospectactions{
+              grid-template-columns:1fr;
+            }
+          }
+          '''
+          css_path.write_text(css)
+
+          test_path = Path("tests/v2-shell-ui.test.mjs")
+          tests = test_path.read_text()
+          if 'test("opportunity workspace separates discovery from saved prospects' not in tests:
+              tests += r'''
+
+          test("opportunity workspace separates discovery from saved prospects without changing opportunity APIs", () => {
+            assert.match(shell, /createOpportunityWorkspace/);
+            assert.match(shell, /data-v2-opportunity-tab/);
+            assert.match(shell, /data-v2-opportunity-panel/);
+            assert.match(shell, /发现外链机会/);
+            assert.match(shell, /Saved Link Prospects/);
+            assert.match(shell, /OPPORTUNITY WORKSPACE/);
+            assert.match(shell, /发现/);
+            assert.match(shell, /保存/);
+            assert.match(shell, /推进/);
+            assert.match(shell, /delete panel\.dataset\.v2View/);
+            assert.match(shell, /createOpportunityWorkspace\(content\)/);
+          });
+          '''
+          test_path.write_text(tests)
+          PY
+      - name: Validate
+        run: |
+          git diff --check
+          node --test
+      - name: Commit redesign
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/v2-shell.js public/v2-shell.css tests/v2-shell-ui.test.mjs
+          git commit -m "feat: redesign Opportunity workspace"
+          git push origin HEAD:seo-pro-v2
