@@ -1,0 +1,440 @@
+name: Site Management UI Redesign
+on:
+  push:
+    branches: [seo-pro-v2]
+    paths:
+      - ".github/workflows/site-management-ui-redesign.yml"
+permissions:
+  contents: write
+jobs:
+  edit-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: seo-pro-v2
+          fetch-depth: 0
+      - name: Redesign site management
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_range(text, start_marker, end_marker, replacement, label):
+              start = text.find(start_marker)
+              if start < 0:
+                  raise SystemExit(f"missing start anchor: {label}")
+              end = text.find(end_marker, start)
+              if end < 0:
+                  raise SystemExit(f"missing end anchor: {label}")
+              end += len(end_marker)
+              return text[:start] + replacement + text[end:]
+
+          shell_path = Path("public/v2-shell.js")
+          shell = shell_path.read_text()
+
+          start_marker = '  const sites = createPlaceholder("sites", "网站管理",'
+          end_marker = '  sites.prepend(syncWarning, retryMarket, retrySync); sites.append(form, siteError, actions, list); content.append(sites);'
+          replacement = r'''  const sites = createElement("section", "panel v2-sites-workspace");
+            sites.dataset.v2View = "sites";
+            sites.innerHTML = `
+              <div class="v2-sites-hero">
+                <div>
+                  <div class="v2-sites-eyebrow">SITE WORKSPACE</div>
+                  <h2>网站配置</h2>
+                  <p>管理站点、默认研究市场和竞争对手。所有站点资料保存到 D1。</p>
+                </div>
+                <div class="v2-sites-hero-note">D1 · 可迁移配置</div>
+              </div>
+            `;
+
+            const form = document.createElement("form");
+            form.className = "v2-site-form";
+            form.dataset.v2SiteForm = "";
+            form.innerHTML = `
+              <div class="v2-site-form-head">
+                <div>
+                  <b>添加或编辑网站</b>
+                  <span>域名会自动规范化为可注册根域名，例如 great-ocean-waterproof.com。</span>
+                </div>
+                <button type="submit" class="v2-site-save">保存网站</button>
+              </div>
+              <div class="v2-site-core-fields">
+                <label>
+                  <span>网站名称</span>
+                  <input name="label" maxlength="80" placeholder="例如 Great Ocean Waterproof" aria-label="网站名称">
+                </label>
+                <label>
+                  <span>根域名</span>
+                  <input name="domain" required placeholder="example.com" aria-label="网站根域名">
+                </label>
+              </div>
+              <details class="v2-site-competitor-details">
+                <summary>
+                  <span>竞争对手（可选）</span>
+                  <small>最多 5 个，可稍后在竞争对手研究中补充</small>
+                </summary>
+                <div class="v2-competitors" aria-label="竞争对手（最多五个）">
+                  <label>竞争对手 1<input data-v2-competitor="1" placeholder="competitor.com"></label>
+                  <label>竞争对手 2<input data-v2-competitor="2" placeholder="competitor.com"></label>
+                  <label>竞争对手 3<input data-v2-competitor="3" placeholder="competitor.com"></label>
+                  <label>竞争对手 4<input data-v2-competitor="4" placeholder="competitor.com"></label>
+                  <label>竞争对手 5<input data-v2-competitor="5" placeholder="competitor.com"></label>
+                </div>
+              </details>
+            `;
+
+            const syncWarning = createElement("div", "v2-sync-warning");
+            syncWarning.dataset.v2SyncWarning = "";
+            syncWarning.setAttribute("role", "status");
+            const retryMarket = createElement("button", "v2-retry-sync", "重试加载市场");
+            retryMarket.type = "button";
+            retryMarket.dataset.v2RetryMarket = "";
+            retryMarket.hidden = true;
+            const retrySync = createElement("button", "v2-retry-sync", "重试同步");
+            retrySync.type = "button";
+            retrySync.dataset.v2RetrySync = "";
+            retrySync.hidden = true;
+            const siteError = createElement("div", "v2-site-error");
+            siteError.dataset.v2SiteError = "";
+            siteError.setAttribute("role", "alert");
+
+            const actions = createElement("div", "v2-site-portability");
+            actions.innerHTML = `
+              <div>
+                <b>配置迁移</b>
+                <span>导出版本化 JSON，或导入已有网站配置。导入同域名时会覆盖现有配置。</span>
+              </div>
+              <div class="v2-site-portability-actions">
+                <button type="button" data-v2-export-sites>导出 JSON</button>
+                <button type="button" data-v2-import-sites>导入 JSON</button>
+                <input type="file" accept="application/json,.json" data-v2-import-file hidden>
+              </div>
+            `;
+
+            const list = document.createElement("ul");
+            list.dataset.v2SiteList = "";
+            list.className = "v2-site-list";
+            const listSection = createElement("div", "v2-sites-list-section");
+            listSection.innerHTML = `
+              <div class="v2-sites-list-head">
+                <div>
+                  <b>已保存网站</b>
+                  <span>切换当前网站后，关键词库、Cluster、竞争对手和机会数据都会归属到对应站点。</span>
+                </div>
+              </div>
+            `;
+            listSection.append(list);
+
+            const editorGrid = createElement("div", "v2-sites-editor-grid");
+            editorGrid.append(form, actions);
+            sites.append(syncWarning, retryMarket, retrySync, editorGrid, siteError, listSection);
+            content.append(sites);'''
+
+          shell = replace_range(shell, start_marker, end_marker, replacement, "site management block")
+          shell_path.write_text(shell)
+
+          css_path = Path("public/v2-shell.css")
+          css = css_path.read_text()
+          css += r'''
+
+          /* Site Management workspace redesign */
+          .v2-sites-workspace{
+            margin-top:0!important;
+            padding:0!important;
+            border:0!important;
+            background:transparent!important;
+            box-shadow:none!important;
+          }
+          .v2-sites-hero{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:18px;
+            margin-bottom:14px;
+          }
+          .v2-sites-eyebrow{
+            margin-bottom:6px;
+            color:#6f93c6;
+            font-size:10px;
+            font-weight:800;
+            letter-spacing:.16em;
+          }
+          .v2-sites-hero h2{
+            margin:0;
+            color:#edf4ff;
+            font-size:24px;
+            line-height:1.2;
+          }
+          .v2-sites-hero p{
+            margin:7px 0 0;
+            color:#8098b9;
+            font-size:13px;
+          }
+          .v2-sites-hero-note{
+            padding:7px 10px;
+            border:1px solid #203b5d;
+            border-radius:999px;
+            background:#0c1c30;
+            color:#7ea6d8;
+            font-size:11px;
+            font-weight:750;
+            white-space:nowrap;
+          }
+          .v2-sites-editor-grid{
+            display:grid;
+            grid-template-columns:minmax(0,2fr) minmax(270px,.8fr);
+            gap:12px;
+            align-items:start;
+          }
+          .v2-site-form,
+          .v2-site-portability,
+          .v2-sites-list-section{
+            margin:0;
+            border:1px solid #1b3352;
+            border-radius:12px;
+            background:#0c192b;
+            overflow:hidden;
+          }
+          .v2-site-form{
+            display:block;
+          }
+          .v2-site-form-head{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:16px;
+            padding:16px 16px 13px;
+            border-bottom:1px solid #172d49;
+            background:#0d1d32;
+          }
+          .v2-site-form-head b,
+          .v2-site-portability b,
+          .v2-sites-list-head b{
+            display:block;
+            color:#e8f1ff;
+            font-size:14px;
+          }
+          .v2-site-form-head span,
+          .v2-site-portability span,
+          .v2-sites-list-head span{
+            display:block;
+            margin-top:5px;
+            color:#7189aa;
+            font-size:11px;
+            line-height:1.5;
+          }
+          .v2-site-save{
+            min-height:36px;
+            padding:0 14px;
+            border:1px solid #3c6ee6;
+            border-radius:8px;
+            background:#4f78e8;
+            color:#fff;
+            font-weight:800;
+            white-space:nowrap;
+          }
+          .v2-site-core-fields{
+            display:grid;
+            grid-template-columns:minmax(180px,.9fr) minmax(260px,1.4fr);
+            gap:10px;
+            padding:14px 16px;
+          }
+          .v2-site-core-fields label{
+            display:flex;
+            flex-direction:column;
+            gap:6px;
+          }
+          .v2-site-core-fields label>span{
+            color:#607a9d;
+            font-size:10px;
+            font-weight:800;
+            text-transform:uppercase;
+            letter-spacing:.06em;
+          }
+          .v2-site-core-fields input,
+          .v2-site-competitor-details input{
+            min-height:39px;
+            border:1px solid #233d5d;
+            border-radius:8px;
+            background:#0b1728;
+            color:#dce7f7;
+          }
+          .v2-site-competitor-details{
+            border-top:1px solid #172d49;
+            background:#0a1727;
+          }
+          .v2-site-competitor-details summary{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:14px;
+            padding:12px 16px;
+            color:#9fb3cf;
+            cursor:pointer;
+            list-style:none;
+          }
+          .v2-site-competitor-details summary::-webkit-details-marker{display:none}
+          .v2-site-competitor-details summary span{
+            font-size:12px;
+            font-weight:750;
+          }
+          .v2-site-competitor-details summary small{
+            color:#627b9d;
+            font-size:10px;
+          }
+          .v2-site-competitor-details[open] summary{
+            border-bottom:1px solid #172d49;
+          }
+          .v2-site-form .v2-competitors{
+            display:grid;
+            grid-template-columns:repeat(2,minmax(0,1fr));
+            gap:9px;
+            padding:14px 16px 16px;
+          }
+          .v2-site-form .v2-competitors label{
+            color:#607a9d;
+            font-size:10px;
+            font-weight:700;
+          }
+          .v2-site-portability{
+            padding:16px;
+          }
+          .v2-site-portability-actions{
+            display:flex;
+            gap:7px;
+            margin-top:14px;
+          }
+          .v2-site-portability-actions button{
+            min-height:34px;
+            padding:0 11px;
+            border:1px solid #28496f;
+            border-radius:8px;
+            background:#10243c;
+            color:#a9bdd8;
+            font-size:11px;
+            font-weight:750;
+          }
+          .v2-site-error:empty,
+          .v2-sync-warning:empty{display:none}
+          .v2-site-error,
+          .v2-sync-warning{
+            margin:10px 0 0;
+            padding:10px 12px;
+            border:1px solid #314e72;
+            border-radius:8px;
+            background:#0c1d31;
+            color:#a9c5e8;
+            font-size:11px;
+          }
+          .v2-sites-list-section{
+            margin-top:12px;
+          }
+          .v2-sites-list-head{
+            padding:14px 16px;
+            border-bottom:1px solid #172d49;
+            background:#0d1d32;
+          }
+          .v2-site-list{
+            margin:0;
+            padding:0 16px;
+          }
+          .v2-site-row{
+            display:grid;
+            grid-template-columns:minmax(0,1fr) auto auto;
+            align-items:center;
+            gap:8px;
+            padding:14px 0;
+            border-bottom:1px solid #152b47;
+          }
+          .v2-site-row:last-child{border-bottom:0}
+          .v2-site-fields{
+            display:grid;
+            grid-template-columns:minmax(180px,260px) minmax(200px,1fr);
+            align-items:center;
+            gap:10px;
+          }
+          .v2-site-fields input{
+            min-height:36px;
+            border:1px solid #233d5d;
+            border-radius:8px;
+            background:#0b1728;
+          }
+          .v2-site-profile-meta{
+            grid-column:1/-1;
+            color:#6680a2;
+            font-size:10px;
+          }
+          .v2-site-row button{
+            min-height:32px;
+            padding:0 10px;
+            border-radius:7px;
+            font-size:11px;
+            font-weight:750;
+          }
+          .v2-site-row [data-v2-site-rename]{
+            border:1px solid #31547d;
+            background:#173966;
+            color:#cfe0ff;
+          }
+          .v2-site-row [data-v2-site-remove]{
+            border:1px solid #4d3040;
+            background:#231520;
+            color:#b77d8d;
+          }
+          .v2-sites-empty{
+            padding:22px 0;
+            color:#7088a8;
+            font-size:12px;
+          }
+          .v2-site-picker select:not(:disabled){
+            border-color:#28496f;
+            background:#0d1c30;
+            color:#e4edfb;
+            font-weight:700;
+          }
+          @media(max-width:980px){
+            .v2-sites-editor-grid{grid-template-columns:1fr}
+          }
+          @media(max-width:720px){
+            .v2-sites-hero,
+            .v2-site-form-head{flex-direction:column}
+            .v2-site-core-fields,
+            .v2-site-form .v2-competitors,
+            .v2-site-row,
+            .v2-site-fields{grid-template-columns:1fr}
+            .v2-site-portability-actions{flex-wrap:wrap}
+          }
+          '''
+          css_path.write_text(css)
+
+          test_path = Path("tests/v2-shell-ui.test.mjs")
+          tests = test_path.read_text()
+          if 'test("site management uses the redesigned workspace hierarchy' not in tests:
+              tests += r'''
+
+          test("site management uses the redesigned workspace hierarchy without changing site APIs", () => {
+            assert.match(shell, /v2-sites-workspace/);
+            assert.match(shell, /v2-sites-editor-grid/);
+            assert.match(shell, /v2-site-competitor-details/);
+            assert.match(shell, /v2-sites-list-section/);
+            assert.match(shell, /data-v2-site-form/);
+            assert.match(shell, /data-v2-export-sites/);
+            assert.match(shell, /data-v2-import-sites/);
+            assert.match(shell, /data-v2-competitor="5"/);
+            assert.match(shell, /\/api\/v2\/sites/);
+          });
+          '''
+          test_path.write_text(tests)
+          PY
+      - name: Validate
+        run: |
+          git diff --check
+          node --test
+      - name: Commit redesign
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/v2-shell.js public/v2-shell.css tests/v2-shell-ui.test.mjs
+          git commit -m "feat: redesign Site Management workspace"
+          git push origin HEAD:seo-pro-v2
