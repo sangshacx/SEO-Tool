@@ -568,6 +568,86 @@ export function createOpportunityWorkspace(root) {
   return { workspace, activateTab };
 }
 
+
+export function createWebsiteDataWorkspace(root) {
+  const snapshot = root.querySelector(".backlinks");
+  const history = root.querySelector(".backlinkhistory");
+  if (!snapshot || !history) return null;
+
+  const workspace = createElement("section", "v2-website-data-workspace");
+  workspace.dataset.v2View = "website";
+
+  const hero = createElement("div", "v2-website-data-hero");
+  hero.innerHTML = `
+    <div>
+      <div class="v2-website-data-eyebrow">SITE OVERVIEW</div>
+      <h2>网站数据</h2>
+      <p>查看当前站点的 Link Profile Health、核心外链指标和历史变化，先判断站点状态，再决定是否深入外链研究。</p>
+    </div>
+    <div class="v2-website-data-hero-meta">
+      <span>7 天快照</span>
+      <span>历史读取 $0</span>
+    </div>
+  `;
+
+  const tabs = createElement("div", "v2-website-data-tabs");
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "网站数据视图");
+  const tabConfig = [
+    ["overview", "Link Profile Overview"],
+    ["history", "历史与提醒"],
+  ];
+  tabConfig.forEach(([id, label], index) => {
+    const button = createElement("button", index === 0 ? "active" : "", label);
+    button.type = "button";
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+    button.dataset.v2WebsiteDataTab = id;
+    tabs.appendChild(button);
+  });
+
+  const stage = createElement("div", "v2-website-data-stage");
+  const panels = [
+    [snapshot, "overview", "v2-website-overview-panel"],
+    [history, "history", "v2-website-history-panel"],
+  ];
+  panels.forEach(([panel, id, className], index) => {
+    panel.classList.add("v2-website-data-panel", className);
+    panel.dataset.v2WebsiteDataPanel = id;
+    delete panel.dataset.v2View;
+    panel.hidden = index !== 0;
+  });
+
+  const activateTab = (tabId) => {
+    const target = tabConfig.some(([id]) => id === tabId) ? tabId : "overview";
+    tabs.querySelectorAll("[data-v2-website-data-tab]").forEach((button) => {
+      const active = button.dataset.v2WebsiteDataTab === target;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    stage.querySelectorAll("[data-v2-website-data-panel]").forEach((panel) => {
+      const active = panel.dataset.v2WebsiteDataPanel === target;
+      panel.hidden = !active;
+      panel.classList.toggle("active", active);
+    });
+    return target;
+  };
+
+  tabs.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-v2-website-data-tab]");
+    if (button) activateTab(button.dataset.v2WebsiteDataTab);
+  });
+
+  const toSnapshot = history.querySelector("#historyToSnapshot");
+  toSnapshot?.addEventListener("click", () => activateTab("overview"));
+
+  snapshot.before(workspace);
+  workspace.append(hero, tabs, stage);
+  stage.append(snapshot, history);
+  activateTab("overview");
+  return { workspace, activateTab };
+}
+
 function createPlaceholder(view, title, description) {
   const section = createElement("section", "panel v2-placeholder");
   section.dataset.v2View = view;
@@ -924,6 +1004,7 @@ function buildShell() {
   createCompetitorResearchWorkspace(content);
   createBacklinkResearchWorkspace(content);
   createOpportunityWorkspace(content);
+  createWebsiteDataWorkspace(content);
   content.querySelector(".top")?.classList.add("v2-legacy-heading");
   content.querySelector("h1")?.classList.add("v2-legacy-heading");
   content.querySelector("h1 + .lead")?.classList.add("v2-legacy-heading");

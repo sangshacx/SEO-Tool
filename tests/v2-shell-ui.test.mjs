@@ -115,3 +115,18 @@ test("opportunity workspace separates discovery from saved prospects without cha
   assert.match(shell, /delete panel\.dataset\.v2View/);
   assert.match(shell, /createOpportunityWorkspace\(content\)/);
 });
+
+
+test("website data is reorganized into overview and history tabs without changing backlink APIs", () => {
+  assert.match(shell, /createWebsiteDataWorkspace/);
+  assert.match(shell, /data-v2-website-data-tab/);
+  assert.match(shell, /data-v2-website-data-panel/);
+  assert.match(shell, /Link Profile Overview/);
+  assert.match(shell, /历史与提醒/);
+  assert.match(shell, /7 天快照/);
+  assert.match(shell, /历史读取 \$0/);
+  assert.match(shell, /historyToSnapshot/);
+  assert.match(shell, /activateTab\("overview"\)/);
+  assert.match(shell, /delete panel\.dataset\.v2View/);
+  assert.match(shell, /createWebsiteDataWorkspace\(content\)/);
+});

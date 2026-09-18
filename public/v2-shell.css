@@ -1895,3 +1895,303 @@
     grid-template-columns:1fr;
   }
 }
+
+
+/* Website Data workspace redesign */
+.v2-website-data-workspace{
+  margin-top:0;
+}
+.v2-website-data-hero{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:20px;
+  padding:4px 2px 18px;
+}
+.v2-website-data-eyebrow{
+  margin-bottom:6px;
+  color:#6f93c6;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.16em;
+}
+.v2-website-data-hero h2{
+  margin:0;
+  color:#edf4ff;
+  font-size:24px;
+  line-height:1.2;
+}
+.v2-website-data-hero p{
+  max-width:780px;
+  margin:7px 0 0;
+  color:#8098b9;
+  font-size:13px;
+}
+.v2-website-data-hero-meta{
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.v2-website-data-hero-meta span{
+  display:inline-flex;
+  align-items:center;
+  min-height:30px;
+  padding:0 9px;
+  border:1px solid #203b5d;
+  border-radius:999px;
+  background:#0c1c30;
+  color:#7ea6d8;
+  font-size:10px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.v2-website-data-tabs{
+  display:flex;
+  gap:4px;
+  width:max-content;
+  max-width:100%;
+  margin-bottom:14px;
+  padding:4px;
+  border:1px solid #1d3554;
+  border-radius:10px;
+  background:#0b1829;
+}
+.v2-website-data-tabs button{
+  min-height:34px;
+  padding:0 14px;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#7188a9;
+  font-size:12px;
+  font-weight:750;
+}
+.v2-website-data-tabs button.active{
+  background:#172b49;
+  color:#e8f1ff;
+  box-shadow:inset 0 0 0 1px #294d77;
+}
+.v2-website-data-stage{
+  border:1px solid #1b3352;
+  border-radius:12px;
+  background:#0c192b;
+  overflow:hidden;
+}
+.v2-website-data-panel[hidden]{display:none!important}
+.v2-website-data-panel{
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.v2-website-data-panel>.section-title,
+.v2-website-history-panel .historyhead{
+  margin:0;
+  padding:17px 18px 4px;
+}
+.v2-website-data-panel>.section-title{
+  color:#e8f1ff;
+  font-size:17px;
+}
+.v2-website-data-panel>.section-title+.sub{
+  padding:0 18px 13px;
+  color:#7189aa;
+  font-size:12px;
+}
+.v2-website-overview-panel>.backlinkform,
+.v2-website-history-panel>.historyform{
+  display:grid;
+  gap:9px;
+  margin:0;
+  padding:13px 18px;
+  border-top:1px solid #172d49;
+  border-bottom:1px solid #172d49;
+  background:#0d1d32;
+}
+.v2-website-overview-panel>.backlinkform{
+  grid-template-columns:minmax(320px,1fr) auto;
+}
+.v2-website-history-panel>.historyform{
+  grid-template-columns:minmax(280px,1.4fr) 150px auto;
+}
+.v2-website-overview-panel>.backlinkform input,
+.v2-website-history-panel>.historyform input,
+.v2-website-history-panel>.historyform select,
+.v2-website-history-panel .historyhead select{
+  min-height:40px;
+  border:1px solid #274563;
+  border-radius:8px;
+  background:#0b1728;
+  color:#dbe7f7;
+}
+.v2-website-overview-panel>.backlinkform button,
+.v2-website-history-panel>.historyform button{
+  min-height:40px;
+  padding:0 14px;
+  border:1px solid #3c6ee6;
+  border-radius:8px;
+  background:#4f78e8;
+  color:#fff;
+  font-weight:800;
+  white-space:nowrap;
+}
+.v2-website-data-panel>.paidtoggle{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  margin:0;
+  padding:9px 18px 0;
+  color:#8aa1c0;
+  font-size:11px;
+}
+.v2-website-data-panel>.paidtoggle input{width:auto}
+.v2-website-data-panel>.note{
+  margin:0;
+  padding:9px 18px;
+  border:0;
+  border-bottom:1px solid #152b47;
+  border-radius:0;
+  background:#0a1727;
+  color:#7189aa;
+  font-size:11px;
+}
+.v2-website-data-panel>.status{
+  margin:0 18px;
+}
+.v2-website-data-panel>#backlinkResult,
+.v2-website-data-panel>#backlinkHistoryResult{
+  padding:14px 18px 18px;
+}
+.v2-website-overview-panel .healthpanel{
+  margin:0 0 10px;
+  padding:15px;
+  border:1px solid #23486f;
+  border-radius:10px;
+  background:#0d1f36;
+}
+.v2-website-overview-panel .healthhead{
+  grid-template-columns:130px 1fr;
+}
+.v2-website-overview-panel .healthscore{
+  color:#a9c8f7;
+}
+.v2-website-overview-panel .healthcomponent{
+  border:1px solid #1d3554;
+  background:#0b1728;
+}
+.v2-website-overview-panel .healthlists{
+  gap:10px;
+}
+.v2-website-overview-panel .healthlist{
+  margin-top:6px;
+  color:#a9bad1;
+}
+.v2-website-data-panel .backlinkmetrics{
+  gap:8px;
+  margin:0 0 10px;
+}
+.v2-website-data-panel .metric{
+  padding:13px;
+  border:1px solid #1d3554;
+  border-radius:9px;
+  background:#0b1728;
+}
+.v2-website-data-panel .metric .value{
+  margin-top:6px;
+  color:#eef5ff;
+}
+.v2-website-overview-panel .distributiongrid{
+  gap:9px;
+  margin-top:10px;
+}
+.v2-website-overview-panel .distributioncard{
+  padding:12px;
+  border:1px solid #1d3554;
+  border-radius:9px;
+  background:#0b1728;
+}
+.v2-website-overview-panel .distributioncard h3{
+  color:#7ea6d8;
+}
+.v2-website-history-panel .historyhead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+.v2-website-history-panel .historyhead .section-title{
+  margin:0 0 4px;
+  color:#e8f1ff;
+  font-size:17px;
+}
+.v2-website-history-panel .historyhead .sub{
+  color:#7189aa;
+}
+.v2-website-history-panel .historyhead select{
+  width:190px;
+}
+.v2-website-history-panel .historychart{
+  margin-top:10px;
+  border:1px solid #1d3554;
+  border-radius:9px;
+  background:#0b1728;
+}
+.v2-website-history-panel .briefsection{
+  margin-top:10px;
+  padding:12px 14px;
+  border:1px solid #1d3554;
+  border-radius:9px;
+  background:#0b1728;
+}
+.v2-website-history-panel .historyalerts{
+  color:#a9bad1;
+}
+.v2-website-history-panel .tablewrap{
+  border:1px solid #1b3352;
+  background:#0b1728;
+}
+.v2-website-history-panel .ideastable thead th{
+  background:#0d1d32;
+  color:#6f8cb3;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.v2-website-history-panel .ideastable tbody tr:hover{
+  background:#0f2036;
+}
+.v2-website-history-panel .historyempty{
+  margin:14px 18px 18px;
+  padding:14px;
+  border:1px dashed #28496f;
+  border-radius:9px;
+  background:#0a1727;
+  color:#7189aa;
+}
+.v2-website-history-panel .historyempty button{
+  min-height:30px;
+  padding:0 9px;
+  border:1px solid #294d77;
+  border-radius:7px;
+  background:#10243c;
+  color:#a9bdd8;
+  font-size:11px;
+  font-weight:750;
+}
+@media(max-width:760px){
+  .v2-website-data-hero,
+  .v2-website-history-panel .historyhead{
+    flex-direction:column;
+  }
+  .v2-website-data-hero-meta{justify-content:flex-start}
+  .v2-website-data-tabs{width:100%;overflow:auto}
+  .v2-website-data-tabs button{flex:0 0 auto}
+  .v2-website-overview-panel>.backlinkform,
+  .v2-website-history-panel>.historyform{
+    grid-template-columns:1fr;
+  }
+  .v2-website-history-panel .historyhead select{width:100%}
+}
