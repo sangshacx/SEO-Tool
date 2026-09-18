@@ -348,5 +348,5 @@ test("Adopting Cluster Intelligence advice only prefills the manual assignment U
   assert.match(source, /尚未保存，请检查后点击“分配已选关键词”/);
   assert.match(source, /尚未修改数据库/);
   assert.match(source, /现有 Primary：/);
-  assert.match(source, /data-v2-cluster-adopt/);
+  assert.match(source, /dataset\.v2ClusterAdopt/);
 });
