@@ -488,6 +488,86 @@ export function createBacklinkResearchWorkspace(root) {
   return { workspace, activateTab };
 }
 
+
+export function createOpportunityWorkspace(root) {
+  const gap = root.querySelector(".backlinkgap");
+  const prospects = root.querySelector(".backlinkprospects");
+  if (!gap || !prospects) return null;
+
+  const workspace = createElement("section", "v2-opportunity-workspace");
+  workspace.dataset.v2View = "opportunities";
+
+  const hero = createElement("div", "v2-opportunity-hero");
+  hero.innerHTML = `
+    <div>
+      <div class="v2-opportunity-eyebrow">OPPORTUNITY WORKSPACE</div>
+      <h2>机会清单</h2>
+      <p>从竞争对手外链中发现可争取的引用域，筛选高价值机会，再保存到 D1 持续推进。</p>
+    </div>
+    <div class="v2-opportunity-pipeline" aria-label="机会工作流">
+      <span><b>1</b>发现</span>
+      <i>→</i>
+      <span><b>2</b>保存</span>
+      <i>→</i>
+      <span><b>3</b>推进</span>
+    </div>
+  `;
+
+  const tabs = createElement("div", "v2-opportunity-tabs");
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "机会清单视图");
+  const tabConfig = [
+    ["discover", "发现外链机会"],
+    ["saved", "Saved Link Prospects"],
+  ];
+  tabConfig.forEach(([id, label], index) => {
+    const button = createElement("button", index === 0 ? "active" : "", label);
+    button.type = "button";
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+    button.dataset.v2OpportunityTab = id;
+    tabs.appendChild(button);
+  });
+
+  const stage = createElement("div", "v2-opportunity-stage");
+  const panels = [
+    [gap, "discover", "v2-opportunity-discover-panel"],
+    [prospects, "saved", "v2-opportunity-saved-panel"],
+  ];
+  panels.forEach(([panel, id, className], index) => {
+    panel.classList.add("v2-opportunity-panel", className);
+    panel.dataset.v2OpportunityPanel = id;
+    delete panel.dataset.v2View;
+    panel.hidden = index !== 0;
+  });
+
+  const activateTab = (tabId) => {
+    const target = tabConfig.some(([id]) => id === tabId) ? tabId : "discover";
+    tabs.querySelectorAll("[data-v2-opportunity-tab]").forEach((button) => {
+      const active = button.dataset.v2OpportunityTab === target;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    stage.querySelectorAll("[data-v2-opportunity-panel]").forEach((panel) => {
+      const active = panel.dataset.v2OpportunityPanel === target;
+      panel.hidden = !active;
+      panel.classList.toggle("active", active);
+    });
+    return target;
+  };
+
+  tabs.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-v2-opportunity-tab]");
+    if (button) activateTab(button.dataset.v2OpportunityTab);
+  });
+
+  gap.before(workspace);
+  workspace.append(hero, tabs, stage);
+  stage.append(gap, prospects);
+  activateTab("discover");
+  return { workspace, activateTab };
+}
+
 function createPlaceholder(view, title, description) {
   const section = createElement("section", "panel v2-placeholder");
   section.dataset.v2View = view;
@@ -843,6 +923,7 @@ function buildShell() {
   createKeywordResearchWorkspace(content);
   createCompetitorResearchWorkspace(content);
   createBacklinkResearchWorkspace(content);
+  createOpportunityWorkspace(content);
   content.querySelector(".top")?.classList.add("v2-legacy-heading");
   content.querySelector("h1")?.classList.add("v2-legacy-heading");
   content.querySelector("h1 + .lead")?.classList.add("v2-legacy-heading");

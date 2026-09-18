@@ -100,3 +100,18 @@ test("backlink research is reorganized into a four-tab workspace without changin
   assert.match(shell, /delete panel\.dataset\.v2View/);
   assert.match(shell, /createBacklinkResearchWorkspace\(content\)/);
 });
+
+
+test("opportunity workspace separates discovery from saved prospects without changing opportunity APIs", () => {
+  assert.match(shell, /createOpportunityWorkspace/);
+  assert.match(shell, /data-v2-opportunity-tab/);
+  assert.match(shell, /data-v2-opportunity-panel/);
+  assert.match(shell, /发现外链机会/);
+  assert.match(shell, /Saved Link Prospects/);
+  assert.match(shell, /OPPORTUNITY WORKSPACE/);
+  assert.match(shell, /发现/);
+  assert.match(shell, /保存/);
+  assert.match(shell, /推进/);
+  assert.match(shell, /delete panel\.dataset\.v2View/);
+  assert.match(shell, /createOpportunityWorkspace\(content\)/);
+});
