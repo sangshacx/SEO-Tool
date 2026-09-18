@@ -7,6 +7,7 @@ import {
   normalizeSavedKeywordCreate,
   normalizeSavedKeywordDelete,
   normalizeSavedKeywordListQuery,
+  normalizeSavedKeywordTagUpdate,
 } from "../src/v2/contracts/saved-keywords.js";
 
 test("Saved Keywords contract normalizes site, market, source, tags, and keyword", () => {
@@ -87,10 +88,10 @@ test("Saved Keywords API is a zero-provider-cost internal contract", async () =>
   assert.match(apiSource, /actual_cost_usd:\s*0/);
   assert.match(apiSource, /provider_requests:\s*0/);
   assert.match(apiSource, /SAVED_KEYWORDS_CONTRACT_VERSION/);
-  assert.equal(SAVED_KEYWORDS_CONTRACT_VERSION, "saved-keywords-v0.1");
+  assert.equal(SAVED_KEYWORDS_CONTRACT_VERSION, "saved-keywords-v0.2");
 });
 
-test("Saved Keywords API exposes GET, POST, DELETE with no provider request", async () => {
+test("Saved Keywords API exposes GET, POST, PATCH, DELETE with no provider request", async () => {
   const calls = [];
   globalThis.__SAVED_KEYWORD_STORAGE_FOR_TESTS__ = {
     async listSavedKeywords(_db, query) {
@@ -100,6 +101,10 @@ test("Saved Keywords API exposes GET, POST, DELETE with no provider request", as
     async saveKeyword(_db, input) {
       calls.push(["save", input]);
       return { id: 7, site_domain: input.site_domain, keyword: input.keyword, tags: [] };
+    },
+    async addTagsToSavedKeywords(_db, input) {
+      calls.push(["tag", input]);
+      return { updated_count: input.ids.length, ids: input.ids, tags: input.tags.map((tag) => tag.name) };
     },
     async deleteSavedKeyword(_db, input) {
       calls.push(["delete", input]);
@@ -138,6 +143,19 @@ test("Saved Keywords API exposes GET, POST, DELETE with no provider request", as
   assert.equal(postResponse.status, 200);
   assert.equal((await postResponse.json()).data.id, 7);
 
+  const patchResponse = await api.onRequestPatch({
+    request: new Request("https://preview.example/api/v2/keywords/saved", {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ site_domain: "example.com", ids: [7, 8, 7], tags: ["Commercial", " commercial ", "Saudi"] }),
+    }),
+    env: { DB: {} },
+  });
+  assert.equal(patchResponse.status, 200);
+  const patchBody = await patchResponse.json();
+  assert.equal(patchBody.data.updated_count, 2);
+  assert.deepEqual(patchBody.data.tags, ["Commercial", "Saudi"]);
+
   const deleteResponse = await api.onRequestDelete({
     request: new Request("https://preview.example/api/v2/keywords/saved", {
       method: "DELETE",
@@ -147,6 +165,49 @@ test("Saved Keywords API exposes GET, POST, DELETE with no provider request", as
     env: { DB: {} },
   });
   assert.equal(deleteResponse.status, 200);
-  assert.deepEqual(calls.map((entry) => entry[0]), ["list", "save", "delete"]);
+  assert.deepEqual(calls.map((entry) => entry[0]), ["list", "save", "tag", "delete"]);
   delete globalThis.__SAVED_KEYWORD_STORAGE_FOR_TESTS__;
+});
+
+
+test("Saved Keywords tag-update contract is bounded, deduplicated, and site scoped", () => {
+  const value = normalizeSavedKeywordTagUpdate({
+    site_domain: "https://www.example.com/",
+    ids: [3, "4", 3],
+    tags: ["Commercial", " commercial ", "Saudi"],
+  });
+  assert.deepEqual(value, {
+    site_domain: "example.com",
+    ids: [3, 4],
+    tags: [
+      { name: "Commercial", normalized_name: "commercial" },
+      { name: "Saudi", normalized_name: "saudi" },
+    ],
+  });
+
+  assert.throws(
+    () => normalizeSavedKeywordTagUpdate({ site_domain: "example.com", ids: [], tags: ["A"] }),
+    /At least one saved keyword id/,
+  );
+  assert.throws(
+    () => normalizeSavedKeywordTagUpdate({ site_domain: "example.com", ids: [1], tags: [] }),
+    /At least one tag/,
+  );
+  assert.throws(
+    () => normalizeSavedKeywordTagUpdate({
+      site_domain: "example.com",
+      ids: Array.from({ length: 101 }, (_, index) => index + 1),
+      tags: ["A"],
+    }),
+    /No more than 100/,
+  );
+});
+
+test("Saved Keywords tag storage uses site-scoped placeholders and normalized tag tables", async () => {
+  const source = await readFile(new URL("../src/v2/storage/saved-keywords.js", import.meta.url), "utf8");
+  assert.match(source, /addTagsToSavedKeywords/);
+  assert.match(source, /INSERT INTO saved_keyword_tags/);
+  assert.match(source, /INSERT OR IGNORE INTO saved_keyword_tag_assignments/);
+  assert.match(source, /WHERE sk\.site_profile_id = \?/);
+  assert.doesNotMatch(source, /DataForSEO|\bfetch\s*\(/);
 });

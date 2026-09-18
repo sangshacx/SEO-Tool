@@ -1,7 +1,7 @@
 import { normalizeMarketRequest } from "../markets/request-market.js";
 import { normalizeRegistrableDomain } from "../storage/registrable-domain.js";
 
-export const SAVED_KEYWORDS_CONTRACT_VERSION = "saved-keywords-v0.1";
+export const SAVED_KEYWORDS_CONTRACT_VERSION = "saved-keywords-v0.2";
 export const SAVED_KEYWORD_SOURCES = Object.freeze([
   "manual",
   "keyword_explorer",
@@ -138,4 +138,37 @@ export function normalizeSavedKeywordDelete(input) {
   const id = Number(input.id);
   if (!Number.isInteger(id) || id < 1) fail("INVALID_ID", "id", "A positive saved keyword id is required.");
   return { site_domain: cleanDomain(input.site_domain), id };
+}
+
+export function normalizeSavedKeywordTagUpdate(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    fail("INVALID_BODY", "body", "Request body must be a JSON object.");
+  }
+  if (!Array.isArray(input.ids) || !input.ids.length) {
+    fail("INVALID_IDS", "ids", "At least one saved keyword id is required.");
+  }
+  if (input.ids.length > 100) {
+    fail("TOO_MANY_IDS", "ids", "No more than 100 saved keywords may be tagged at once.");
+  }
+
+  const ids = [];
+  const seen = new Set();
+  for (const raw of input.ids) {
+    const id = Number(raw);
+    if (!Number.isInteger(id) || id < 1) {
+      fail("INVALID_ID", "ids", "Saved keyword ids must be positive integers.");
+    }
+    if (seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+
+  const tags = cleanTags(input.tags);
+  if (!tags.length) fail("INVALID_TAGS", "tags", "At least one tag is required.");
+
+  return {
+    site_domain: cleanDomain(input.site_domain),
+    ids,
+    tags,
+  };
 }

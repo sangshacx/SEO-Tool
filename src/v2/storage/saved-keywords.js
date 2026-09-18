@@ -274,3 +274,58 @@ export async function deleteSavedKeyword(db, input) {
   }
   return { id: input.id, site_domain: input.site_domain };
 }
+
+
+export async function addTagsToSavedKeywords(db, input) {
+  const site = await resolveSiteProfile(db, input.site_domain);
+  const placeholders = input.ids.map(() => "?").join(", ");
+  const owned = await db.prepare(
+    `SELECT COUNT(*) AS total
+     FROM saved_keywords
+     WHERE site_profile_id = ?
+       AND id IN (${placeholders})`,
+  ).bind(site.id, ...input.ids).first();
+
+  if (Number(owned?.total ?? 0) !== input.ids.length) {
+    const error = new Error("SAVED_KEYWORD_NOT_FOUND");
+    error.code = "SAVED_KEYWORD_NOT_FOUND";
+    error.httpStatus = 404;
+    throw error;
+  }
+
+  await db.batch(input.tags.map((tag) =>
+    db.prepare(`
+      INSERT INTO saved_keyword_tags (
+        site_profile_id,
+        name,
+        normalized_name
+      ) VALUES (?, ?, ?)
+      ON CONFLICT(site_profile_id, normalized_name)
+      DO UPDATE SET name = excluded.name
+    `).bind(site.id, tag.name, tag.normalized_name),
+  ));
+
+  const assignmentStatements = input.tags.map((tag) =>
+    db.prepare(`
+      INSERT OR IGNORE INTO saved_keyword_tag_assignments (
+        saved_keyword_id,
+        tag_id
+      )
+      SELECT sk.id, t.id
+      FROM saved_keywords sk
+      JOIN saved_keyword_tags t
+        ON t.site_profile_id = sk.site_profile_id
+       AND t.normalized_name = ?
+      WHERE sk.site_profile_id = ?
+        AND sk.id IN (${placeholders})
+    `).bind(tag.normalized_name, site.id, ...input.ids),
+  );
+  await db.batch(assignmentStatements);
+
+  return {
+    site_domain: input.site_domain,
+    updated_count: input.ids.length,
+    ids: input.ids,
+    tags: input.tags.map((tag) => tag.name),
+  };
+}

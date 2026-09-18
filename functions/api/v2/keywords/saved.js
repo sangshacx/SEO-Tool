@@ -4,11 +4,12 @@ import {
   normalizeSavedKeywordCreate,
   normalizeSavedKeywordDelete,
   normalizeSavedKeywordListQuery,
+  normalizeSavedKeywordTagUpdate,
 } from "../../../../src/v2/contracts/saved-keywords.js";
 import * as savedKeywordStorage from "../../../../src/v2/storage/saved-keywords.js";
 
 const MAX_BODY_BYTES = 64 * 1024;
-const ALLOW = "GET, POST, DELETE, OPTIONS";
+const ALLOW = "GET, POST, PATCH, DELETE, OPTIONS";
 const BASE_HEADERS = {
   "Cache-Control": "no-store",
   "Content-Type": "application/json; charset=UTF-8",
@@ -144,6 +145,20 @@ export async function onRequestPost({ request, env }) {
   }
 }
 
+export async function onRequestPatch({ request, env }) {
+  const denied = accessError(request);
+  if (denied) return denied;
+  const missing = bindingError(env);
+  if (missing) return missing;
+  try {
+    const body = await readJsonObject(request);
+    const input = normalizeSavedKeywordTagUpdate(body);
+    return success(await STORAGE.addTagsToSavedKeywords(env.DB, input));
+  } catch (error) {
+    return mappedError(error);
+  }
+}
+
 export async function onRequestDelete({ request, env }) {
   const denied = accessError(request);
   if (denied) return denied;
@@ -168,6 +183,7 @@ export async function onRequest(context) {
   const handlers = {
     GET: onRequestGet,
     POST: onRequestPost,
+    PATCH: onRequestPatch,
     DELETE: onRequestDelete,
     OPTIONS: onRequestOptions,
   };
