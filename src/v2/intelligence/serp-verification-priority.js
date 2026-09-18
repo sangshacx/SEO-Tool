@@ -25,6 +25,7 @@ function decisionImpact(code) {
 }
 
 function demandScore(searchVolume) {
+  if (searchVolume == null || searchVolume === "") return 50;
   const volume = Number(searchVolume);
   if (!Number.isFinite(volume) || volume < 0) return 50;
   if (volume === 0) return 0;
@@ -41,6 +42,7 @@ function commercialIntentScore(intent) {
 }
 
 function feasibilityScore(keywordDifficulty) {
+  if (keywordDifficulty == null || keywordDifficulty === "") return 50;
   const kd = Number(keywordDifficulty);
   if (!Number.isFinite(kd)) return 50;
   return rounded(100 - clamp(kd));
@@ -100,8 +102,12 @@ export function buildSerpVerificationPriority({
   const raw = {
     decision_code,
     match_score: Number.isFinite(Number(match_score)) ? Number(match_score) : null,
-    search_volume: Number.isFinite(Number(search_volume)) ? Number(search_volume) : null,
-    keyword_difficulty: Number.isFinite(Number(keyword_difficulty)) ? Number(keyword_difficulty) : null,
+    search_volume: search_volume == null || search_volume === ""
+      ? null
+      : Number.isFinite(Number(search_volume)) ? Number(search_volume) : null,
+    keyword_difficulty: keyword_difficulty == null || keyword_difficulty === ""
+      ? null
+      : Number.isFinite(Number(keyword_difficulty)) ? Number(keyword_difficulty) : null,
     intent_primary: intent_primary || null,
   };
   return {
