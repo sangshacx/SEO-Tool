@@ -7,8 +7,10 @@ import {
   RESEARCH_SAVE_SURFACES,
   buildKeywordClusterAssignments,
   buildSavedKeywordListUrl,
+  clusterConfidencePresentation,
   clusterIntelligenceDecisionLabel,
   clusterIntelligenceRiskLabel,
+  clusterSerpEvidencePresentation,
   clusterSuggestionPrefill,
   newClusterSuggestionPrefill,
   normalizeBatchTagInput,
@@ -389,4 +391,46 @@ test("Keyword Library redesign uses three workspace tabs without changing backen
   assert.match(source, /activateLibraryTab\("clusters"\)/);
   assert.match(source, /保存、筛选和组织值得持续跟踪的关键词/);
   assert.match(source, /D1 管理 · \$0/);
+});
+
+
+test("Cluster Intelligence v0.2 presents SERP evidence and confidence explicitly", () => {
+  assert.deepEqual(clusterSerpEvidencePresentation({
+    status: "available",
+    strength: "strong",
+    score: 40,
+    shared_url_count: 4,
+    shared_urls: ["a.com/page", "b.com/page"],
+  }), {
+    status: "available",
+    strength: "strong",
+    label: "强 · 40%",
+    shared_label: "4 个",
+    shared_urls: ["a.com/page", "b.com/page"],
+  });
+  assert.equal(clusterSerpEvidencePresentation({ status: "stale" }).label, "已过期");
+  assert.equal(clusterSerpEvidencePresentation({ status: "insufficient" }).label, "证据不足");
+  assert.deepEqual(clusterConfidencePresentation({
+    level: "high",
+    score: 90,
+    reason: "真实 SERP 证据",
+  }), {
+    level: "high",
+    label: "高",
+    score: 90,
+    reason: "真实 SERP 证据",
+  });
+});
+
+test("Cluster Intelligence table exposes SERP overlap, shared URLs, confidence, and evidence coverage without paid calls", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /<th>SERP Overlap<\/th>/);
+  assert.match(source, /<th>Shared URLs<\/th>/);
+  assert.match(source, /<th>Confidence<\/th>/);
+  assert.match(source, /SERP 证据 .*覆盖/);
+  assert.match(source, /dataset\.evidenceStatus/);
+  assert.match(source, /evidence\.shared_urls\.join/);
+  assert.match(source, /dataset\.confidence/);
+  assert.match(source, /colSpan = 11/);
+  assert.doesNotMatch(source, /submitSeoResearchRequest|dataforseo\.com/i);
 });

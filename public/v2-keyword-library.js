@@ -122,6 +122,52 @@ export function clusterIntelligenceDecisionLabel(code, fallback = "") {
   })[String(code || "").toLowerCase()] || fallback || "—";
 }
 
+
+export function clusterSerpEvidencePresentation(evidence = {}) {
+  const status = String(evidence?.status || "unavailable").toLowerCase();
+  const strength = String(evidence?.strength || "none").toLowerCase();
+  if (status === "available") {
+    const strengthLabel = ({
+      strong: "强",
+      moderate: "中",
+      weak: "弱",
+    })[strength] || "弱";
+    return {
+      status,
+      strength,
+      label: `${strengthLabel} · ${Number(evidence?.score ?? 0)}%`,
+      shared_label: `${Number(evidence?.shared_url_count ?? 0)} 个`,
+      shared_urls: Array.isArray(evidence?.shared_urls) ? evidence.shared_urls : [],
+    };
+  }
+  return {
+    status,
+    strength: "none",
+    label: ({
+      stale: "已过期",
+      insufficient: "证据不足",
+      market_mismatch: "市场不同",
+      unavailable: "暂无 SERP",
+    })[status] || "暂无 SERP",
+    shared_label: "—",
+    shared_urls: [],
+  };
+}
+
+export function clusterConfidencePresentation(confidence = {}) {
+  const level = String(confidence?.level || "medium").toLowerCase();
+  return {
+    level,
+    label: ({
+      high: "高",
+      medium: "中",
+      low: "低",
+    })[level] || "中",
+    score: Number.isFinite(Number(confidence?.score)) ? Number(confidence.score) : null,
+    reason: clean(confidence?.reason),
+  };
+}
+
 export function clusterSuggestionPrefill({ suggestion, cluster } = {}) {
   const savedKeywordId = Number(suggestion?.saved_keyword_id);
   const clusterId = Number(suggestion?.suggested_cluster?.id);
@@ -581,6 +627,9 @@ export function createKeywordLibrarySection(documentLike = globalThis.document) 
                 <th>建议</th>
                 <th>建议 Cluster</th>
                 <th>Match</th>
+                <th>SERP Overlap</th>
+                <th>Shared URLs</th>
+                <th>Confidence</th>
                 <th>Cannibalization</th>
                 <th>原因</th>
                 <th>下一步</th>
@@ -588,7 +637,7 @@ export function createKeywordLibrarySection(documentLike = globalThis.document) 
               </tr>
             </thead>
             <tbody data-v2-cluster-intelligence-body>
-              <tr><td colspan="8" class="emptyrow">点击“分析 Cluster 建议”生成只读建议。本次 $0。</td></tr>
+              <tr><td colspan="11" class="emptyrow">点击“分析 Cluster 建议”生成只读建议。本次 $0。</td></tr>
             </tbody>
           </table>
         </div>
@@ -694,7 +743,7 @@ export function mountKeywordLibrary({
     intelligenceBody.replaceChildren();
     const row = documentLike.createElement("tr");
     const cell = documentLike.createElement("td");
-    cell.colSpan = 8;
+    cell.colSpan = 11;
     cell.className = "emptyrow";
     cell.textContent = "点击“分析 Cluster 建议”生成只读建议。本次 $0。";
     row.appendChild(cell);
@@ -710,6 +759,9 @@ export function mountKeywordLibrary({
       `人工复核 ${summaryData.manual_review ?? 0}`,
       `新建候选 ${summaryData.new_cluster_candidates ?? 0}`,
       `高潜在蚕食风险 ${summaryData.potential_cannibalization_high ?? 0}`,
+      `SERP 证据 ${summaryData.serp_evidence_available ?? 0}/${summaryData.unassigned_keywords ?? 0} · 覆盖 ${summaryData.serp_evidence_coverage_pct ?? 0}%`,
+      (summaryData.serp_evidence_strong ?? 0) > 0 ? `强 SERP 证据 ${summaryData.serp_evidence_strong}` : null,
+      (summaryData.serp_evidence_stale ?? 0) > 0 ? `过期 SERP ${summaryData.serp_evidence_stale}` : null,
       summaryData.truncated ? "仅分析最近 250 个 Saved Keywords" : null,
     ].filter(Boolean).join(" · ");
 
@@ -717,13 +769,18 @@ export function mountKeywordLibrary({
     const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
     suggestions.forEach((item) => {
       const row = documentLike.createElement("tr");
+      const evidence = clusterSerpEvidencePresentation(item.serp_overlap);
+      const confidence = clusterConfidencePresentation(item.confidence);
       const cells = [
         item.keyword || "—",
         clusterIntelligenceDecisionLabel(item.decision?.code, item.decision?.label),
         item.suggested_cluster
           ? `${item.suggested_cluster.name || "Unnamed"} · ${item.suggested_cluster.score ?? "—"}`
           : "—",
-        item.suggested_cluster?.score ?? "—",
+        item.components?.final_match_score ?? item.suggested_cluster?.score ?? "—",
+        evidence.label,
+        evidence.shared_label,
+        confidence.score == null ? confidence.label : `${confidence.label} · ${confidence.score}`,
         `${clusterIntelligenceRiskLabel(item.cannibalization?.level)} · ${item.cannibalization?.score ?? 0}`,
         Array.isArray(item.reasons) && item.reasons.length ? item.reasons.join(" ") : "—",
         item.decision?.next_action || "—",
@@ -732,7 +789,23 @@ export function mountKeywordLibrary({
         const cell = documentLike.createElement("td");
         cell.textContent = String(value);
         if (index === 4) {
+          cell.className = "v2-serp-evidence-cell";
+          cell.dataset.evidenceStatus = evidence.status;
+          cell.dataset.evidenceStrength = evidence.strength;
+          cell.title = item.serp_overlap?.reason || "当前没有可用的 SERP overlap 证据。";
+        }
+        if (index === 5 && evidence.shared_urls.length) {
+          cell.className = "v2-serp-shared-urls";
+          cell.title = evidence.shared_urls.join("\n");
+        }
+        if (index === 6) {
+          cell.className = "v2-cluster-confidence";
+          cell.dataset.confidence = confidence.level;
+          cell.title = confidence.reason || "当前没有置信度说明。";
+        }
+        if (index === 7) {
           cell.dataset.risk = String(item.cannibalization?.level || "none");
+          cell.title = item.cannibalization?.reason || "";
         }
         row.appendChild(cell);
       });
@@ -798,7 +871,7 @@ export function mountKeywordLibrary({
     if (!suggestions.length) {
       const row = documentLike.createElement("tr");
       const cell = documentLike.createElement("td");
-      cell.colSpan = 8;
+      cell.colSpan = 11;
       cell.className = "emptyrow";
       cell.textContent = summaryData.unassigned_keywords === 0
         ? "当前分析范围内没有未分配关键词。"

@@ -2647,3 +2647,21 @@
     animation:none!important;
   }
 }
+
+
+/* Cluster Intelligence v0.2 evidence UI */
+.v2-cluster-intelligence-table{min-width:1520px}
+.v2-cluster-intelligence-table .v2-serp-evidence-cell,
+.v2-cluster-intelligence-table .v2-cluster-confidence{font-weight:750;white-space:nowrap}
+.v2-serp-evidence-cell[data-evidence-status="available"][data-evidence-strength="strong"]{color:#92d7bd}
+.v2-serp-evidence-cell[data-evidence-status="available"][data-evidence-strength="moderate"]{color:#ffd38c}
+.v2-serp-evidence-cell[data-evidence-status="available"][data-evidence-strength="weak"]{color:#9fbce0}
+.v2-serp-evidence-cell[data-evidence-status="stale"],
+.v2-serp-evidence-cell[data-evidence-status="insufficient"],
+.v2-serp-evidence-cell[data-evidence-status="market_mismatch"],
+.v2-serp-evidence-cell[data-evidence-status="unavailable"]{color:#7088a8}
+.v2-serp-shared-urls{color:#9fc2f7;font-variant-numeric:tabular-nums;cursor:help}
+.v2-cluster-confidence[data-confidence="high"]{color:#92d7bd}
+.v2-cluster-confidence[data-confidence="medium"]{color:#a9c8f7}
+.v2-cluster-confidence[data-confidence="low"]{color:#ffd38c}
+.v2-serp-evidence-cell,.v2-serp-shared-urls,.v2-cluster-confidence,.v2-cluster-intelligence-table td[data-risk]{cursor:help}
