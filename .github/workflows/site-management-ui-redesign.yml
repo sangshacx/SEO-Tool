@@ -103,7 +103,7 @@ jobs:
             actions.innerHTML = `
               <div>
                 <b>配置迁移</b>
-                <span>导出版本化 JSON，或导入已有网站配置。导入同域名时会覆盖现有配置。</span>
+                <span>导出版本化 JSON，或导入已有网站配置。导入会覆盖同域名配置，请确认后操作。</span>
               </div>
               <div class="v2-site-portability-actions">
                 <button type="button" data-v2-export-sites>导出 JSON</button>
