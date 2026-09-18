@@ -14,13 +14,15 @@ function clean(value) {
 }
 
 function formatNumber(value) {
+  if (value === null || value === undefined || value === "") return "—";
   const number = Number(value);
   return Number.isFinite(number) ? new Intl.NumberFormat("en-US").format(number) : "—";
 }
 
 function formatMoney(value) {
+  if (value === null || value === undefined || value === "") return "—";
   const number = Number(value);
-  return Number.isFinite(number) ? `$${number.toFixed(2)}` : "—";
+  return Number.isFinite(number) ? `${number.toFixed(2)}` : "—";
 }
 
 function formatDate(value) {

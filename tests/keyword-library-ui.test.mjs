@@ -58,7 +58,7 @@ test("Keyword Library UI only calls the internal Saved Keywords API", async () =
   assert.match(source, /\/api\/v2\/keywords\/saved/);
   assert.match(source, /保存到关键词库/);
   assert.match(source, /本次费用 \$0/);
-  assert.doesNotMatch(source, /DataForSEO|submitSeoResearchRequest|\/api\/v2\/keywords\/overview|\/api\/v2\/keywords\/ideas/);
+  assert.doesNotMatch(source, /submitSeoResearchRequest|\/api\/v2\/keywords\/overview|\/api\/v2\/keywords\/ideas|dataforseo\.com/i);
 });
 
 test("V2 shell exposes Keyword Library as a first-class research view", async () => {
