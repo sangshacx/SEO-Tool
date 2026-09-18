@@ -1,0 +1,56 @@
+name: Apply Competitor Opportunity UI
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - .github/workflows/apply-competitor-opportunity-ui.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: seo-pro-v2
+
+      - name: Add opportunity presets to Competitor Snapshot
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          html_path = Path("public/v2.html")
+          html = html_path.read_text()
+          old = '<select id="competitorPreset" aria-label="竞品关键词预设"><option value="all">全部关键词</option><option value="top10">Top 10</option><option value="low-kd">KD ≤ 35</option></select>'
+          new = '<select id="competitorPreset" aria-label="竞品关键词预设"><option value="all">全部关键词</option><option value="quick-opportunity">机会：Top 10 + KD ≤ 35</option><option value="commercial-demand">机会：商业词 + 搜索量 ≥ 100</option><option value="high-cpc-commercial">机会：商业词 + CPC ≥ $1</option><option value="top10">仅 Top 10</option><option value="low-kd">仅 KD ≤ 35</option></select>'
+          if old not in html:
+              raise SystemExit("competitor preset HTML anchor not found")
+          html_path.write_text(html.replace(old, new, 1))
+
+          test_path = Path("tests/competitor-keyword-pagination.test.mjs")
+          tests = test_path.read_text()
+          anchor = '  assert.match(html, /id="competitorPreset"/);\n'
+          addition = anchor + '  assert.match(html, /value="quick-opportunity">机会：Top 10 \+ KD ≤ 35/);\n  assert.match(html, /value="commercial-demand">机会：商业词 \+ 搜索量 ≥ 100/);\n  assert.match(html, /value="high-cpc-commercial">机会：商业词 \+ CPC ≥ \$1/);\n'
+          if anchor not in tests:
+              raise SystemExit("competitor preset test anchor not found")
+          test_path.write_text(tests.replace(anchor, addition, 1))
+          PY
+
+          git diff --check
+          node --test
+
+      - name: Commit feature and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/apply-competitor-opportunity-ui.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/v2.html tests/competitor-keyword-pagination.test.mjs .github/workflows/apply-competitor-opportunity-ui.yml
+          git commit -m "feat: expose competitor opportunity presets"
+          git push origin HEAD:seo-pro-v2
