@@ -1,5 +1,36 @@
 const DEFAULT_PAGE_SIZE = 10;
 
+function numericValue(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+export function filterAndSortCompetitorKeywords(rows, { query = "", intent = "", preset = "all", sort = "position" } = {}) {
+  const normalizedQuery = String(query).trim().toLowerCase();
+  const normalizedIntent = String(intent).trim().toLowerCase();
+  const filtered = (Array.isArray(rows) ? rows : []).filter((item) => {
+    const keyword = String(item?.keyword || "").toLowerCase();
+    const itemIntent = String(item?.intent || "").toLowerCase();
+    const position = numericValue(item?.position, Infinity);
+    const difficulty = numericValue(item?.keyword_difficulty, Infinity);
+    if (normalizedQuery && !keyword.includes(normalizedQuery)) return false;
+    if (normalizedIntent && itemIntent !== normalizedIntent) return false;
+    if (preset === "top10" && position > 10) return false;
+    if (preset === "low-kd" && difficulty > 35) return false;
+    return true;
+  });
+  const valueFor = {
+    position: (item) => numericValue(item?.position, Infinity),
+    volume: (item) => -numericValue(item?.search_volume, -Infinity),
+    difficulty: (item) => numericValue(item?.keyword_difficulty, Infinity),
+    cpc: (item) => -numericValue(item?.cpc_usd, -Infinity),
+  }[sort] || ((item) => numericValue(item?.position, Infinity));
+  return [...filtered].sort((left, right) =>
+    valueFor(left) - valueFor(right) ||
+    String(left?.keyword || "").localeCompare(String(right?.keyword || "")),
+  );
+}
+
 export function paginateCompetitorKeywords(rows, requestedPage, pageSize = DEFAULT_PAGE_SIZE) {
   const items = Array.isArray(rows) ? rows : [];
   const size = Number.isInteger(pageSize) && pageSize > 0 ? pageSize : DEFAULT_PAGE_SIZE;
@@ -49,6 +80,10 @@ export function createCompetitorKeywordTable({
   nextButton,
   pageLabel,
   keywordInput,
+  queryInput,
+  intentSelect,
+  presetSelect,
+  sortSelect,
   locationLike = globalThis.location,
   documentLike = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame,
@@ -57,7 +92,13 @@ export function createCompetitorKeywordTable({
   let page = 1;
 
   const render = () => {
-    const model = paginateCompetitorKeywords(rows, page);
+    const visibleRows = filterAndSortCompetitorKeywords(rows, {
+      query: queryInput?.value,
+      intent: intentSelect?.value,
+      preset: presetSelect?.value,
+      sort: sortSelect?.value,
+    });
+    const model = paginateCompetitorKeywords(visibleRows, page);
     page = model.page;
     body.replaceChildren();
     if (!model.rows.length) {
@@ -110,6 +151,12 @@ export function createCompetitorKeywordTable({
 
   previousButton.addEventListener("click", () => { page -= 1; render(); });
   nextButton.addEventListener("click", () => { page += 1; render(); });
+  [queryInput, intentSelect, presetSelect, sortSelect].forEach((control) => {
+    control?.addEventListener(control === queryInput ? "input" : "change", () => {
+      page = 1;
+      render();
+    });
+  });
 
   return Object.freeze({
     setRows(nextRows) {

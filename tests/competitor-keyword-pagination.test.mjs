@@ -79,6 +79,32 @@ test("competitor keywords paginate locally in groups of 10", async () => {
   });
 });
 
+test("competitor keyword filtering and sorting is local and deterministic", async () => {
+  const { filterAndSortCompetitorKeywords } = await import("../public/v2-competitor-keywords.js");
+  const rows = [
+    { keyword: "waterproof membrane", position: 3, search_volume: 1200, keyword_difficulty: 28, cpc_usd: 1.2, intent: "commercial" },
+    { keyword: "roof coating", position: 12, search_volume: 900, keyword_difficulty: 18, cpc_usd: 2.4, intent: "commercial" },
+    { keyword: "basement waterproofing", position: 7, search_volume: 500, keyword_difficulty: 42, cpc_usd: 3.1, intent: "informational" },
+  ];
+
+  assert.deepEqual(filterAndSortCompetitorKeywords(rows, { preset: "top10" }).map((row) => row.keyword), [
+    "waterproof membrane",
+    "basement waterproofing",
+  ]);
+  assert.deepEqual(filterAndSortCompetitorKeywords(rows, { preset: "low-kd", sort: "volume" }).map((row) => row.keyword), [
+    "waterproof membrane",
+    "roof coating",
+  ]);
+  assert.deepEqual(filterAndSortCompetitorKeywords(rows, { query: "roof", intent: "commercial", sort: "cpc" }).map((row) => row.keyword), [
+    "roof coating",
+  ]);
+  assert.deepEqual(filterAndSortCompetitorKeywords(rows, { sort: "difficulty" }).map((row) => row.keyword), [
+    "roof coating",
+    "waterproof membrane",
+    "basement waterproofing",
+  ]);
+});
+
 test("clicking a competitor keyword only prefills Keyword Explorer and never submits", async () => {
   const { prefillKeywordExplorer } = await import("../public/v2-competitor-keywords.js");
   let focused = 0;
@@ -117,6 +143,8 @@ function fakeElement(tagName = "div") {
     replaceChildren(...children) { this.children = children; },
     addEventListener(type, listener) { this.listeners[type] = listener; },
     click() { this.listeners.click?.({ preventDefault() {} }); },
+    input() { this.listeners.input?.(); },
+    change() { this.listeners.change?.(); },
   };
 }
 
@@ -127,6 +155,12 @@ test("competitor table renders 10 linked rows and changes pages locally", async 
   const next = fakeElement("button");
   const label = fakeElement("span");
   const input = fakeElement("input");
+  const queryInput = fakeElement("input");
+  const intentSelect = fakeElement("select");
+  const presetSelect = fakeElement("select");
+  const sortSelect = fakeElement("select");
+  presetSelect.value = "all";
+  sortSelect.value = "position";
   const locationLike = { hash: "#competitors" };
   const documentLike = { createElement: fakeElement };
   const rows = Array.from({ length: 23 }, (_, index) => ({
@@ -144,6 +178,10 @@ test("competitor table renders 10 linked rows and changes pages locally", async 
     nextButton: next,
     pageLabel: label,
     keywordInput: input,
+    queryInput,
+    intentSelect,
+    presetSelect,
+    sortSelect,
     locationLike,
     documentLike,
     requestAnimationFrameImpl(callback) { callback(); },
@@ -165,6 +203,12 @@ test("competitor table renders 10 linked rows and changes pages locally", async 
   body.children[0].children[1].children[0].click();
   assert.equal(input.value, "keyword-11");
   assert.equal(locationLike.hash, "keywords");
+
+  queryInput.value = "keyword-2";
+  queryInput.input();
+  assert.equal(body.children.length, 5);
+  assert.equal(body.children[0].children[1].children[0].textContent, "keyword-2");
+  assert.equal(label.textContent, "第 1 / 1 页 · 5 条关键词");
 });
 
 test("V2 competitor snapshot mounts the local pager and describes the 50-keyword cache", async () => {
@@ -172,6 +216,10 @@ test("V2 competitor snapshot mounts the local pager and describes the 50-keyword
   assert.match(html, /id="competitorPrev"/);
   assert.match(html, /id="competitorPageLabel"/);
   assert.match(html, /id="competitorNext"/);
+  assert.match(html, /id="competitorFilter"/);
+  assert.match(html, /id="competitorIntent"/);
+  assert.match(html, /id="competitorPreset"/);
+  assert.match(html, /id="competitorSort"/);
   assert.match(html, /v2-competitor-keywords\.js/);
   assert.match(html, /competitorKeywordTable\.setRows\(data\.top_keywords\|\|\[\]\)/);
   assert.match(html, /最多 50 个排名关键词/);
