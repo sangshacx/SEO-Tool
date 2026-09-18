@@ -364,8 +364,8 @@ jobs:
           text = path.read_text()
           text = replace_once(
               text,
-              '  requestAnimationFrameImpl = globalThis.requestAnimationFrame,\n} = {}) {',
-              '  requestAnimationFrameImpl = globalThis.requestAnimationFrame,\n  eventTarget = globalThis.window,\n  customEventFactory = (type, detail) => typeof globalThis.CustomEvent === "function"\n    ? new globalThis.CustomEvent(type, { detail })\n    : { type, detail },\n} = {}) {',
+              '  locationLike = globalThis.location,\n  documentLike = globalThis.document,\n  requestAnimationFrameImpl = globalThis.requestAnimationFrame,\n} = {}) {\n  let rows = [];',
+              '  locationLike = globalThis.location,\n  documentLike = globalThis.document,\n  requestAnimationFrameImpl = globalThis.requestAnimationFrame,\n  eventTarget = globalThis.window,\n  customEventFactory = (type, detail) => typeof globalThis.CustomEvent === "function"\n    ? new globalThis.CustomEvent(type, { detail })\n    : { type, detail },\n} = {}) {\n  let rows = [];',
               "competitor table event options",
           )
           text = replace_once(
