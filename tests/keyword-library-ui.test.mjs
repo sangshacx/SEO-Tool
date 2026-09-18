@@ -7,6 +7,8 @@ import {
   RESEARCH_SAVE_SURFACES,
   buildKeywordClusterAssignments,
   buildSavedKeywordListUrl,
+  clusterIntelligenceDecisionLabel,
+  clusterIntelligenceRiskLabel,
   normalizeBatchTagInput,
   researchSurfaceKeyword,
   savedKeywordCreatePayload,
@@ -270,6 +272,29 @@ test("Keyword Library exposes manual Topic Cluster creation, primary selection, 
   assert.match(source, /method:\s*"PATCH"/);
   assert.match(source, /Primary：/);
   assert.match(source, /Supporting：/);
+  assert.match(source, /本次 \$0/);
+  assert.doesNotMatch(source, /dataforseo\.com|submitSeoResearchRequest/i);
+});
+
+
+test("Cluster Intelligence UI labels deterministic decisions and potential-risk levels clearly", () => {
+  assert.equal(clusterIntelligenceDecisionLabel("assign_to_existing"), "建议归入现有 Cluster");
+  assert.equal(clusterIntelligenceDecisionLabel("review_cluster_fit"), "需要人工复核");
+  assert.equal(clusterIntelligenceDecisionLabel("new_cluster_candidate"), "更适合新建 Cluster");
+  assert.equal(clusterIntelligenceRiskLabel("high"), "高");
+  assert.equal(clusterIntelligenceRiskLabel("medium"), "中");
+  assert.equal(clusterIntelligenceRiskLabel("none"), "无明显风险");
+});
+
+test("Keyword Library Cluster Intelligence UI is read-only and zero-provider-cost", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /\/api\/v2\/keywords\/cluster-intelligence/);
+  assert.match(source, /data-v2-cluster-intelligence-run/);
+  assert.match(source, /data-v2-cluster-intelligence-summary/);
+  assert.match(source, /data-v2-cluster-intelligence-body/);
+  assert.match(source, /Match/);
+  assert.match(source, /Cannibalization/);
+  assert.match(source, /未修改任何 Cluster/);
   assert.match(source, /本次 \$0/);
   assert.doesNotMatch(source, /dataforseo\.com|submitSeoResearchRequest/i);
 });

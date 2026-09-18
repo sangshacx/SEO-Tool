@@ -1,5 +1,6 @@
 const SAVED_KEYWORDS_URL = "/api/v2/keywords/saved";
 const KEYWORD_CLUSTERS_URL = "/api/v2/keywords/clusters";
+const CLUSTER_INTELLIGENCE_URL = "/api/v2/keywords/cluster-intelligence";
 
 const SOURCE_LABELS = Object.freeze({
   manual: "手动",
@@ -99,6 +100,23 @@ export function buildKeywordClusterAssignments({
   return [...roles.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([saved_keyword_id, role]) => ({ saved_keyword_id, role }));
+}
+
+export function clusterIntelligenceRiskLabel(level) {
+  return ({
+    high: "高",
+    medium: "中",
+    low: "低",
+    none: "无明显风险",
+  })[String(level || "").toLowerCase()] || "未知";
+}
+
+export function clusterIntelligenceDecisionLabel(code, fallback = "") {
+  return ({
+    assign_to_existing: "建议归入现有 Cluster",
+    review_cluster_fit: "需要人工复核",
+    new_cluster_candidate: "更适合新建 Cluster",
+  })[String(code || "").toLowerCase()] || fallback || "—";
 }
 
 export function buildSavedKeywordListUrl({
@@ -436,6 +454,35 @@ export function createKeywordLibrarySection(documentLike = globalThis.document) 
       <div class="note"><b>分配规则：</b>选择一个 Primary；其余已选词作为 Supporting。若目标 Cluster 已有成员，会保留原成员并把原 Primary 调整为 Supporting。已选词若属于其他 Cluster，会移动到当前 Cluster。全部操作 $0。</div>
       <div data-v2-cluster-status class="v2-cluster-status"></div>
       <div data-v2-cluster-list class="v2-cluster-list"></div>
+      <div class="v2-cluster-intelligence">
+        <div class="v2-cluster-intelligence-head">
+          <div>
+            <b>Cluster Intelligence v0.1</b>
+            <div class="sub">只读确定性建议：关键词结构 + 已缓存 Intent。Cannibalization 仅代表潜在风险，不是已确认蚕食。</div>
+          </div>
+          <button type="button" data-v2-cluster-intelligence-run>分析 Cluster 建议</button>
+        </div>
+        <div data-v2-cluster-intelligence-status class="v2-cluster-intelligence-status"></div>
+        <div data-v2-cluster-intelligence-summary class="v2-cluster-intelligence-summary"></div>
+        <div class="tablewrap v2-cluster-intelligence-tablewrap">
+          <table class="ideastable v2-cluster-intelligence-table">
+            <thead>
+              <tr>
+                <th>Keyword</th>
+                <th>建议</th>
+                <th>建议 Cluster</th>
+                <th>Match</th>
+                <th>Cannibalization</th>
+                <th>原因</th>
+                <th>下一步</th>
+              </tr>
+            </thead>
+            <tbody data-v2-cluster-intelligence-body>
+              <tr><td colspan="7" class="emptyrow">点击“分析 Cluster 建议”生成只读建议。本次 $0。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
     <div data-v2-library-status class="status"></div>
     <div class="tablewrap">
@@ -489,6 +536,10 @@ export function mountKeywordLibrary({
   const clusterAssignButton = section.querySelector("[data-v2-cluster-assign]");
   const clusterStatus = section.querySelector("[data-v2-cluster-status]");
   const clusterList = section.querySelector("[data-v2-cluster-list]");
+  const intelligenceRunButton = section.querySelector("[data-v2-cluster-intelligence-run]");
+  const intelligenceStatus = section.querySelector("[data-v2-cluster-intelligence-status]");
+  const intelligenceSummary = section.querySelector("[data-v2-cluster-intelligence-summary]");
+  const intelligenceBody = section.querySelector("[data-v2-cluster-intelligence-body]");
   const keywordInput = root.querySelector("#keyword");
 
   let page = 1;
@@ -508,6 +559,76 @@ export function mountKeywordLibrary({
   const showClusterStatus = (message = "", type = "info") => {
     clusterStatus.textContent = message;
     clusterStatus.className = message ? `v2-cluster-status ${type}` : "v2-cluster-status";
+  };
+
+  const showIntelligenceStatus = (message = "", type = "info") => {
+    intelligenceStatus.textContent = message;
+    intelligenceStatus.className = message
+      ? `v2-cluster-intelligence-status ${type}`
+      : "v2-cluster-intelligence-status";
+  };
+
+  const clearClusterIntelligence = () => {
+    intelligenceSummary.textContent = "";
+    intelligenceBody.replaceChildren();
+    const row = documentLike.createElement("tr");
+    const cell = documentLike.createElement("td");
+    cell.colSpan = 7;
+    cell.className = "emptyrow";
+    cell.textContent = "点击“分析 Cluster 建议”生成只读建议。本次 $0。";
+    row.appendChild(cell);
+    intelligenceBody.appendChild(row);
+    showIntelligenceStatus();
+  };
+
+  const renderClusterIntelligence = (data = {}) => {
+    const summaryData = data.summary || {};
+    intelligenceSummary.textContent = [
+      `未分配 ${summaryData.unassigned_keywords ?? 0}`,
+      `建议现有 Cluster ${summaryData.suggested_existing_cluster ?? 0}`,
+      `人工复核 ${summaryData.manual_review ?? 0}`,
+      `新建候选 ${summaryData.new_cluster_candidates ?? 0}`,
+      `高潜在蚕食风险 ${summaryData.potential_cannibalization_high ?? 0}`,
+      summaryData.truncated ? "仅分析最近 250 个 Saved Keywords" : null,
+    ].filter(Boolean).join(" · ");
+
+    intelligenceBody.replaceChildren();
+    const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+    suggestions.forEach((item) => {
+      const row = documentLike.createElement("tr");
+      const cells = [
+        item.keyword || "—",
+        clusterIntelligenceDecisionLabel(item.decision?.code, item.decision?.label),
+        item.suggested_cluster
+          ? `${item.suggested_cluster.name || "Unnamed"} · ${item.suggested_cluster.score ?? "—"}`
+          : "—",
+        item.suggested_cluster?.score ?? "—",
+        `${clusterIntelligenceRiskLabel(item.cannibalization?.level)} · ${item.cannibalization?.score ?? 0}`,
+        Array.isArray(item.reasons) && item.reasons.length ? item.reasons.join(" ") : "—",
+        item.decision?.next_action || "—",
+      ];
+      cells.forEach((value, index) => {
+        const cell = documentLike.createElement("td");
+        cell.textContent = String(value);
+        if (index === 4) {
+          cell.dataset.risk = String(item.cannibalization?.level || "none");
+        }
+        row.appendChild(cell);
+      });
+      intelligenceBody.appendChild(row);
+    });
+
+    if (!suggestions.length) {
+      const row = documentLike.createElement("tr");
+      const cell = documentLike.createElement("td");
+      cell.colSpan = 7;
+      cell.className = "emptyrow";
+      cell.textContent = summaryData.unassigned_keywords === 0
+        ? "当前分析范围内没有未分配关键词。"
+        : "当前没有可显示的 Cluster 建议。";
+      row.appendChild(cell);
+      intelligenceBody.appendChild(row);
+    }
   };
 
   const handleLibrarySelectionChange = ({ item, selected } = {}) => {
@@ -891,6 +1012,31 @@ export function mountKeywordLibrary({
   };
 
   clusterRefreshButton.addEventListener("click", () => loadClusters());
+  intelligenceRunButton.addEventListener("click", async () => {
+    const market = context.get();
+    if (!market?.domain) {
+      showIntelligenceStatus("请先在网站管理添加并选择当前网站。", "error");
+      return;
+    }
+
+    intelligenceRunButton.disabled = true;
+    intelligenceRunButton.textContent = "分析中…";
+    showIntelligenceStatus("正在读取 D1 中的 Saved Keywords、Cluster 和已缓存 Intent；不会调用 DataForSEO。");
+    try {
+      const response = await fetchImpl(
+        CLUSTER_INTELLIGENCE_URL + "?site_domain=" + encodeURIComponent(market.domain),
+        { headers: { accept: "application/json" } },
+      );
+      const payload = await readJson(response);
+      renderClusterIntelligence(payload.data || {});
+      showIntelligenceStatus("Cluster 建议已生成 · 本次 $0 · 未修改任何 Cluster。", "success");
+    } catch (error) {
+      showIntelligenceStatus(error.message || "Cluster Intelligence 分析失败", "error");
+    } finally {
+      intelligenceRunButton.textContent = "分析 Cluster 建议";
+      intelligenceRunButton.disabled = false;
+    }
+  });
   clusterNameInput.addEventListener("input", refreshClusterControls);
   clusterSelect.addEventListener("change", refreshClusterControls);
   clusterPrimarySelect.addEventListener("change", refreshClusterControls);
@@ -1054,6 +1200,7 @@ export function mountKeywordLibrary({
     selectedLibraryIds.clear();
     selectedLibraryItems.clear();
     keywordClusters = [];
+    clearClusterIntelligence();
     updateLibrarySelection();
     updateSaveButton();
     refreshResearchSurfaceButtons();
@@ -1178,6 +1325,7 @@ export function mountKeywordLibrary({
 
   renderClusterSelect();
   renderClusterList();
+  clearClusterIntelligence();
   refreshClusterControls();
   updateLibrarySelection();
   updateSaveButton();
