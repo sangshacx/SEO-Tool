@@ -93,6 +93,43 @@ test("keyword gap filtering combines keyword, intent, and priority without mutat
   assert.equal(rows.length, 3);
 });
 
+test("keyword gap decisions identify explainable Easy Win candidates without extra API work", async () => {
+  const { classifyKeywordGapDecision, KEYWORD_GAP_DECISION_VERSION, filterAndSortKeywordGap } = await import("../public/v2-keyword-gap.js");
+  const easy = {
+    keyword: "roof membrane installation",
+    competitor_position: 3,
+    metrics: { search_volume: 1200, keyword_difficulty: 28, cpc_usd: 0.8 },
+    intelligence: { gap_priority: { score: 74, label: "Medium" } },
+  };
+  const strongButHard = {
+    keyword: "roof membrane price",
+    competitor_position: 8,
+    metrics: { search_volume: 900, keyword_difficulty: 42, cpc_usd: 2.1 },
+    intelligence: { gap_priority: { score: 82, label: "High" } },
+  };
+  const low = {
+    keyword: "generic waterproof topic",
+    competitor_position: 22,
+    metrics: { search_volume: 90, keyword_difficulty: 48, cpc_usd: 0.2 },
+    intelligence: { gap_priority: { score: 48, label: "Low" } },
+  };
+
+  const easyDecision = classifyKeywordGapDecision(easy);
+  assert.equal(easyDecision.version, KEYWORD_GAP_DECISION_VERSION);
+  assert.equal(easyDecision.code, "easy_win_candidate");
+  assert.equal(easyDecision.easy_win, true);
+  assert.match(easyDecision.reasons.join(" "), /KD 28/);
+  assert.match(easyDecision.reasons.join(" "), /#3/);
+
+  const hardDecision = classifyKeywordGapDecision(strongButHard);
+  assert.equal(hardDecision.code, "high_opportunity_validate");
+  assert.equal(hardDecision.easy_win, false);
+  assert.match(hardDecision.reasons.join(" "), /KD 42 > 35/);
+
+  assert.equal(classifyKeywordGapDecision(low).code, "monitor_or_skip");
+  assert.deepEqual(filterAndSortKeywordGap([strongButHard, easy, low], { preset: "quick" }).map((row) => row.keyword), [easy.keyword]);
+});
+
 test("keyword gap sorting is deterministic for priority, volume, difficulty, cpc, and competitor rank", async () => {
   const { filterAndSortKeywordGap } = await import("../public/v2-keyword-gap.js");
   const rows = [
@@ -156,6 +193,8 @@ test("keyword gap table pages 10 rows while selection remains global", async () 
   assert.equal(body.children.length, 10);
   assert.equal(body.children[0].children[1].textContent, 1);
   assert.equal(label.textContent, "第 1 / 3 页 · 23 条机会");
+  assert.match(body.children[0].children[8].children[1].textContent, /Easy Win 候选/);
+  assert.match(body.children[0].children[8].children[1].textContent, /检查竞品排名页/);
 
   next.click();
   assert.equal(body.children[0].children[1].textContent, 11);

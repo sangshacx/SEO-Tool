@@ -1,5 +1,104 @@
 const DEFAULT_PAGE_SIZE = 10;
 
+export const KEYWORD_GAP_DECISION_VERSION = "keyword-gap-decision-v0.1";
+
+function finiteNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+export function classifyKeywordGapDecision(item) {
+  const priority = finiteNumber(item?.intelligence?.gap_priority?.score);
+  const difficulty = finiteNumber(item?.metrics?.keyword_difficulty);
+  const rank = finiteNumber(item?.competitor_position);
+  const thresholds = Object.freeze({
+    gap_priority_min: 65,
+    keyword_difficulty_max: 35,
+    competitor_rank_max: 10,
+  });
+
+  if (priority === null) {
+    return {
+      version: KEYWORD_GAP_DECISION_VERSION,
+      code: "insufficient_data",
+      label: "数据不足",
+      priority: "unknown",
+      easy_win: false,
+      next_action: "刷新关键词指标后再判断。",
+      reasons: ["缺少 Gap Priority 分数"],
+      thresholds,
+      is_estimate: true,
+    };
+  }
+
+  if (priority >= thresholds.gap_priority_min &&
+      difficulty !== null && difficulty <= thresholds.keyword_difficulty_max &&
+      rank !== null && rank <= thresholds.competitor_rank_max) {
+    return {
+      version: KEYWORD_GAP_DECISION_VERSION,
+      code: "easy_win_candidate",
+      label: "Easy Win 候选",
+      priority: "high",
+      easy_win: true,
+      next_action: "先检查竞品排名页与搜索意图，再创建或强化对应页面。",
+      reasons: [
+        `Gap Priority ${priority} ≥ ${thresholds.gap_priority_min}`,
+        `KD ${difficulty} ≤ ${thresholds.keyword_difficulty_max}`,
+        `竞品排名 #${rank}，位于 Top ${thresholds.competitor_rank_max}`,
+      ],
+      thresholds,
+      is_estimate: true,
+    };
+  }
+
+  const blockers = [];
+  if (difficulty === null) blockers.push("缺少 KD");
+  else if (difficulty > thresholds.keyword_difficulty_max) blockers.push(`KD ${difficulty} > ${thresholds.keyword_difficulty_max}`);
+  if (rank === null) blockers.push("缺少竞品排名");
+  else if (rank > thresholds.competitor_rank_max) blockers.push(`竞品排名 #${rank} 未进入 Top ${thresholds.competitor_rank_max}`);
+
+  if (priority >= 75) {
+    return {
+      version: KEYWORD_GAP_DECISION_VERSION,
+      code: "high_opportunity_validate",
+      label: "高机会 · 需验证",
+      priority: "medium_high",
+      easy_win: false,
+      next_action: "优先验证 SERP 弱度与内容差距，再决定是否投入。",
+      reasons: [`Gap Priority ${priority} 较高`, ...blockers],
+      thresholds,
+      is_estimate: true,
+    };
+  }
+
+  if (priority >= 55) {
+    return {
+      version: KEYWORD_GAP_DECISION_VERSION,
+      code: "manual_validation",
+      label: "人工验证",
+      priority: "medium",
+      easy_win: false,
+      next_action: "检查搜索意图、SERP 和本站主题相关性后再排期。",
+      reasons: [`Gap Priority ${priority} 为中等`, ...blockers],
+      thresholds,
+      is_estimate: true,
+    };
+  }
+
+  return {
+    version: KEYWORD_GAP_DECISION_VERSION,
+    code: "monitor_or_skip",
+    label: "暂缓 / 监控",
+    priority: "low",
+    easy_win: false,
+    next_action: "先处理更强的 Gap 机会，后续再观察该关键词。",
+    reasons: [`Gap Priority ${priority} < 55`, ...blockers],
+    thresholds,
+    is_estimate: true,
+  };
+}
+
 function numericValue(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -17,7 +116,7 @@ export function filterAndSortKeywordGap(rows, { query = "", intent = "", preset 
     if (normalizedQuery && !keyword.includes(normalizedQuery)) return false;
     if (normalizedIntent && primaryIntent !== normalizedIntent) return false;
     if (preset === "high" && priority < 75) return false;
-    if (preset === "quick" && !(priority >= 65 && difficulty <= 35 && rank <= 10)) return false;
+    if (preset === "quick" && classifyKeywordGapDecision(item).code !== "easy_win_candidate") return false;
     return true;
   });
   const values = {
@@ -128,7 +227,13 @@ export function createKeywordGapTable({
       const badge = documentLike.createElement("span");
       badge.className = "scorepill";
       badge.textContent = `${item.intelligence?.gap_priority?.score ?? "—"} · ${item.intelligence?.gap_priority?.label || "—"}`;
+      const decision = classifyKeywordGapDecision(item);
+      const decisionText = documentLike.createElement("div");
+      decisionText.className = "sub gapdecision";
+      decisionText.textContent = `${decision.label} · ${decision.next_action}`;
+      decisionText.title = decision.reasons.join("；");
       priorityCell.appendChild(badge);
+      priorityCell.appendChild(decisionText);
       row.appendChild(priorityCell);
 
       const pageCell = documentLike.createElement("td");
