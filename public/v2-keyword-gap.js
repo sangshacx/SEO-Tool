@@ -147,6 +147,26 @@ export function paginateKeywordGap(rows, requestedPage, pageSize = DEFAULT_PAGE_
   };
 }
 
+export function openKeywordGapKeyword(keyword, {
+  documentLike = globalThis.document,
+  locationLike = globalThis.location,
+  requestAnimationFrameLike = globalThis.requestAnimationFrame,
+} = {}) {
+  const value = String(keyword || "").trim();
+  if (!value) return false;
+  const input = documentLike?.getElementById?.("keyword");
+  if (!input) return false;
+  input.value = value;
+  if (locationLike) locationLike.hash = "keywords";
+  const focus = () => {
+    input.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    input.focus?.();
+  };
+  if (typeof requestAnimationFrameLike === "function") requestAnimationFrameLike(focus);
+  else focus();
+  return true;
+}
+
 function displayNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("en-US") : "—";
 }
@@ -162,6 +182,7 @@ export function createKeywordGapTable({
   pageLabel,
   selectedKeywords,
   onSelectionChange = () => {},
+  onKeywordOpen = (item) => openKeywordGapKeyword(item?.keyword),
   queryInput,
   intentSelect,
   presetSelect,
@@ -218,8 +239,21 @@ export function createKeywordGapTable({
       ];
       values.forEach((value, valueIndex) => {
         const cell = documentLike.createElement("td");
-        cell.textContent = value;
-        if (valueIndex === 1) cell.className = "keywordcell";
+        if (valueIndex === 1) {
+          cell.className = "keywordcell";
+          const link = documentLike.createElement("a");
+          link.href = "#keywords";
+          link.className = "ranklink keywordgaplink";
+          link.textContent = value;
+          link.setAttribute("aria-label", `在 Keyword Explorer 中查看 ${item.keyword}`);
+          link.addEventListener("click", (event) => {
+            event?.preventDefault?.();
+            onKeywordOpen(item);
+          });
+          cell.appendChild(link);
+        } else {
+          cell.textContent = value;
+        }
         row.appendChild(cell);
       });
 

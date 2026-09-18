@@ -158,9 +158,32 @@ function fakeElement(tagName = "div") {
     addEventListener(type, listener) { this.listeners[type] = listener; },
     click() { this.listeners.click?.({ preventDefault() {} }); },
     change() { this.listeners.change?.(); },
+    focus() { this.focused = true; },
+    scrollIntoView(options) { this.scrolled = options || true; },
     setAttribute() {},
   };
 }
+
+test("keyword gap keyword handoff opens Keyword Explorer without triggering research", async () => {
+  const { openKeywordGapKeyword } = await import("../public/v2-keyword-gap.js");
+  const input = fakeElement("input");
+  const documentLike = { getElementById(id) { return id === "keyword" ? input : null; } };
+  const locationLike = { hash: "#competitors" };
+  let frames = 0;
+
+  const opened = openKeywordGapKeyword(" waterproof membrane ", {
+    documentLike,
+    locationLike,
+    requestAnimationFrameLike(callback) { frames += 1; callback(); },
+  });
+
+  assert.equal(opened, true);
+  assert.equal(input.value, "waterproof membrane");
+  assert.equal(locationLike.hash, "keywords");
+  assert.equal(input.focused, true);
+  assert.deepEqual(input.scrolled, { behavior: "smooth", block: "center" });
+  assert.equal(frames, 1);
+});
 
 test("keyword gap table pages 10 rows while selection remains global", async () => {
   const { createKeywordGapTable } = await import("../public/v2-keyword-gap.js");
@@ -170,6 +193,7 @@ test("keyword gap table pages 10 rows while selection remains global", async () 
   const label = fakeElement("span");
   const selected = new Set(["gap-12"]);
   let selectionUpdates = 0;
+  const openedKeywords = [];
   const rows = Array.from({ length: 23 }, (_, index) => ({
     keyword: `gap-${index + 1}`,
     competitor_position: index + 1,
@@ -186,12 +210,17 @@ test("keyword gap table pages 10 rows while selection remains global", async () 
     pageLabel: label,
     selectedKeywords: selected,
     onSelectionChange() { selectionUpdates += 1; },
+    onKeywordOpen(item) { openedKeywords.push(item.keyword); },
     documentLike: { createElement: fakeElement },
   });
   table.setRows(rows);
 
   assert.equal(body.children.length, 10);
   assert.equal(body.children[0].children[1].textContent, 1);
+  assert.equal(body.children[0].children[2].children[0].textContent, "gap-1");
+  assert.equal(body.children[0].children[2].children[0].href, "#keywords");
+  body.children[0].children[2].children[0].click();
+  assert.deepEqual(openedKeywords, ["gap-1"]);
   assert.equal(label.textContent, "第 1 / 3 页 · 23 条机会");
   assert.match(body.children[0].children[8].children[1].textContent, /Easy Win 候选/);
   assert.match(body.children[0].children[8].children[1].textContent, /检查竞品排名页/);
