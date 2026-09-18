@@ -375,6 +375,7 @@ export function createKeywordLibrarySection(documentLike = globalThis.document) 
       <button type="button" data-v2-library-clear-selected>清空选择</button>
       <input type="text" data-v2-library-batch-tags placeholder="添加 Tag，例如 Commercial, Saudi">
       <button type="button" data-v2-library-add-tags>批量添加 Tag</button>
+      <button type="button" data-v2-library-delete-selected>删除已选关键词</button>
       <span data-v2-library-batch-status class="v2-library-batch-status"></span>
     </div>
     <div class="note"><b>费用：</b>关键词库读取、筛选、Tag 管理、删除均为 $0；这里不会主动刷新 DataForSEO 指标。</div>
@@ -420,6 +421,7 @@ export function mountKeywordLibrary({
   const clearSelectedButton = section.querySelector("[data-v2-library-clear-selected]");
   const batchTagsInput = section.querySelector("[data-v2-library-batch-tags]");
   const addTagsButton = section.querySelector("[data-v2-library-add-tags]");
+  const deleteSelectedButton = section.querySelector("[data-v2-library-delete-selected]");
   const batchStatus = section.querySelector("[data-v2-library-batch-status]");
   const keywordInput = root.querySelector("#keyword");
 
@@ -446,6 +448,15 @@ export function mountKeywordLibrary({
         : !tags.length
           ? "请输入至少一个 Tag"
           : `给已选 ${selectedLibraryIds.size} 个关键词添加 ${tags.length} 个 Tag`;
+    const tooManySelected = selectedLibraryIds.size > 100;
+    deleteSelectedButton.disabled = !market?.domain || !selectedLibraryIds.size || tooManySelected;
+    deleteSelectedButton.title = !market?.domain
+      ? "请先在网站管理添加并选择当前网站"
+      : tooManySelected
+        ? "每次最多批量删除 100 个关键词"
+        : selectedLibraryIds.size
+          ? `删除当前网站中已选的 ${selectedLibraryIds.size} 个关键词`
+          : "请先选择关键词";
     clearSelectedButton.disabled = !selectedLibraryIds.size;
     selectPageButton.disabled = !currentItems.length;
   };
@@ -602,6 +613,43 @@ export function mountKeywordLibrary({
       batchStatus.className = "v2-library-batch-status error-text";
     } finally {
       addTagsButton.textContent = "批量添加 Tag";
+      updateLibrarySelection();
+    }
+  });
+  deleteSelectedButton.addEventListener("click", async () => {
+    const market = context.get();
+    const ids = [...selectedLibraryIds];
+    if (!market?.domain || !ids.length || ids.length > 100) {
+      updateLibrarySelection();
+      return;
+    }
+    if (!confirmImpl(`确定从当前网站关键词库删除已选的 ${ids.length} 个关键词吗？此操作会同时移除这些关键词的 Tag 关联。`)) {
+      return;
+    }
+
+    deleteSelectedButton.disabled = true;
+    deleteSelectedButton.textContent = "删除中…";
+    batchStatus.textContent = "";
+    batchStatus.className = "v2-library-batch-status";
+    try {
+      const result = await readJson(await fetchImpl(SAVED_KEYWORDS_URL, {
+        method: "DELETE",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          site_domain: market.domain,
+          ids,
+        }),
+      }));
+      const count = Number(result.data?.deleted_count || ids.length);
+      selectedLibraryIds.clear();
+      batchStatus.textContent = `已删除 ${count} 个关键词 · 本次 $0`;
+      batchStatus.className = "v2-library-batch-status success";
+      await load();
+    } catch (error) {
+      batchStatus.textContent = error.message || "批量删除关键词失败";
+      batchStatus.className = "v2-library-batch-status error-text";
+    } finally {
+      deleteSelectedButton.textContent = "删除已选关键词";
       updateLibrarySelection();
     }
   });

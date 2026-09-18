@@ -213,3 +213,15 @@ test("Keyword Library batch Tag UI uses PATCH on the zero-cost Saved Keywords AP
   assert.match(source, /本次 \$0/);
   assert.doesNotMatch(source, /submitSeoResearchRequest|dataforseo\.com/i);
 });
+
+
+test("Keyword Library batch delete is explicit, bounded, and stays on the zero-cost Saved Keywords API", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /data-v2-library-delete-selected/);
+  assert.match(source, /每次最多批量删除 100 个关键词/);
+  assert.match(source, /method:\s*"DELETE"/);
+  assert.match(source, /ids,/);
+  assert.match(source, /确定从当前网站关键词库删除已选的/);
+  assert.match(source, /已删除 .* 个关键词 · 本次 \$0/);
+  assert.doesNotMatch(source, /submitSeoResearchRequest|dataforseo\.com/i);
+});

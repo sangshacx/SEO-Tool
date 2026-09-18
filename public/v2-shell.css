@@ -22,3 +22,5 @@
 .v2-batch-save-keywords{background:#123c37;border:1px solid #245f56;color:#9ff0d1}.v2-batch-save-status{font-size:11px;color:var(--muted);margin-left:4px}.v2-batch-save-status.success{color:#70e2bb}.v2-batch-save-status.error-text{color:#ff9bad}
 
 .v2-library-selection{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}.v2-library-selection input{min-width:240px;flex:1}.v2-library-selection button{padding:7px 10px;background:#112a49;border:1px solid #294d77}.v2-library-selection [data-v2-library-add-tags]{background:#123c37;border-color:#245f56;color:#9ff0d1}.v2-library-batch-status{font-size:11px;color:var(--muted)}.v2-library-batch-status.success{color:#70e2bb}.v2-library-batch-status.error-text{color:#ff9bad}
+
+.v2-library-selection [data-v2-library-delete-selected]{background:#351625;border-color:#6a2841;color:#ffb1be}

@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 import {
   SAVED_KEYWORDS_CONTRACT_VERSION,
+  normalizeSavedKeywordBulkDelete,
   normalizeSavedKeywordCreate,
   normalizeSavedKeywordDelete,
   normalizeSavedKeywordListQuery,
@@ -88,7 +89,7 @@ test("Saved Keywords API is a zero-provider-cost internal contract", async () =>
   assert.match(apiSource, /actual_cost_usd:\s*0/);
   assert.match(apiSource, /provider_requests:\s*0/);
   assert.match(apiSource, /SAVED_KEYWORDS_CONTRACT_VERSION/);
-  assert.equal(SAVED_KEYWORDS_CONTRACT_VERSION, "saved-keywords-v0.2");
+  assert.equal(SAVED_KEYWORDS_CONTRACT_VERSION, "saved-keywords-v0.3");
 });
 
 test("Saved Keywords API exposes GET, POST, PATCH, DELETE with no provider request", async () => {
@@ -109,6 +110,10 @@ test("Saved Keywords API exposes GET, POST, PATCH, DELETE with no provider reque
     async deleteSavedKeyword(_db, input) {
       calls.push(["delete", input]);
       return input;
+    },
+    async deleteSavedKeywords(_db, input) {
+      calls.push(["bulk-delete", input]);
+      return { deleted_count: input.ids.length, ids: input.ids, site_domain: input.site_domain };
     },
   };
 
@@ -165,7 +170,18 @@ test("Saved Keywords API exposes GET, POST, PATCH, DELETE with no provider reque
     env: { DB: {} },
   });
   assert.equal(deleteResponse.status, 200);
-  assert.deepEqual(calls.map((entry) => entry[0]), ["list", "save", "tag", "delete"]);
+
+  const bulkDeleteResponse = await api.onRequestDelete({
+    request: new Request("https://preview.example/api/v2/keywords/saved", {
+      method: "DELETE",
+      headers,
+      body: JSON.stringify({ site_domain: "example.com", ids: [7, 8, 7] }),
+    }),
+    env: { DB: {} },
+  });
+  assert.equal(bulkDeleteResponse.status, 200);
+  assert.equal((await bulkDeleteResponse.json()).data.deleted_count, 2);
+  assert.deepEqual(calls.map((entry) => entry[0]), ["list", "save", "tag", "delete", "bulk-delete"]);
   delete globalThis.__SAVED_KEYWORD_STORAGE_FOR_TESTS__;
 });
 
@@ -209,5 +225,37 @@ test("Saved Keywords tag storage uses site-scoped placeholders and normalized ta
   assert.match(source, /INSERT INTO saved_keyword_tags/);
   assert.match(source, /INSERT OR IGNORE INTO saved_keyword_tag_assignments/);
   assert.match(source, /WHERE sk\.site_profile_id = \?/);
+  assert.doesNotMatch(source, /DataForSEO|\bfetch\s*\(/);
+});
+
+
+test("Saved Keywords bulk-delete contract is bounded, deduplicated, and site scoped", () => {
+  assert.deepEqual(normalizeSavedKeywordBulkDelete({
+    site_domain: "https://www.example.com/",
+    ids: [2, "3", 2],
+  }), {
+    site_domain: "example.com",
+    ids: [2, 3],
+  });
+
+  assert.throws(
+    () => normalizeSavedKeywordBulkDelete({ site_domain: "example.com", ids: [] }),
+    /At least one saved keyword id/,
+  );
+  assert.throws(
+    () => normalizeSavedKeywordBulkDelete({
+      site_domain: "example.com",
+      ids: Array.from({ length: 101 }, (_, index) => index + 1),
+    }),
+    /No more than 100/,
+  );
+});
+
+test("Saved Keywords bulk delete verifies site ownership before deleting", async () => {
+  const source = await readFile(new URL("../src/v2/storage/saved-keywords.js", import.meta.url), "utf8");
+  assert.match(source, /deleteSavedKeywords/);
+  assert.match(source, /SELECT COUNT\(\*\) AS total/);
+  assert.match(source, /DELETE FROM saved_keywords/);
+  assert.match(source, /WHERE site_profile_id = \?/);
   assert.doesNotMatch(source, /DataForSEO|\bfetch\s*\(/);
 });

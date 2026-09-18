@@ -1,6 +1,7 @@
 import {
   SAVED_KEYWORDS_CONTRACT_VERSION,
   SavedKeywordContractError,
+  normalizeSavedKeywordBulkDelete,
   normalizeSavedKeywordCreate,
   normalizeSavedKeywordDelete,
   normalizeSavedKeywordListQuery,
@@ -166,6 +167,10 @@ export async function onRequestDelete({ request, env }) {
   if (missing) return missing;
   try {
     const body = await readJsonObject(request);
+    if (Array.isArray(body?.ids)) {
+      const input = normalizeSavedKeywordBulkDelete(body);
+      return success(await STORAGE.deleteSavedKeywords(env.DB, input));
+    }
     const input = normalizeSavedKeywordDelete(body);
     return success(await STORAGE.deleteSavedKeyword(env.DB, input));
   } catch (error) {

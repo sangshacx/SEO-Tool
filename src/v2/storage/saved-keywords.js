@@ -329,3 +329,34 @@ export async function addTagsToSavedKeywords(db, input) {
     tags: input.tags.map((tag) => tag.name),
   };
 }
+
+
+export async function deleteSavedKeywords(db, input) {
+  const site = await resolveSiteProfile(db, input.site_domain);
+  const placeholders = input.ids.map(() => "?").join(", ");
+  const owned = await db.prepare(
+    `SELECT COUNT(*) AS total
+     FROM saved_keywords
+     WHERE site_profile_id = ?
+       AND id IN (${placeholders})`,
+  ).bind(site.id, ...input.ids).first();
+
+  if (Number(owned?.total ?? 0) !== input.ids.length) {
+    const error = new Error("SAVED_KEYWORD_NOT_FOUND");
+    error.code = "SAVED_KEYWORD_NOT_FOUND";
+    error.httpStatus = 404;
+    throw error;
+  }
+
+  const result = await db.prepare(
+    `DELETE FROM saved_keywords
+     WHERE site_profile_id = ?
+       AND id IN (${placeholders})`,
+  ).bind(site.id, ...input.ids).run();
+
+  return {
+    site_domain: input.site_domain,
+    ids: input.ids,
+    deleted_count: Number(result?.meta?.changes ?? input.ids.length),
+  };
+}
