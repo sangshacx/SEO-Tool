@@ -85,3 +85,18 @@ test("competitor research is reorganized into a three-tab workspace without chan
   assert.match(shell, /delete panel\.dataset\.v2View/);
   assert.match(shell, /createCompetitorResearchWorkspace\(content\)/);
 });
+
+
+test("backlink research is reorganized into a four-tab workspace without changing backlink APIs", () => {
+  assert.match(shell, /createBacklinkResearchWorkspace/);
+  assert.match(shell, /data-v2-backlink-tab/);
+  assert.match(shell, /data-v2-backlink-panel/);
+  assert.match(shell, /批量概览/);
+  assert.match(shell, /Referring Domains/);
+  assert.match(shell, /Backlink Details/);
+  assert.match(shell, /Anchor Text/);
+  assert.match(shell, /Cache First/);
+  assert.match(shell, /Cost Guard/);
+  assert.match(shell, /delete panel\.dataset\.v2View/);
+  assert.match(shell, /createBacklinkResearchWorkspace\(content\)/);
+});

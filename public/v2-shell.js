@@ -405,6 +405,89 @@ export function createCompetitorResearchWorkspace(root) {
   return { workspace, activateTab };
 }
 
+
+export function createBacklinkResearchWorkspace(root) {
+  const batch = root.querySelector(".backlinkbatch");
+  const referring = root.querySelector(".refdomains");
+  const details = root.querySelector(".backlinkdetails");
+  const anchors = root.querySelector(".anchoranalysis");
+  if (!batch || !referring || !details || !anchors) return null;
+
+  const workspace = createElement("section", "v2-backlink-workspace");
+  workspace.dataset.v2View = "backlinks";
+
+  const hero = createElement("div", "v2-backlink-hero");
+  hero.innerHTML = `
+    <div>
+      <div class="v2-backlink-eyebrow">BACKLINK RESEARCH</div>
+      <h2>外链研究</h2>
+      <p>从批量域名概览进入引用域、具体 Backlink 和 Anchor Text，按需读取缓存或明确确认付费查询。</p>
+    </div>
+    <div class="v2-backlink-hero-meta">
+      <span>Cache First</span>
+      <span>Cost Guard</span>
+    </div>
+  `;
+
+  const tabs = createElement("div", "v2-backlink-tabs");
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "外链研究视图");
+  const tabConfig = [
+    ["batch", "批量概览"],
+    ["referring", "Referring Domains"],
+    ["details", "Backlink Details"],
+    ["anchors", "Anchor Text"],
+  ];
+  tabConfig.forEach(([id, label], index) => {
+    const button = createElement("button", index === 0 ? "active" : "", label);
+    button.type = "button";
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+    button.dataset.v2BacklinkTab = id;
+    tabs.appendChild(button);
+  });
+
+  const stage = createElement("div", "v2-backlink-stage");
+  const panels = [
+    [batch, "batch", "v2-backlink-batch-panel"],
+    [referring, "referring", "v2-backlink-referring-panel"],
+    [details, "details", "v2-backlink-details-panel"],
+    [anchors, "anchors", "v2-backlink-anchor-panel"],
+  ];
+  panels.forEach(([panel, id, className], index) => {
+    panel.classList.add("v2-backlink-panel", className);
+    panel.dataset.v2BacklinkPanel = id;
+    delete panel.dataset.v2View;
+    panel.hidden = index !== 0;
+  });
+
+  const activateTab = (tabId) => {
+    const target = tabConfig.some(([id]) => id === tabId) ? tabId : "batch";
+    tabs.querySelectorAll("[data-v2-backlink-tab]").forEach((button) => {
+      const active = button.dataset.v2BacklinkTab === target;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    stage.querySelectorAll("[data-v2-backlink-panel]").forEach((panel) => {
+      const active = panel.dataset.v2BacklinkPanel === target;
+      panel.hidden = !active;
+      panel.classList.toggle("active", active);
+    });
+    return target;
+  };
+
+  tabs.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-v2-backlink-tab]");
+    if (button) activateTab(button.dataset.v2BacklinkTab);
+  });
+
+  batch.before(workspace);
+  workspace.append(hero, tabs, stage);
+  stage.append(batch, referring, details, anchors);
+  activateTab("batch");
+  return { workspace, activateTab };
+}
+
 function createPlaceholder(view, title, description) {
   const section = createElement("section", "panel v2-placeholder");
   section.dataset.v2View = view;
@@ -759,6 +842,7 @@ function buildShell() {
   markDomainFields(content);
   createKeywordResearchWorkspace(content);
   createCompetitorResearchWorkspace(content);
+  createBacklinkResearchWorkspace(content);
   content.querySelector(".top")?.classList.add("v2-legacy-heading");
   content.querySelector("h1")?.classList.add("v2-legacy-heading");
   content.querySelector("h1 + .lead")?.classList.add("v2-legacy-heading");
