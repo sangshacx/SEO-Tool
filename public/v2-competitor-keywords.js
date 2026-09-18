@@ -1,8 +1,40 @@
 const DEFAULT_PAGE_SIZE = 10;
 
+export const COMPETITOR_OPPORTUNITY_RULES_VERSION = "competitor-opportunity-presets-v0.1";
+
+export const COMPETITOR_OPPORTUNITY_THRESHOLDS = Object.freeze({
+  quick_position_max: 10,
+  quick_keyword_difficulty_max: 35,
+  commercial_search_volume_min: 100,
+  high_cpc_usd_min: 1,
+});
+
 function numericValue(value, fallback) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
+}
+
+export function competitorOpportunityPresetMatches(item, preset = "all") {
+  const position = numericValue(item?.position, Infinity);
+  const difficulty = numericValue(item?.keyword_difficulty, Infinity);
+  const volume = numericValue(item?.search_volume, 0);
+  const cpc = numericValue(item?.cpc_usd, 0);
+  const intent = String(item?.intent || "").toLowerCase();
+  const commercialIntent = intent === "commercial" || intent === "transactional";
+
+  if (preset === "quick-opportunity") {
+    return position <= COMPETITOR_OPPORTUNITY_THRESHOLDS.quick_position_max &&
+      difficulty <= COMPETITOR_OPPORTUNITY_THRESHOLDS.quick_keyword_difficulty_max;
+  }
+  if (preset === "commercial-demand") {
+    return commercialIntent &&
+      volume >= COMPETITOR_OPPORTUNITY_THRESHOLDS.commercial_search_volume_min;
+  }
+  if (preset === "high-cpc-commercial") {
+    return commercialIntent &&
+      cpc >= COMPETITOR_OPPORTUNITY_THRESHOLDS.high_cpc_usd_min;
+  }
+  return true;
 }
 
 export function filterAndSortCompetitorKeywords(rows, { query = "", intent = "", preset = "all", sort = "position" } = {}) {
@@ -17,6 +49,8 @@ export function filterAndSortCompetitorKeywords(rows, { query = "", intent = "",
     if (normalizedIntent && itemIntent !== normalizedIntent) return false;
     if (preset === "top10" && position > 10) return false;
     if (preset === "low-kd" && difficulty > 35) return false;
+    if (["quick-opportunity", "commercial-demand", "high-cpc-commercial"].includes(preset) &&
+        !competitorOpportunityPresetMatches(item, preset)) return false;
     return true;
   });
   const valueFor = {

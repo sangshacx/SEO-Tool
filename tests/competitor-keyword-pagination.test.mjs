@@ -105,6 +105,46 @@ test("competitor keyword filtering and sorting is local and deterministic", asyn
   ]);
 });
 
+test("competitor opportunity presets are transparent and deterministic", async () => {
+  const {
+    COMPETITOR_OPPORTUNITY_RULES_VERSION,
+    COMPETITOR_OPPORTUNITY_THRESHOLDS,
+    competitorOpportunityPresetMatches,
+    filterAndSortCompetitorKeywords,
+  } = await import("../public/v2-competitor-keywords.js");
+
+  assert.equal(COMPETITOR_OPPORTUNITY_RULES_VERSION, "competitor-opportunity-presets-v0.1");
+  assert.deepEqual(COMPETITOR_OPPORTUNITY_THRESHOLDS, {
+    quick_position_max: 10,
+    quick_keyword_difficulty_max: 35,
+    commercial_search_volume_min: 100,
+    high_cpc_usd_min: 1,
+  });
+
+  const rows = [
+    { keyword: "easy commercial", position: 4, search_volume: 500, keyword_difficulty: 22, cpc_usd: 1.4, intent: "commercial" },
+    { keyword: "hard commercial", position: 6, search_volume: 700, keyword_difficulty: 55, cpc_usd: 2.2, intent: "commercial" },
+    { keyword: "cheap transaction", position: 18, search_volume: 300, keyword_difficulty: 18, cpc_usd: 0.4, intent: "transactional" },
+    { keyword: "informational cpc", position: 2, search_volume: 900, keyword_difficulty: 15, cpc_usd: 3.5, intent: "informational" },
+  ];
+
+  assert.equal(competitorOpportunityPresetMatches(rows[0], "quick-opportunity"), true);
+  assert.equal(competitorOpportunityPresetMatches(rows[1], "quick-opportunity"), false);
+  assert.deepEqual(filterAndSortCompetitorKeywords(rows, { preset: "quick-opportunity" }).map((row) => row.keyword), [
+    "informational cpc",
+    "easy commercial",
+  ]);
+  assert.deepEqual(filterAndSortCompetitorKeywords(rows, { preset: "commercial-demand", sort: "volume" }).map((row) => row.keyword), [
+    "hard commercial",
+    "easy commercial",
+    "cheap transaction",
+  ]);
+  assert.deepEqual(filterAndSortCompetitorKeywords(rows, { preset: "high-cpc-commercial", sort: "cpc" }).map((row) => row.keyword), [
+    "hard commercial",
+    "easy commercial",
+  ]);
+});
+
 test("clicking a competitor keyword only prefills Keyword Explorer and never submits", async () => {
   const { prefillKeywordExplorer } = await import("../public/v2-competitor-keywords.js");
   let focused = 0;
