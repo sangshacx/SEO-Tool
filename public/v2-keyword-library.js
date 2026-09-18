@@ -9,6 +9,12 @@ const SOURCE_LABELS = Object.freeze({
   serp_reality: "SERP Reality",
 });
 
+export const RESEARCH_SAVE_SURFACES = Object.freeze({
+  ideasBody: Object.freeze({ source: "keyword_ideas", keyword_cell_index: 2 }),
+  competitorBody: Object.freeze({ source: "competitor_snapshot", keyword_cell_index: 1 }),
+  gapBody: Object.freeze({ source: "keyword_gap", keyword_cell_index: 2 }),
+});
+
 function clean(value) {
   return String(value ?? "").trim();
 }
@@ -66,6 +72,71 @@ export function savedKeywordCreatePayload({ market, keyword, source = "keyword_e
     source,
     tags,
   };
+}
+
+export function researchSurfaceKeyword(row, spec) {
+  const index = Number(spec?.keyword_cell_index);
+  if (!row || !Number.isInteger(index) || index < 0) return "";
+  const cell = row.children?.[index];
+  if (!cell || cell.querySelector?.(".emptyrow")) return "";
+  const linked = clean(cell.querySelector?.("a")?.textContent);
+  if (linked) return linked.replace(/\s+/g, " ");
+  const textNodes = [...(cell.childNodes || [])]
+    .filter((node) => node?.nodeType === 3)
+    .map((node) => clean(node.textContent))
+    .filter(Boolean);
+  const direct = clean(textNodes.join(" "));
+  return (direct || clean(cell.textContent)).replace(/\s+/g, " ");
+}
+
+export function decorateResearchKeywordRows({
+  body,
+  spec,
+  market,
+  onSave,
+  documentLike = globalThis.document,
+} = {}) {
+  if (!body || !spec || typeof onSave !== "function") return 0;
+  let added = 0;
+  [...(body.children || [])].forEach((row) => {
+    if (row.querySelector?.(".emptyrow")) return;
+    const cell = row.children?.[spec.keyword_cell_index];
+    if (!cell || cell.querySelector?.("[data-v2-inline-save-keyword]")) return;
+    const keyword = researchSurfaceKeyword(row, spec);
+    if (!keyword) return;
+
+    const button = documentLike.createElement("button");
+    button.type = "button";
+    button.className = "v2-inline-save-keyword";
+    button.dataset.v2InlineSaveKeyword = "";
+    button.textContent = "保存";
+    button.title = market?.domain
+      ? `保存“${keyword}”到当前网站关键词库`
+      : "请先在网站管理添加并选择当前网站";
+    button.disabled = !market?.domain;
+    button.addEventListener("click", async (event) => {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      button.disabled = true;
+      const original = button.textContent;
+      button.textContent = "保存中…";
+      try {
+        await onSave({ keyword, source: spec.source });
+        button.textContent = "已保存";
+        button.classList?.add?.("saved");
+      } catch (error) {
+        button.textContent = "重试";
+        button.title = error?.message || "保存失败";
+        button.classList?.add?.("error");
+      } finally {
+        if (!button.classList?.contains?.("saved")) button.disabled = !market?.domain;
+        if (!button.textContent) button.textContent = original;
+      }
+    });
+    cell.appendChild(button);
+    added += 1;
+  });
+  return added;
 }
 
 async function readJson(response) {
@@ -259,6 +330,21 @@ export function mountKeywordLibrary({
     return load();
   };
 
+  const saveToLibrary = async ({ keyword, source }) => {
+    const payload = savedKeywordCreatePayload({
+      market: context.get(),
+      keyword,
+      source,
+    });
+    const result = await readJson(await fetchImpl(SAVED_KEYWORDS_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify(payload),
+    }));
+    await resetAndLoad();
+    return result;
+  };
+
   queryInput.addEventListener("input", resetAndLoad);
   tagInput.addEventListener("input", resetAndLoad);
   sortSelect.addEventListener("change", resetAndLoad);
@@ -347,14 +433,9 @@ export function mountKeywordLibrary({
       });
       saveButton.disabled = true;
       saveButton.textContent = "保存中…";
-      const result = await readJson(await fetchImpl(SAVED_KEYWORDS_URL, {
-        method: "POST",
-        headers: { "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify(payload),
-      }));
+      const result = await saveToLibrary({ keyword: payload.keyword, source: payload.source });
       saveStatus.textContent = `已保存“${result.data?.keyword || payload.keyword}”到关键词库 · 本次 $0`;
       saveStatus.className = "v2-save-keyword-status success";
-      await resetAndLoad();
     } catch (error) {
       saveStatus.textContent = error.message || "保存关键词失败";
       saveStatus.className = "v2-save-keyword-status error-text";
@@ -364,10 +445,31 @@ export function mountKeywordLibrary({
     }
   });
 
+  const surfaceObservers = [];
+  const decorateSurface = (body, spec) => decorateResearchKeywordRows({
+    body,
+    spec,
+    market: context.get(),
+    documentLike,
+    onSave: saveToLibrary,
+  });
+
+  Object.entries(RESEARCH_SAVE_SURFACES).forEach(([bodyId, spec]) => {
+    const body = root.querySelector(`#${bodyId}`);
+    if (!body) return;
+    decorateSurface(body, spec);
+    if (typeof globalThis.MutationObserver === "function") {
+      const observer = new globalThis.MutationObserver(() => decorateSurface(body, spec));
+      observer.observe(body, { childList: true });
+      surfaceObservers.push(observer);
+    }
+  });
+
   updateSaveButton();
 
   return () => {
     unsubscribe?.();
+    surfaceObservers.forEach((observer) => observer.disconnect?.());
     keywordInput?.removeEventListener("input", handleKeywordInput);
   };
 }
