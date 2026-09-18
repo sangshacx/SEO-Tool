@@ -3005,3 +3005,36 @@
   .v2-competitor-intelligence-detail{grid-template-columns:1fr}
   .v2-competitor-intelligence-next button{width:100%}
 }
+
+
+/* Competitor Gap Action Brief */
+.v2-competitor-gap-action-card{
+  margin:14px 18px 0;
+  padding:15px;
+  border:1px solid #294d77;
+  border-radius:10px;
+  background:linear-gradient(145deg,#0d2037,#0b1829);
+}
+.v2-competitor-gap-action-card[hidden]{display:none!important}
+.v2-competitor-gap-action-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}
+.v2-competitor-gap-action-head h3{margin:4px 0 0;color:#e8f1ff;font-size:17px}
+.v2-competitor-gap-action-head p{margin:5px 0 0;color:#7189aa;font-size:11px}
+.v2-gap-action-decision{max-width:460px;text-align:right}
+.v2-gap-action-decision b{display:block;color:#92d7bd;font-size:14px}
+.v2-gap-action-decision span{display:block;margin-top:4px;color:#a9bdd8;font-size:11px;line-height:1.45}
+.v2-gap-action-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:13px}
+.v2-gap-action-metrics>div{padding:10px 11px;border:1px solid #1d3554;border-radius:8px;background:#0b1728}
+.v2-gap-action-metrics span{display:block;color:#7088a8;font-size:9px;font-weight:800;text-transform:uppercase}
+.v2-gap-action-metrics b{display:block;margin-top:5px;color:#edf4ff;font-size:18px}
+.v2-gap-action-top{margin-top:12px;padding:11px 12px;border:1px solid #1d3554;border-radius:8px;background:#0a1727}
+.v2-gap-action-top>b{color:#bcd0ea;font-size:11px}
+.v2-gap-action-top ol{display:grid;gap:6px;margin:8px 0 0;padding-left:20px}
+.v2-gap-action-top li{color:#8ca5c5;font-size:11px}
+.v2-gap-action-top li b{color:#d8e6f8;margin-right:7px}
+.v2-gap-action-top li span{color:#7088a8}
+.v2-gap-action-foot{margin-top:8px;color:#607a9d;font-size:9px;line-height:1.45}
+@media(max-width:760px){
+  .v2-competitor-gap-action-head{flex-direction:column}
+  .v2-gap-action-decision{text-align:left}
+  .v2-gap-action-metrics{grid-template-columns:1fr 1fr}
+}

@@ -9,6 +9,10 @@ import {
 import {
   competitorIntelligencePresentation,
 } from "../public/v2-competitor-intelligence-ui.js";
+import {
+  COMPETITOR_GAP_ACTION_VERSION,
+  buildCompetitorGapAction,
+} from "../src/v2/intelligence/competitor-gap-action.js";
 
 test("Competitor Intelligence v0.1 is deterministic and explainable", () => {
   const intelligence = buildCompetitorSnapshotIntelligence({
@@ -91,5 +95,69 @@ test("Competitor Intelligence UI listens to the local snapshot event and only pr
   assert.match(source, /去验证 Keyword Gap/);
   assert.match(source, /gapInput\.value = currentDomain/);
   assert.match(source, /activateTab\?\.\("gap"\)/);
+  assert.doesNotMatch(source, /fetch\s*\(|submitSeoResearchRequest|requestSubmit\(|\.submit\(/);
+});
+
+
+test("Gap Action Brief ranks Easy Wins into a deterministic next-action shortlist", () => {
+  const rows = [
+    {
+      keyword: "waterproof membrane supplier",
+      competitor_position: 3,
+      metrics: { search_volume: 1000, keyword_difficulty: 28, cpc_usd: 2.8 },
+      intent: { primary: "commercial" },
+      intelligence: { gap_priority: { score: 82 } },
+    },
+    {
+      keyword: "roof waterproofing membrane",
+      competitor_position: 8,
+      metrics: { search_volume: 700, keyword_difficulty: 31, cpc_usd: 1.9 },
+      intent: { primary: "transactional" },
+      intelligence: { gap_priority: { score: 76 } },
+    },
+    {
+      keyword: "bitumen membrane guide",
+      competitor_position: 5,
+      metrics: { search_volume: 400, keyword_difficulty: 22, cpc_usd: 1.2 },
+      intent: { primary: "informational" },
+      intelligence: { gap_priority: { score: 70 } },
+    },
+  ];
+  const brief = buildCompetitorGapAction({
+    competitor_domain: "competitor.example",
+    own_domain: "own.example",
+    opportunities: rows,
+  });
+  assert.equal(brief.version, COMPETITOR_GAP_ACTION_VERSION);
+  assert.equal(brief.version, "competitor-gap-action-v0.1");
+  assert.equal(brief.summary.easy_wins, 3);
+  assert.equal(brief.decision.code, "attack_now");
+  assert.equal(brief.top_actions.length, 3);
+  assert.ok(brief.top_actions[0].action_score >= brief.top_actions[1].action_score);
+  assert.match(brief.disclaimer, /不代表全部市场机会、排名概率或收入预测/);
+});
+
+test("Gap Action Brief does not overstate weak samples", () => {
+  const brief = buildCompetitorGapAction({
+    opportunities: [{
+      keyword: "weak term",
+      competitor_position: 38,
+      metrics: { search_volume: 20, keyword_difficulty: 72, cpc_usd: 0.2 },
+      intent: { primary: "informational" },
+      intelligence: { gap_priority: { score: 32 } },
+    }],
+  });
+  assert.equal(brief.summary.easy_wins, 0);
+  assert.equal(brief.top_actions.length, 0);
+  assert.equal(brief.decision.code, "monitor");
+});
+
+test("Competitor Intelligence UI renders Gap Action Brief from a local event without provider calls", async () => {
+  const source = await readFile(new URL("../public/v2-competitor-intelligence-ui.js", import.meta.url), "utf8");
+  assert.match(source, /seo-pro-v2:keyword-gap-ready/);
+  assert.match(source, /GAP ACTION BRIEF/);
+  assert.match(source, /What should I do next\?/);
+  assert.match(source, /Easy Wins/);
+  assert.match(source, /Top 3 优先动作/);
   assert.doesNotMatch(source, /fetch\s*\(|submitSeoResearchRequest|requestSubmit\(|\.submit\(/);
 });

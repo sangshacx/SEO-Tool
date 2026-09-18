@@ -1,3 +1,5 @@
+import { buildCompetitorGapAction } from "../src/v2/intelligence/competitor-gap-action.js";
+
 export function competitorIntelligencePresentation(intelligence = {}) {
   const score = Number.isFinite(Number(intelligence?.score)) ? Number(intelligence.score) : null;
   const confidence = Number.isFinite(Number(intelligence?.confidence_score)) ? Number(intelligence.confidence_score) : null;
@@ -75,6 +77,38 @@ export function mountCompetitorIntelligence({
   `;
   result.before(card);
 
+  const gapPanel = root?.querySelector?.(".v2-competitor-gap-panel");
+  const gapResult = gapPanel?.querySelector?.("#gapResult");
+  const gapCard = documentLike.createElement("section");
+  gapCard.className = "v2-competitor-gap-action-card";
+  gapCard.dataset.v2CompetitorGapAction = "";
+  gapCard.hidden = true;
+  gapCard.innerHTML = `
+    <div class="v2-competitor-gap-action-head">
+      <div>
+        <div class="v2-competitor-intelligence-eyebrow">GAP ACTION BRIEF · v0.1</div>
+        <h3>What should I do next?</h3>
+        <p>把 Keyword Gap 样本压缩成 Easy Wins、需验证机会和本轮最值得先做的关键词。</p>
+      </div>
+      <div class="v2-gap-action-decision">
+        <b data-v2-gap-action-label>等待 Keyword Gap</b>
+        <span data-v2-gap-action-next>先运行 Keyword Gap。</span>
+      </div>
+    </div>
+    <div class="v2-gap-action-metrics">
+      <div><span>Easy Wins</span><b data-v2-gap-metric="easy_wins">—</b></div>
+      <div><span>高机会需验证</span><b data-v2-gap-metric="high_validate">—</b></div>
+      <div><span>商业型缺口</span><b data-v2-gap-metric="commercial_gaps">—</b></div>
+      <div><span>低 KD 缺口</span><b data-v2-gap-metric="low_kd_gaps">—</b></div>
+    </div>
+    <div class="v2-gap-action-top">
+      <b>Top 3 优先动作</b>
+      <ol data-v2-gap-action-list></ol>
+    </div>
+    <div class="v2-gap-action-foot" data-v2-gap-action-disclaimer></div>
+  `;
+  gapResult?.before?.(gapCard);
+
   let currentDomain = "";
   const render = (detail = {}) => {
     const intelligence = detail.intelligence;
@@ -98,6 +132,44 @@ export function mountCompetitorIntelligence({
   const handleSnapshot = (event) => render(event?.detail || {});
   eventTarget?.addEventListener?.("seo-pro-v2:competitor-snapshot-ready", handleSnapshot);
 
+  const handleGapReady = (event) => {
+    const data = event?.detail?.data || event?.detail || {};
+    const brief = buildCompetitorGapAction(data);
+    if (!gapCard) return;
+    gapCard.querySelector("[data-v2-gap-action-label]").textContent = brief.decision.label;
+    gapCard.querySelector("[data-v2-gap-action-next]").textContent = brief.decision.next_action;
+    Object.entries(brief.summary).forEach(([key, value]) => {
+      const target = gapCard.querySelector(`[data-v2-gap-metric="${key}"]`);
+      if (target) target.textContent = String(value);
+    });
+    const list = gapCard.querySelector("[data-v2-gap-action-list]");
+    list.replaceChildren();
+    if (!brief.top_actions.length) {
+      const item = documentLike.createElement("li");
+      item.textContent = "当前样本没有达到优先行动阈值的关键词。";
+      list.appendChild(item);
+    } else {
+      brief.top_actions.forEach((action) => {
+        const item = documentLike.createElement("li");
+        const keyword = documentLike.createElement("b");
+        keyword.textContent = action.keyword;
+        const meta = documentLike.createElement("span");
+        meta.textContent = [
+          `Action ${action.action_score}`,
+          action.gap_priority == null ? null : `Gap ${action.gap_priority}`,
+          action.search_volume == null ? null : `Vol ${action.search_volume}`,
+          action.keyword_difficulty == null ? null : `KD ${action.keyword_difficulty}`,
+          action.competitor_position == null ? null : `竞品 #${action.competitor_position}`,
+        ].filter(Boolean).join(" · ");
+        item.append(keyword, meta);
+        list.appendChild(item);
+      });
+    }
+    gapCard.querySelector("[data-v2-gap-action-disclaimer]").textContent = `${brief.version} · ${brief.disclaimer}`;
+    gapCard.hidden = false;
+  };
+  eventTarget?.addEventListener?.("seo-pro-v2:keyword-gap-ready", handleGapReady);
+
   const gapButton = card.querySelector("[data-v2-ci-gap]");
   gapButton.addEventListener("click", () => {
     if (!currentDomain || !gapInput) return;
@@ -108,6 +180,8 @@ export function mountCompetitorIntelligence({
 
   return () => {
     eventTarget?.removeEventListener?.("seo-pro-v2:competitor-snapshot-ready", handleSnapshot);
+    eventTarget?.removeEventListener?.("seo-pro-v2:keyword-gap-ready", handleGapReady);
     card.remove?.();
+    gapCard.remove?.();
   };
 }
