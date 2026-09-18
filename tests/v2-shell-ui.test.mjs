@@ -71,3 +71,17 @@ test("keyword research is reorganized into a tabbed workspace without replacing 
   assert.match(shell, /delete overview\.dataset\.v2View/);
   assert.match(shell, /createKeywordResearchWorkspace\(content\)/);
 });
+
+
+test("competitor research is reorganized into a three-tab workspace without changing research APIs", () => {
+  assert.match(shell, /createCompetitorResearchWorkspace/);
+  assert.match(shell, /data-v2-competitor-tab/);
+  assert.match(shell, /data-v2-competitor-panel/);
+  assert.match(shell, /自然搜索概览/);
+  assert.match(shell, /Keyword Gap/);
+  assert.match(shell, /外链比较/);
+  assert.match(shell, /7 天缓存/);
+  assert.match(shell, /Cost Guard/);
+  assert.match(shell, /delete panel\.dataset\.v2View/);
+  assert.match(shell, /createCompetitorResearchWorkspace\(content\)/);
+});

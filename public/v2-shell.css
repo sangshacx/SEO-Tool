@@ -963,3 +963,286 @@
   .v2-keyword-overview-panel>.search{grid-template-columns:1fr}
   .v2-keyword-overview-panel>.search button{grid-column:auto}
 }
+
+
+/* Competitor Research workspace redesign */
+.v2-competitor-workspace{
+  margin-top:0;
+}
+.v2-competitor-hero{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:20px;
+  padding:4px 2px 18px;
+}
+.v2-competitor-eyebrow{
+  margin-bottom:6px;
+  color:#6f93c6;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.16em;
+}
+.v2-competitor-hero h2{
+  margin:0;
+  color:#edf4ff;
+  font-size:24px;
+  line-height:1.2;
+}
+.v2-competitor-hero p{
+  max-width:760px;
+  margin:7px 0 0;
+  color:#8098b9;
+  font-size:13px;
+}
+.v2-competitor-hero-meta{
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.v2-competitor-hero-meta span{
+  display:inline-flex;
+  align-items:center;
+  min-height:30px;
+  padding:0 9px;
+  border:1px solid #203b5d;
+  border-radius:999px;
+  background:#0c1c30;
+  color:#7ea6d8;
+  font-size:10px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.v2-competitor-tabs{
+  display:flex;
+  gap:4px;
+  width:max-content;
+  max-width:100%;
+  margin-bottom:14px;
+  padding:4px;
+  border:1px solid #1d3554;
+  border-radius:10px;
+  background:#0b1829;
+}
+.v2-competitor-tabs button{
+  min-height:34px;
+  padding:0 14px;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#7188a9;
+  font-size:12px;
+  font-weight:750;
+}
+.v2-competitor-tabs button.active{
+  background:#172b49;
+  color:#e8f1ff;
+  box-shadow:inset 0 0 0 1px #294d77;
+}
+.v2-competitor-stage{
+  border:1px solid #1b3352;
+  border-radius:12px;
+  background:#0c192b;
+  overflow:hidden;
+}
+.v2-competitor-panel[hidden]{display:none!important}
+.v2-competitor-panel{
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.v2-competitor-panel>.section-title{
+  margin:0;
+  padding:17px 18px 4px;
+  color:#e8f1ff;
+  font-size:17px;
+}
+.v2-competitor-panel>.section-title+.sub{
+  padding:0 18px 13px;
+  color:#7189aa;
+  font-size:12px;
+}
+.v2-competitor-panel>.competitorform,
+.v2-competitor-panel>.gapform,
+.v2-competitor-panel>.compareform{
+  display:grid;
+  gap:9px;
+  margin:0;
+  padding:13px 18px;
+  border-top:1px solid #172d49;
+  border-bottom:1px solid #172d49;
+  background:#0d1d32;
+}
+.v2-competitor-panel>.competitorform{
+  grid-template-columns:minmax(320px,1fr) auto;
+}
+.v2-competitor-panel>.gapform,
+.v2-competitor-panel>.compareform{
+  grid-template-columns:minmax(240px,1fr) minmax(240px,1fr) auto;
+}
+.v2-competitor-panel>.competitorform input,
+.v2-competitor-panel>.gapform input,
+.v2-competitor-panel>.compareform input{
+  min-height:42px;
+  border:1px solid #274563;
+  border-radius:8px;
+  background:#0b1728;
+  color:#e0e9f7;
+}
+.v2-competitor-panel>.competitorform button,
+.v2-competitor-panel>.gapform button,
+.v2-competitor-panel>.compareform button{
+  min-height:42px;
+  padding:0 15px;
+  border:1px solid #3c6ee6;
+  border-radius:8px;
+  background:#4f78e8;
+  color:#fff;
+  font-weight:800;
+  white-space:nowrap;
+}
+.v2-competitor-panel>.note{
+  margin:0;
+  padding:9px 18px;
+  border:0;
+  border-bottom:1px solid #152b47;
+  border-radius:0;
+  background:#0a1727;
+  color:#7189aa;
+  font-size:11px;
+}
+.v2-competitor-panel>.status{
+  margin:0 18px;
+}
+.v2-competitor-panel>#competitorResult,
+.v2-competitor-panel>#gapResult,
+.v2-competitor-panel>#backlinkCompareResult{
+  padding:14px 18px 18px;
+}
+.v2-competitor-panel .competitormetrics,
+.v2-competitor-panel .backlinkmetrics{
+  gap:8px;
+  margin:0 0 10px;
+}
+.v2-competitor-panel .metric{
+  padding:13px;
+  border:1px solid #1d3554;
+  border-radius:9px;
+  background:#0b1728;
+}
+.v2-competitor-panel .metric .value{
+  margin-top:6px;
+  color:#eef5ff;
+}
+.v2-competitor-panel .competitortools,
+.v2-competitor-panel .gaptools{
+  display:grid;
+  gap:7px;
+  margin:0;
+  padding:10px;
+  border:1px solid #1b3352;
+  border-radius:10px 10px 0 0;
+  background:#0d1d32;
+}
+.v2-competitor-panel .competitortools{
+  grid-template-columns:minmax(220px,1.5fr) minmax(140px,.8fr) minmax(210px,1fr) minmax(150px,.8fr);
+}
+.v2-competitor-panel .gaptools{
+  grid-template-columns:minmax(220px,1.5fr) minmax(140px,.8fr) minmax(170px,.9fr) minmax(170px,.9fr);
+}
+.v2-competitor-panel .competitortools input,
+.v2-competitor-panel .competitortools select,
+.v2-competitor-panel .gaptools input,
+.v2-competitor-panel .gaptools select{
+  min-height:36px;
+  border:1px solid #233d5d;
+  border-radius:7px;
+  background:#0b1728;
+  color:#cdd9eb;
+}
+.v2-competitor-panel .gapactions{
+  margin:0;
+  padding:9px 10px;
+  border-left:1px solid #1b3352;
+  border-right:1px solid #1b3352;
+  background:#0a1727;
+}
+.v2-competitor-panel .gapactions button,
+.v2-competitor-panel .competitorpager button,
+.v2-competitor-panel .gappager button{
+  min-height:30px;
+  padding:0 9px;
+  border:1px solid #294d77;
+  border-radius:7px;
+  background:#10243c;
+  color:#9fb5d2;
+  font-size:11px;
+  font-weight:750;
+}
+.v2-competitor-panel .tablewrap{
+  border:1px solid #1b3352;
+  background:#0b1728;
+}
+.v2-competitor-panel .ideastable thead th{
+  background:#0d1d32;
+  color:#6f8cb3;
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.05em;
+}
+.v2-competitor-panel .ideastable tbody tr:hover{
+  background:#0f2036;
+}
+.v2-competitor-panel .competitorpager,
+.v2-competitor-panel .gappager{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top:10px;
+}
+.v2-competitor-backlink-panel .comparehead{
+  padding:12px 14px;
+  border:1px solid #1d3554;
+  border-radius:9px;
+  background:#0b1728;
+}
+.v2-competitor-backlink-panel .compareverdict{
+  color:#dce9ff;
+}
+.v2-competitor-backlink-panel .briefsection{
+  margin-top:12px;
+  padding:12px 14px;
+  border:1px solid #1d3554;
+  border-radius:9px;
+  background:#0b1728;
+}
+.v2-competitor-backlink-panel .briefsection h3{
+  margin-top:0;
+  color:#c9d8ed;
+}
+.v2-competitor-backlink-panel .missingactions button{
+  border:1px solid #294d77;
+  border-radius:7px;
+  background:#10243c;
+  color:#a9bdd8;
+}
+@media(max-width:980px){
+  .v2-competitor-panel .competitortools,
+  .v2-competitor-panel .gaptools{grid-template-columns:1fr 1fr}
+}
+@media(max-width:720px){
+  .v2-competitor-hero{flex-direction:column}
+  .v2-competitor-hero-meta{justify-content:flex-start}
+  .v2-competitor-tabs{width:100%;overflow:auto}
+  .v2-competitor-tabs button{flex:0 0 auto}
+  .v2-competitor-panel>.competitorform,
+  .v2-competitor-panel>.gapform,
+  .v2-competitor-panel>.compareform,
+  .v2-competitor-panel .competitortools,
+  .v2-competitor-panel .gaptools{grid-template-columns:1fr}
+}

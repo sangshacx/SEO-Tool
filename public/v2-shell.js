@@ -325,6 +325,86 @@ export function createKeywordResearchWorkspace(root) {
   return { workspace, activateTab };
 }
 
+
+export function createCompetitorResearchWorkspace(root) {
+  const snapshot = root.querySelector(".competitor");
+  const gap = root.querySelector(".keywordgap");
+  const backlinks = root.querySelector(".backlinkcompare");
+  if (!snapshot || !gap || !backlinks) return null;
+
+  const workspace = createElement("section", "v2-competitor-workspace");
+  workspace.dataset.v2View = "competitors";
+
+  const hero = createElement("div", "v2-competitor-hero");
+  hero.innerHTML = `
+    <div>
+      <div class="v2-competitor-eyebrow">COMPETITOR RESEARCH</div>
+      <h2>竞争对手研究</h2>
+      <p>先看竞争对手的自然搜索规模和排名关键词，再验证 Keyword Gap 与外链差距。</p>
+    </div>
+    <div class="v2-competitor-hero-meta">
+      <span>7 天缓存</span>
+      <span>Cost Guard</span>
+    </div>
+  `;
+
+  const tabs = createElement("div", "v2-competitor-tabs");
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "竞争对手研究视图");
+  const tabConfig = [
+    ["snapshot", "自然搜索概览"],
+    ["gap", "Keyword Gap"],
+    ["backlinks", "外链比较"],
+  ];
+  tabConfig.forEach(([id, label], index) => {
+    const button = createElement("button", index === 0 ? "active" : "", label);
+    button.type = "button";
+    button.setAttribute("role", "tab");
+    button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+    button.dataset.v2CompetitorTab = id;
+    tabs.appendChild(button);
+  });
+
+  const stage = createElement("div", "v2-competitor-stage");
+  const panels = [
+    [snapshot, "snapshot", "v2-competitor-snapshot-panel"],
+    [gap, "gap", "v2-competitor-gap-panel"],
+    [backlinks, "backlinks", "v2-competitor-backlink-panel"],
+  ];
+  panels.forEach(([panel, id, className], index) => {
+    panel.classList.add("v2-competitor-panel", className);
+    panel.dataset.v2CompetitorPanel = id;
+    delete panel.dataset.v2View;
+    panel.hidden = index !== 0;
+  });
+
+  const activateTab = (tabId) => {
+    const target = tabConfig.some(([id]) => id === tabId) ? tabId : "snapshot";
+    tabs.querySelectorAll("[data-v2-competitor-tab]").forEach((button) => {
+      const active = button.dataset.v2CompetitorTab === target;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    stage.querySelectorAll("[data-v2-competitor-panel]").forEach((panel) => {
+      const active = panel.dataset.v2CompetitorPanel === target;
+      panel.hidden = !active;
+      panel.classList.toggle("active", active);
+    });
+    return target;
+  };
+
+  tabs.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-v2-competitor-tab]");
+    if (button) activateTab(button.dataset.v2CompetitorTab);
+  });
+
+  snapshot.before(workspace);
+  workspace.append(hero, tabs, stage);
+  stage.append(snapshot, gap, backlinks);
+  activateTab("snapshot");
+  return { workspace, activateTab };
+}
+
 function createPlaceholder(view, title, description) {
   const section = createElement("section", "panel v2-placeholder");
   section.dataset.v2View = view;
@@ -678,6 +758,7 @@ function buildShell() {
   annotateExistingTools(content);
   markDomainFields(content);
   createKeywordResearchWorkspace(content);
+  createCompetitorResearchWorkspace(content);
   content.querySelector(".top")?.classList.add("v2-legacy-heading");
   content.querySelector("h1")?.classList.add("v2-legacy-heading");
   content.querySelector("h1 + .lead")?.classList.add("v2-legacy-heading");
