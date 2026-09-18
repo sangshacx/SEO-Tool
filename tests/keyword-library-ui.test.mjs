@@ -10,6 +10,7 @@ import {
   clusterIntelligenceDecisionLabel,
   clusterIntelligenceRiskLabel,
   clusterSuggestionPrefill,
+  newClusterSuggestionPrefill,
   normalizeBatchTagInput,
   researchSurfaceKeyword,
   savedKeywordCreatePayload,
@@ -349,4 +350,28 @@ test("Adopting Cluster Intelligence advice only prefills the manual assignment U
   assert.match(source, /尚未修改数据库/);
   assert.match(source, /现有 Primary：/);
   assert.match(source, /dataset\.v2ClusterAdopt/);
+});
+
+
+test("new Cluster candidate prefill uses the suggested keyword as an editable Cluster name and Primary", () => {
+  assert.deepEqual(newClusterSuggestionPrefill({
+    suggestion: {
+      saved_keyword_id: 31,
+      keyword: "  epoxy   floor coating ",
+      decision: { code: "new_cluster_candidate" },
+    },
+  }), {
+    selected_item: { id: 31, keyword: "epoxy floor coating" },
+    cluster_name: "epoxy floor coating",
+    primary_id: 31,
+  });
+});
+
+test("new Cluster candidate action only prefills creation and still requires explicit create and assignment clicks", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /按建议新建 Cluster/);
+  assert.match(source, /dataset\.v2ClusterCreatePrefill/);
+  assert.match(source, /尚未创建，请检查名称后点击“创建 Cluster”/);
+  assert.match(source, /尚未创建 Cluster，也未修改数据库/);
+  assert.match(source, /decisionCode === "new_cluster_candidate"/);
 });

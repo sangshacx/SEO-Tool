@@ -23,6 +23,8 @@ test("registers the approved navigation without promoting Content Brief", () => 
     V2_VIEWS.map((view) => view.id),
     ["overview", "website", "competitors", "keywords", "keyword-library", "backlinks", "opportunities", "more", "sites", "settings"],
   );
+  assert.equal(V2_VIEWS.find((view) => view.id === "keywords")?.label, "关键词研究");
+  assert.equal(V2_VIEWS.find((view) => view.id === "keyword-library")?.label, "关键词库");
   assert.equal(V2_VIEWS.some((view) => /content brief/i.test(view.label)), false);
 });
 

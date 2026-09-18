@@ -144,6 +144,21 @@ export function clusterSuggestionPrefill({ suggestion, cluster } = {}) {
   };
 }
 
+export function newClusterSuggestionPrefill({ suggestion } = {}) {
+  const savedKeywordId = Number(suggestion?.saved_keyword_id);
+  const keyword = clean(suggestion?.keyword).replace(/\s+/g, " ");
+  if (!Number.isInteger(savedKeywordId) || savedKeywordId < 1) {
+    throw new Error("建议关键词缺少有效 Saved Keyword ID。");
+  }
+  if (!keyword) {
+    throw new Error("建议关键词为空，无法预填新 Cluster。");
+  }
+  return {
+    selected_item: { id: savedKeywordId, keyword },
+    cluster_name: keyword,
+    primary_id: savedKeywordId,
+  };
+}
 export function buildSavedKeywordListUrl({
   siteDomain,
   q = "",
@@ -577,6 +592,7 @@ export function mountKeywordLibrary({
   const selectedLibraryItems = new Map();
   let refreshClusterControls = () => {};
   let prefillClusterSuggestion = async () => {};
+  let prefillNewClusterSuggestion = async () => {};
 
   const showStatus = (message = "", type = "info") => {
     status.textContent = message;
@@ -644,12 +660,35 @@ export function mountKeywordLibrary({
       });
 
       const actionCell = documentLike.createElement("td");
-      if (item.suggested_cluster?.id) {
+      const decisionCode = String(item.decision?.code || "");
+      if (decisionCode === "new_cluster_candidate") {
+        const createPrefill = documentLike.createElement("button");
+        createPrefill.type = "button";
+        createPrefill.className = "v2-cluster-adopt";
+        createPrefill.dataset.v2ClusterCreatePrefill = String(item.saved_keyword_id);
+        createPrefill.textContent = "按建议新建 Cluster";
+        createPrefill.title = "只预填新 Cluster 名称和 Primary Keyword；不会立即创建或写入数据库。";
+        createPrefill.addEventListener("click", async () => {
+          createPrefill.disabled = true;
+          createPrefill.textContent = "预填中…";
+          try {
+            await prefillNewClusterSuggestion(item);
+            createPrefill.textContent = "已预填";
+          } catch (error) {
+            createPrefill.textContent = "重试";
+            createPrefill.title = error?.message || "预填失败";
+            showIntelligenceStatus(error?.message || "新 Cluster 预填失败", "error");
+          } finally {
+            if (createPrefill.textContent !== "已预填") createPrefill.disabled = false;
+          }
+        });
+        actionCell.appendChild(createPrefill);
+      } else if (item.suggested_cluster?.id) {
         const adopt = documentLike.createElement("button");
         adopt.type = "button";
         adopt.className = "v2-cluster-adopt";
         adopt.dataset.v2ClusterAdopt = String(item.saved_keyword_id);
-        adopt.textContent = "采用此建议";
+        adopt.textContent = decisionCode === "review_cluster_fit" ? "预填复核" : "采用此建议";
         adopt.title = "只预填关键词、Cluster 和 Primary/Supporting；不会立即写入数据库。";
         adopt.addEventListener("click", async () => {
           adopt.disabled = true;
@@ -671,7 +710,7 @@ export function mountKeywordLibrary({
       } else {
         const hint = documentLike.createElement("span");
         hint.className = "sub";
-        hint.textContent = "需手动新建 Cluster";
+        hint.textContent = "暂无可预填建议";
         actionCell.appendChild(hint);
       }
       row.appendChild(actionCell);
@@ -1089,6 +1128,38 @@ export function mountKeywordLibrary({
             : tooMany
               ? "合并现有成员后最多允许 100 个关键词"
               : `把已选 ${selectedItems.length} 个关键词分配到 ${cluster.name}`;
+  };
+
+  prefillNewClusterSuggestion = async (suggestion) => {
+    const prefill = newClusterSuggestionPrefill({ suggestion });
+    selectedLibraryIds.clear();
+    selectedLibraryItems.clear();
+    selectedLibraryIds.add(prefill.selected_item.id);
+    selectedLibraryItems.set(prefill.selected_item.id, prefill.selected_item);
+    clusterSelect.value = "";
+    clusterNameInput.value = prefill.cluster_name;
+
+    renderRows({
+      documentLike,
+      body,
+      items: currentItems,
+      keywordInput,
+      locationLike,
+      selectedIds: selectedLibraryIds,
+      onSelectionChange: handleLibrarySelectionChange,
+    });
+    updateLibrarySelection();
+    refreshClusterControls();
+    clusterPrimarySelect.value = String(prefill.primary_id);
+    refreshClusterControls();
+
+    showClusterStatus(
+      `已预填新 Cluster“${prefill.cluster_name}”，Primary 为“${prefill.selected_item.keyword}”。尚未创建，请检查名称后点击“创建 Cluster”；创建后再点击“分配已选关键词”。`,
+      "success",
+    );
+    showIntelligenceStatus("新 Cluster 建议已预填；尚未创建 Cluster，也未修改数据库。", "success");
+    clusterNameInput.focus?.();
+    clusterNameInput.scrollIntoView?.({ behavior: "smooth", block: "center" });
   };
 
   prefillClusterSuggestion = async (suggestion) => {

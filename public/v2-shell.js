@@ -23,7 +23,7 @@ export const V2_VIEWS = Object.freeze([
   { id: "overview", label: "总览", group: "primary" },
   { id: "website", label: "网站数据", group: "research" },
   { id: "competitors", label: "竞争对手", group: "research" },
-  { id: "keywords", label: "关键词", group: "research" },
+  { id: "keywords", label: "关键词研究", group: "research" },
   { id: "keyword-library", label: "关键词库", group: "research" },
   { id: "backlinks", label: "外链", group: "research" },
   { id: "opportunities", label: "机会清单", group: "action" },
