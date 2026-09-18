@@ -49,3 +49,15 @@ test("keyword decision UI is local-only and carries no research request path", a
   const source = await readFile(new URL("../public/v2-keyword-decision.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /\bfetch\s*\(|submitSeoResearchRequest|\/api\//);
 });
+
+
+test("Keyword Explorer first screen leads with a decision before raw metrics", async () => {
+  const html = await readFile(new URL("../public/v2.html", import.meta.url), "utf8");
+  assert.match(html, /src="\.\/v2-keyword-decision\.js"/);
+  assert.match(html, /id="keywordDecisionStage"/);
+  assert.match(html, /id="keywordNextAction"/);
+  assert.match(html, /id="keywordDecisionReason"/);
+  assert.match(html, /What should I do next\?/);
+  assert.match(html, /KeywordDecisionView\?\.keywordDecisionSummary/);
+  assert.ok(html.indexOf('class="panel scorebox keyworddecision"') < html.indexOf('class="metrics"'), "decision card must precede raw metrics");
+});
