@@ -19,6 +19,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           def replace_once(text, old, new, label):
               if old not in text:
@@ -85,14 +86,14 @@ jobs:
           '''
           text = replace_once(text, helper_anchor, helper_anchor + helpers, "evidence presentation helpers")
 
-          header_old = '''                <th>Match</th>
-                <th>Cannibalization</th>'''
-          header_new = '''                <th>Match</th>
-                <th>SERP Overlap</th>
-                <th>Shared URLs</th>
-                <th>Confidence</th>
-                <th>Cannibalization</th>'''
-          text = replace_once(text, header_old, header_new, "intelligence table headers")
+          text, header_count = re.subn(
+              r'(<th>Match</th>\\s*)(<th>Cannibalization</th>)',
+              r'\\1<th>SERP Overlap</th>\\n                <th>Shared URLs</th>\\n                <th>Confidence</th>\\n                \\2',
+              text,
+              count=1,
+          )
+          if header_count != 1:
+              raise SystemExit("missing anchor: intelligence table headers")
           text = text.replace('colspan="8" class="emptyrow">点击“分析 Cluster 建议”生成只读建议。本次 $0。</td>', 'colspan="11" class="emptyrow">点击“分析 Cluster 建议”生成只读建议。本次 $0。</td>', 1)
 
           clear_old = '''    cell.colSpan = 8;
