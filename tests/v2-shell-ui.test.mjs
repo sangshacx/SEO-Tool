@@ -57,3 +57,17 @@ test("site management uses the redesigned workspace hierarchy without changing s
   assert.match(shell, /data-v2-competitor="5"/);
   assert.match(shell, /\/api\/v2\/sites/);
 });
+
+
+test("keyword research is reorganized into a tabbed workspace without replacing research APIs", () => {
+  assert.match(shell, /createKeywordResearchWorkspace/);
+  assert.match(shell, /data-v2-keyword-research-tab/);
+  assert.match(shell, /data-v2-keyword-research-panel/);
+  assert.match(shell, /关键词概览/);
+  assert.match(shell, /Keyword Ideas/);
+  assert.match(shell, /Content Plan/);
+  assert.match(shell, /Cache First/);
+  assert.match(shell, /Cost Guard/);
+  assert.match(shell, /delete overview\.dataset\.v2View/);
+  assert.match(shell, /createKeywordResearchWorkspace\(content\)/);
+});
