@@ -608,17 +608,101 @@ function buildShell() {
     createPlaceholder("more", "更多工具", "Content Brief 已按项目决定暂停，现有代码和数据继续保留，但不占用主工作区。"),
     createPlaceholder("settings", "费用与设置", "DataForSEO 费用仍由 Cost Guard、7 天缓存和 D1 用量记录共同控制。"),
   );
-  const sites = createPlaceholder("sites", "网站管理", "网站、默认市场和竞争对手保存在 D1；可导出版本化 JSON，方便以后迁移到自己的域名。"), form = document.createElement("form");
-  form.className = "v2-site-form"; form.dataset.v2SiteForm = "";
-  form.innerHTML = `<input name="label" maxlength="80" placeholder="网站名称（可选）" aria-label="网站名称"><input name="domain" required placeholder="example.com" aria-label="网站根域名"><button type="submit">保存网站</button><div class="v2-competitors" aria-label="竞争对手（最多五个）"><label>竞争对手 1<input data-v2-competitor="1" placeholder="competitor.com"></label><label>竞争对手 2<input data-v2-competitor="2" placeholder="competitor.com"></label><label>竞争对手 3<input data-v2-competitor="3" placeholder="competitor.com"></label><label>竞争对手 4<input data-v2-competitor="4" placeholder="competitor.com"></label><label>竞争对手 5<input data-v2-competitor="5" placeholder="competitor.com"></label></div>`;
-  const list = document.createElement("ul"); list.dataset.v2SiteList = ""; list.className = "v2-site-list";
-  const syncWarning = createElement("div", "v2-sync-warning"); syncWarning.dataset.v2SyncWarning = ""; syncWarning.setAttribute("role", "status");
-  const retryMarket = createElement("button", "v2-retry-sync", "重试加载市场"); retryMarket.type = "button"; retryMarket.dataset.v2RetryMarket = ""; retryMarket.hidden = true;
-  const retrySync = createElement("button", "v2-retry-sync", "重试同步"); retrySync.type = "button"; retrySync.dataset.v2RetrySync = ""; retrySync.hidden = true;
-  const siteError = createElement("div", "v2-site-error"); siteError.dataset.v2SiteError = ""; siteError.setAttribute("role", "alert");
-  const actions = createElement("div", "v2-site-actions");
-  actions.innerHTML = `<button type="button" data-v2-export-sites>导出网站配置 JSON</button><button type="button" data-v2-import-sites>导入网站配置 JSON</button><input type="file" accept="application/json,.json" data-v2-import-file hidden><span>导入会覆盖同域名配置；完成后显示服务器规范化的根域名。</span>`;
-  sites.prepend(syncWarning, retryMarket, retrySync); sites.append(form, siteError, actions, list); content.append(sites);
+  const sites = createElement("section", "panel v2-sites-workspace");
+  sites.dataset.v2View = "sites";
+  sites.innerHTML = `
+    <div class="v2-sites-hero">
+      <div>
+        <div class="v2-sites-eyebrow">SITE WORKSPACE</div>
+        <h2>网站配置</h2>
+        <p>管理站点、默认研究市场和竞争对手。所有站点资料保存到 D1。</p>
+      </div>
+      <div class="v2-sites-hero-note">D1 · 可迁移配置</div>
+    </div>
+  `;
+
+  const form = document.createElement("form");
+  form.className = "v2-site-form";
+  form.dataset.v2SiteForm = "";
+  form.innerHTML = `
+    <div class="v2-site-form-head">
+      <div>
+        <b>添加或编辑网站</b>
+        <span>域名会自动规范化为可注册根域名，例如 great-ocean-waterproof.com。</span>
+      </div>
+      <button type="submit" class="v2-site-save">保存网站</button>
+    </div>
+    <div class="v2-site-core-fields">
+      <label>
+        <span>网站名称</span>
+        <input name="label" maxlength="80" placeholder="例如 Great Ocean Waterproof" aria-label="网站名称">
+      </label>
+      <label>
+        <span>根域名</span>
+        <input name="domain" required placeholder="example.com" aria-label="网站根域名">
+      </label>
+    </div>
+    <details class="v2-site-competitor-details">
+      <summary>
+        <span>竞争对手（可选）</span>
+        <small>最多 5 个，可稍后在竞争对手研究中补充</small>
+      </summary>
+      <div class="v2-competitors" aria-label="竞争对手（最多五个）">
+        <label>竞争对手 1<input data-v2-competitor="1" placeholder="competitor.com"></label>
+        <label>竞争对手 2<input data-v2-competitor="2" placeholder="competitor.com"></label>
+        <label>竞争对手 3<input data-v2-competitor="3" placeholder="competitor.com"></label>
+        <label>竞争对手 4<input data-v2-competitor="4" placeholder="competitor.com"></label>
+        <label>竞争对手 5<input data-v2-competitor="5" placeholder="competitor.com"></label>
+      </div>
+    </details>
+  `;
+
+  const syncWarning = createElement("div", "v2-sync-warning");
+  syncWarning.dataset.v2SyncWarning = "";
+  syncWarning.setAttribute("role", "status");
+  const retryMarket = createElement("button", "v2-retry-sync", "重试加载市场");
+  retryMarket.type = "button";
+  retryMarket.dataset.v2RetryMarket = "";
+  retryMarket.hidden = true;
+  const retrySync = createElement("button", "v2-retry-sync", "重试同步");
+  retrySync.type = "button";
+  retrySync.dataset.v2RetrySync = "";
+  retrySync.hidden = true;
+  const siteError = createElement("div", "v2-site-error");
+  siteError.dataset.v2SiteError = "";
+  siteError.setAttribute("role", "alert");
+
+  const actions = createElement("div", "v2-site-portability");
+  actions.innerHTML = `
+    <div>
+      <b>配置迁移</b>
+      <span>导出版本化 JSON，或导入已有网站配置。导入会覆盖同域名配置，请确认后操作。</span>
+    </div>
+    <div class="v2-site-portability-actions">
+      <button type="button" data-v2-export-sites>导出 JSON</button>
+      <button type="button" data-v2-import-sites>导入 JSON</button>
+      <input type="file" accept="application/json,.json" data-v2-import-file hidden>
+    </div>
+  `;
+
+  const list = document.createElement("ul");
+  list.dataset.v2SiteList = "";
+  list.className = "v2-site-list";
+  const listSection = createElement("div", "v2-sites-list-section");
+  listSection.innerHTML = `
+    <div class="v2-sites-list-head">
+      <div>
+        <b>已保存网站</b>
+        <span>切换当前网站后，关键词库、Cluster、竞争对手和机会数据都会归属到对应站点。</span>
+      </div>
+    </div>
+  `;
+  listSection.append(list);
+
+  const editorGrid = createElement("div", "v2-sites-editor-grid");
+  editorGrid.append(form, actions);
+  sites.append(syncWarning, retryMarket, retrySync, editorGrid, siteError, listSection);
+  content.append(sites);
 
   const shell = createElement("div", "v2-app-shell");
   shell.innerHTML = `<aside class="v2-sidebar" data-v2-sidebar><div class="v2-brand">SEO Pro <span>V2</span></div><label class="v2-site-picker">当前网站<select data-v2-site-select aria-label="当前网站"></select></label><nav data-v2-nav-list aria-label="SEO Pro V2 主导航"></nav></aside><div class="v2-workspace"><header class="v2-workspace-header"><div class="v2-header-main"><button type="button" class="v2-menu" data-v2-menu aria-label="打开导航">☰</button><div><span class="label">SEO PRO V2</span><h2 data-v2-view-title>总览</h2></div></div>${marketControlsMarkup()}<span class="alpha">ALPHA · PREVIEW</span></header></div>`;

@@ -44,3 +44,16 @@ test("existing static IDs remain unique", () => {
   const ids = [...html.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(ids).size, ids.length);
 });
+
+
+test("site management uses the redesigned workspace hierarchy without changing site APIs", () => {
+  assert.match(shell, /v2-sites-workspace/);
+  assert.match(shell, /v2-sites-editor-grid/);
+  assert.match(shell, /v2-site-competitor-details/);
+  assert.match(shell, /v2-sites-list-section/);
+  assert.match(shell, /data-v2-site-form/);
+  assert.match(shell, /data-v2-export-sites/);
+  assert.match(shell, /data-v2-import-sites/);
+  assert.match(shell, /data-v2-competitor="5"/);
+  assert.match(shell, /\/api\/v2\/sites/);
+});
