@@ -2195,3 +2195,455 @@
   }
   .v2-website-history-panel .historyhead select{width:100%}
 }
+
+
+/* SEO Pro V2 global UI consistency layer */
+.v2-app-shell{
+  --v2-bg:#08111f;
+  --v2-sidebar:#0b1728;
+  --v2-surface:#0c192b;
+  --v2-surface-2:#0d1d32;
+  --v2-surface-3:#0b1728;
+  --v2-line:#1b3352;
+  --v2-line-soft:#152b47;
+  --v2-line-strong:#294d77;
+  --v2-text:#e8f1ff;
+  --v2-text-soft:#b7c9e2;
+  --v2-muted:#7189aa;
+  --v2-muted-2:#607a9d;
+  --v2-primary:#4f78e8;
+  --v2-primary-border:#3c6ee6;
+  --v2-success:#92d7bd;
+  --v2-success-bg:#102d29;
+  --v2-success-line:#28594e;
+  --v2-danger:#d994a4;
+  --v2-danger-bg:#291522;
+  --v2-danger-line:#5d3140;
+  --v2-warning:#ffd38c;
+  --v2-radius-sm:7px;
+  --v2-radius:9px;
+  --v2-radius-lg:12px;
+  --v2-control-h:38px;
+  color-scheme:dark;
+}
+
+.v2-app-shell .wrap{
+  padding-left:24px;
+  padding-right:24px;
+  padding-bottom:36px;
+}
+
+.v2-app-shell :is(
+  .v2-library-hero,
+  .v2-sites-hero,
+  .v2-keyword-research-hero,
+  .v2-competitor-hero,
+  .v2-backlink-hero,
+  .v2-opportunity-hero,
+  .v2-website-data-hero
+){
+  min-height:68px;
+}
+
+.v2-app-shell :is(
+  .v2-library-eyebrow,
+  .v2-sites-eyebrow,
+  .v2-keyword-research-eyebrow,
+  .v2-competitor-eyebrow,
+  .v2-backlink-eyebrow,
+  .v2-opportunity-eyebrow,
+  .v2-website-data-eyebrow
+){
+  color:#7198cc;
+  font-size:10px;
+  font-weight:850;
+  letter-spacing:.15em;
+}
+
+.v2-app-shell :is(
+  .v2-library-hero,
+  .v2-sites-hero,
+  .v2-keyword-research-hero,
+  .v2-competitor-hero,
+  .v2-backlink-hero,
+  .v2-opportunity-hero,
+  .v2-website-data-hero
+) h2{
+  color:var(--v2-text);
+  font-size:24px;
+  font-weight:820;
+  letter-spacing:-.015em;
+}
+
+.v2-app-shell :is(
+  .v2-library-hero,
+  .v2-sites-hero,
+  .v2-keyword-research-hero,
+  .v2-competitor-hero,
+  .v2-backlink-hero,
+  .v2-opportunity-hero,
+  .v2-website-data-hero
+) p{
+  color:var(--v2-muted);
+  line-height:1.6;
+}
+
+.v2-app-shell :is(
+  .v2-library-tabs,
+  .v2-keyword-research-tabs,
+  .v2-competitor-tabs,
+  .v2-backlink-tabs,
+  .v2-opportunity-tabs,
+  .v2-website-data-tabs
+){
+  gap:3px;
+  padding:4px;
+  border-color:var(--v2-line);
+  border-radius:var(--v2-radius);
+  background:#0a1727;
+}
+
+.v2-app-shell :is(
+  .v2-library-tabs,
+  .v2-keyword-research-tabs,
+  .v2-competitor-tabs,
+  .v2-backlink-tabs,
+  .v2-opportunity-tabs,
+  .v2-website-data-tabs
+) button{
+  min-height:34px;
+  border-radius:6px;
+  color:#7891b3;
+  transition:background .15s ease,color .15s ease,box-shadow .15s ease;
+}
+
+.v2-app-shell :is(
+  .v2-library-tabs,
+  .v2-keyword-research-tabs,
+  .v2-competitor-tabs,
+  .v2-backlink-tabs,
+  .v2-opportunity-tabs,
+  .v2-website-data-tabs
+) button:hover:not(:disabled){
+  background:#102038;
+  color:#c8d8ed;
+}
+
+.v2-app-shell :is(
+  .v2-library-tabs,
+  .v2-keyword-research-tabs,
+  .v2-competitor-tabs,
+  .v2-backlink-tabs,
+  .v2-opportunity-tabs,
+  .v2-website-data-tabs
+) button.active{
+  background:#172b49;
+  color:#edf4ff;
+  box-shadow:inset 0 0 0 1px var(--v2-line-strong),0 1px 0 rgba(255,255,255,.02);
+}
+
+.v2-app-shell :is(
+  .v2-library-panel,
+  .v2-keyword-research-stage,
+  .v2-competitor-stage,
+  .v2-backlink-stage,
+  .v2-opportunity-stage,
+  .v2-website-data-stage,
+  .v2-site-form,
+  .v2-site-portability,
+  .v2-sites-list-section
+){
+  border-color:var(--v2-line);
+  border-radius:var(--v2-radius-lg);
+  background:var(--v2-surface);
+  box-shadow:0 12px 28px rgba(0,0,0,.08);
+}
+
+.v2-app-shell .v2-workspace :is(input,select,textarea){
+  border-color:#233d5d;
+  border-radius:var(--v2-radius-sm);
+  background:var(--v2-surface-3);
+  color:#dce7f7;
+  outline:none;
+  transition:border-color .15s ease,box-shadow .15s ease,background .15s ease;
+}
+
+.v2-app-shell .v2-workspace :is(input,select,textarea)::placeholder{
+  color:#526b8c;
+}
+
+.v2-app-shell .v2-workspace :is(input,select,textarea):hover:not(:disabled){
+  border-color:#315274;
+}
+
+.v2-app-shell .v2-workspace :is(input,select,textarea):focus{
+  border-color:#507cc5;
+  box-shadow:0 0 0 3px rgba(79,120,232,.13);
+  background:#0c1a2d;
+}
+
+.v2-app-shell .v2-workspace button{
+  border-radius:var(--v2-radius-sm);
+  cursor:pointer;
+  transition:filter .15s ease,transform .08s ease,border-color .15s ease,background .15s ease,color .15s ease;
+}
+
+.v2-app-shell .v2-workspace button:hover:not(:disabled){
+  filter:brightness(1.08);
+}
+
+.v2-app-shell .v2-workspace button:active:not(:disabled){
+  transform:translateY(1px);
+}
+
+.v2-app-shell .v2-workspace :is(button,input,select,textarea,a):focus-visible{
+  outline:2px solid #6d98eb;
+  outline-offset:2px;
+}
+
+.v2-app-shell .v2-workspace button:disabled,
+.v2-app-shell .v2-workspace :is(input,select,textarea):disabled{
+  cursor:not-allowed;
+  opacity:.48;
+  filter:none;
+}
+
+.v2-app-shell .v2-workspace :is(
+  .v2-site-save,
+  .v2-keyword-overview-panel>.search button,
+  .v2-keyword-ideas-panel #ideasBtn,
+  .v2-competitor-panel>.competitorform button,
+  .v2-competitor-panel>.gapform button,
+  .v2-competitor-panel>.compareform button,
+  .v2-backlink-panel>.refdomainform button,
+  .v2-backlink-panel>.backlinkdetailsform button,
+  .v2-backlink-panel>.anchorform button,
+  .v2-opportunity-discover-panel>.backlinkgapform button,
+  .v2-opportunity-saved-panel>.prospectactions button,
+  .v2-website-overview-panel>.backlinkform button,
+  .v2-website-history-panel>.historyform button
+){
+  border-color:var(--v2-primary-border);
+  background:var(--v2-primary);
+  color:#fff;
+  box-shadow:0 5px 14px rgba(32,68,150,.16);
+}
+
+.v2-app-shell .v2-workspace :is(
+  .secondary-action,
+  .v2-site-portability-actions button,
+  .v2-library-bulkbar button,
+  .v2-library-pager button,
+  .v2-competitor-panel .gapactions button,
+  .v2-competitor-panel .competitorpager button,
+  .v2-competitor-panel .gappager button,
+  .v2-backlink-panel .refdomaintools button,
+  .v2-backlink-panel .backlinkdetailtools button,
+  .v2-backlink-panel .anchortools button,
+  .v2-opportunity-panel .backlinkgaptools button,
+  .v2-opportunity-panel .outreachtools button,
+  .v2-opportunity-panel .backlinkgappager button,
+  .v2-opportunity-panel .prospectpager button
+){
+  border-color:#294866;
+  background:#102038;
+  color:#a8bdd8;
+  box-shadow:none;
+}
+
+.v2-app-shell .v2-workspace :is(
+  .v2-save-keyword,
+  .v2-batch-save-keywords,
+  .v2-cluster-adopt,
+  .v2-cluster-compose .primary-action,
+  .v2-workspace-section-head .primary-action,
+  .v2-library-bulkbar .secondary-action,
+  .v2-opportunity-panel .prospectsave
+){
+  border-color:var(--v2-success-line);
+  background:var(--v2-success-bg);
+  color:var(--v2-success);
+}
+
+.v2-app-shell .v2-workspace :is(
+  .danger-action,
+  .v2-library-remove,
+  [data-v2-library-delete-selected],
+  [data-v2-site-remove]
+){
+  border-color:var(--v2-danger-line);
+  background:var(--v2-danger-bg);
+  color:var(--v2-danger);
+}
+
+.v2-app-shell .v2-workspace :is(.tablewrap,.v2-library-table-shell){
+  border-color:var(--v2-line);
+  background:var(--v2-surface-3);
+  scrollbar-color:#294867 #0a1524;
+  scrollbar-width:thin;
+}
+
+.v2-app-shell .v2-workspace table.ideastable{
+  border-collapse:separate;
+  border-spacing:0;
+}
+
+.v2-app-shell .v2-workspace table.ideastable thead th{
+  position:sticky;
+  top:0;
+  z-index:1;
+  height:38px;
+  padding:9px 10px;
+  background:var(--v2-surface-2);
+  color:#6f8cb3;
+  border-bottom:1px solid #203b5d;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.055em;
+}
+
+.v2-app-shell .v2-workspace table.ideastable tbody td{
+  min-height:42px;
+  padding:10px;
+  border-bottom:1px solid var(--v2-line-soft);
+  vertical-align:middle;
+}
+
+.v2-app-shell .v2-workspace table.ideastable tbody tr{
+  transition:background .12s ease;
+}
+
+.v2-app-shell .v2-workspace table.ideastable tbody tr:hover{
+  background:#0f2036;
+}
+
+.v2-app-shell .v2-workspace :is(.metric,.scorepart,.healthcomponent,.distributioncard,.v2-cluster-card){
+  border-color:var(--v2-line);
+  background:var(--v2-surface-3);
+}
+
+.v2-app-shell .v2-workspace :is(
+  .status,
+  .v2-cluster-status,
+  .v2-cluster-intelligence-status,
+  .v2-library-batch-status,
+  .v2-save-keyword-status
+){
+  min-height:18px;
+  font-size:11px;
+  line-height:1.55;
+}
+
+.v2-app-shell .v2-workspace :is(
+  .status.on,
+  .v2-cluster-status.success,
+  .v2-cluster-intelligence-status.success,
+  .v2-library-batch-status.success,
+  .v2-save-keyword-status.success
+){
+  color:#84d8b9;
+}
+
+.v2-app-shell .v2-workspace :is(
+  .v2-cluster-status.error,
+  .v2-cluster-intelligence-status.error,
+  .v2-library-batch-status.error-text,
+  .v2-save-keyword-status.error-text
+){
+  color:#ef9aaa;
+}
+
+.v2-app-shell .v2-workspace :is(
+  .emptyrow,
+  .v2-cluster-empty,
+  .v2-sites-empty,
+  .historyempty,
+  .batchmissing
+){
+  color:#6f87a8;
+  font-size:12px;
+  line-height:1.6;
+}
+
+.v2-app-shell .v2-workspace .emptyrow{
+  height:96px;
+  text-align:center;
+  background:#0a1727;
+}
+
+.v2-app-shell .v2-workspace :is(.note,.v2-inline-help){
+  color:#6f87a8;
+  line-height:1.6;
+}
+
+.v2-app-shell .v2-workspace :is(.label,.sub,.ideasmeta){
+  line-height:1.45;
+}
+
+.v2-app-shell .v2-workspace :is(
+  .v2-library-pager,
+  .competitorpager,
+  .gappager,
+  .refpager,
+  .backlinkdetailpager,
+  .anchorpager,
+  .backlinkgappager,
+  .prospectpager
+) button{
+  min-width:68px;
+}
+
+@media(max-width:780px){
+  .v2-app-shell .wrap{
+    padding-left:14px;
+    padding-right:14px;
+    padding-bottom:28px;
+  }
+  .v2-workspace-header{
+    height:68px;
+  }
+  .v2-app-shell :is(
+    .v2-library-hero,
+    .v2-sites-hero,
+    .v2-keyword-research-hero,
+    .v2-competitor-hero,
+    .v2-backlink-hero,
+    .v2-opportunity-hero,
+    .v2-website-data-hero
+  ){
+    min-height:0;
+    padding-bottom:14px;
+  }
+  .v2-app-shell :is(
+    .v2-library-tabs,
+    .v2-keyword-research-tabs,
+    .v2-competitor-tabs,
+    .v2-backlink-tabs,
+    .v2-opportunity-tabs,
+    .v2-website-data-tabs
+  ){
+    margin-bottom:10px;
+    scrollbar-width:none;
+  }
+  .v2-app-shell :is(
+    .v2-library-tabs,
+    .v2-keyword-research-tabs,
+    .v2-competitor-tabs,
+    .v2-backlink-tabs,
+    .v2-opportunity-tabs,
+    .v2-website-data-tabs
+  )::-webkit-scrollbar{display:none}
+  .v2-app-shell .v2-workspace table.ideastable thead th{
+    position:static;
+  }
+}
+
+@media(prefers-reduced-motion:reduce){
+  .v2-app-shell *,
+  .v2-app-shell *::before,
+  .v2-app-shell *::after{
+    scroll-behavior:auto!important;
+    transition:none!important;
+    animation:none!important;
+  }
+}

@@ -4,6 +4,7 @@ import test from "node:test";
 
 const html = await readFile(new URL("../public/v2.html", import.meta.url), "utf8");
 const shell = await readFile(new URL("../public/v2-shell.js", import.meta.url), "utf8");
+const shellCss = await readFile(new URL("../public/v2-shell.css", import.meta.url), "utf8");
 
 test("loads the portable V2 shell assets", () => {
   assert.match(html, /href="\.\/v2-shell\.css"/);
@@ -129,4 +130,22 @@ test("website data is reorganized into overview and history tabs without changin
   assert.match(shell, /activateTab\("overview"\)/);
   assert.match(shell, /delete panel\.dataset\.v2View/);
   assert.match(shell, /createWebsiteDataWorkspace\(content\)/);
+});
+
+
+test("global UI consistency layer defines shared visual primitives across redesigned workspaces", () => {
+  assert.match(shellCss, /SEO Pro V2 global UI consistency layer/);
+  assert.match(shellCss, /--v2-surface:/);
+  assert.match(shellCss, /--v2-primary:/);
+  assert.match(shellCss, /--v2-success:/);
+  assert.match(shellCss, /--v2-danger:/);
+  assert.match(shellCss, /:focus-visible/);
+  assert.match(shellCss, /table\.ideastable thead th/);
+  assert.match(shellCss, /prefers-reduced-motion/);
+  assert.match(shellCss, /\.v2-keyword-research-tabs/);
+  assert.match(shellCss, /\.v2-competitor-tabs/);
+  assert.match(shellCss, /\.v2-backlink-tabs/);
+  assert.match(shellCss, /\.v2-opportunity-tabs/);
+  assert.match(shellCss, /\.v2-website-data-tabs/);
+  assert.match(shellCss, /\.v2-library-tabs/);
 });
