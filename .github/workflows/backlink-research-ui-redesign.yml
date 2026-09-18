@@ -1,0 +1,479 @@
+name: Backlink Research UI Redesign
+on:
+  push:
+    branches: [seo-pro-v2]
+    paths:
+      - ".github/workflows/backlink-research-ui-redesign.yml"
+permissions:
+  contents: write
+jobs:
+  edit-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: seo-pro-v2
+          fetch-depth: 0
+      - name: Redesign Backlink Research workspace
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"missing anchor: {label}")
+              return text.replace(old, new, 1)
+
+          shell_path = Path("public/v2-shell.js")
+          shell = shell_path.read_text()
+
+          anchor = '''function createPlaceholder(view, title, description) {
+            const section = createElement("section", "panel v2-placeholder");
+            section.dataset.v2View = view;
+            section.innerHTML = `<div class="section-title">${title}</div><p class="lead">${description}</p>`;
+            return section;
+          }
+          '''
+          helper = r'''
+          export function createBacklinkResearchWorkspace(root) {
+            const batch = root.querySelector(".backlinkbatch");
+            const referring = root.querySelector(".refdomains");
+            const details = root.querySelector(".backlinkdetails");
+            const anchors = root.querySelector(".anchoranalysis");
+            if (!batch || !referring || !details || !anchors) return null;
+
+            const workspace = createElement("section", "v2-backlink-workspace");
+            workspace.dataset.v2View = "backlinks";
+
+            const hero = createElement("div", "v2-backlink-hero");
+            hero.innerHTML = `
+              <div>
+                <div class="v2-backlink-eyebrow">BACKLINK RESEARCH</div>
+                <h2>外链研究</h2>
+                <p>从批量域名概览进入引用域、具体 Backlink 和 Anchor Text，按需读取缓存或明确确认付费查询。</p>
+              </div>
+              <div class="v2-backlink-hero-meta">
+                <span>Cache First</span>
+                <span>Cost Guard</span>
+              </div>
+            `;
+
+            const tabs = createElement("div", "v2-backlink-tabs");
+            tabs.setAttribute("role", "tablist");
+            tabs.setAttribute("aria-label", "外链研究视图");
+            const tabConfig = [
+              ["batch", "批量概览"],
+              ["referring", "Referring Domains"],
+              ["details", "Backlink Details"],
+              ["anchors", "Anchor Text"],
+            ];
+            tabConfig.forEach(([id, label], index) => {
+              const button = createElement("button", index === 0 ? "active" : "", label);
+              button.type = "button";
+              button.setAttribute("role", "tab");
+              button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+              button.dataset.v2BacklinkTab = id;
+              tabs.appendChild(button);
+            });
+
+            const stage = createElement("div", "v2-backlink-stage");
+            const panels = [
+              [batch, "batch", "v2-backlink-batch-panel"],
+              [referring, "referring", "v2-backlink-referring-panel"],
+              [details, "details", "v2-backlink-details-panel"],
+              [anchors, "anchors", "v2-backlink-anchor-panel"],
+            ];
+            panels.forEach(([panel, id, className], index) => {
+              panel.classList.add("v2-backlink-panel", className);
+              panel.dataset.v2BacklinkPanel = id;
+              delete panel.dataset.v2View;
+              panel.hidden = index !== 0;
+            });
+
+            const activateTab = (tabId) => {
+              const target = tabConfig.some(([id]) => id === tabId) ? tabId : "batch";
+              tabs.querySelectorAll("[data-v2-backlink-tab]").forEach((button) => {
+                const active = button.dataset.v2BacklinkTab === target;
+                button.classList.toggle("active", active);
+                button.setAttribute("aria-selected", active ? "true" : "false");
+              });
+              stage.querySelectorAll("[data-v2-backlink-panel]").forEach((panel) => {
+                const active = panel.dataset.v2BacklinkPanel === target;
+                panel.hidden = !active;
+                panel.classList.toggle("active", active);
+              });
+              return target;
+            };
+
+            tabs.addEventListener("click", (event) => {
+              const button = event.target.closest("[data-v2-backlink-tab]");
+              if (button) activateTab(button.dataset.v2BacklinkTab);
+            });
+
+            batch.before(workspace);
+            workspace.append(hero, tabs, stage);
+            stage.append(batch, referring, details, anchors);
+            activateTab("batch");
+            return { workspace, activateTab };
+          }
+          '''
+          shell = replace_once(shell, anchor, helper + "\n" + anchor, "backlink workspace helper")
+
+          mount_anchor = '''  createKeywordResearchWorkspace(content);
+            createCompetitorResearchWorkspace(content);
+            content.querySelector(".top")?.classList.add("v2-legacy-heading");'''
+          mount_new = '''  createKeywordResearchWorkspace(content);
+            createCompetitorResearchWorkspace(content);
+            createBacklinkResearchWorkspace(content);
+            content.querySelector(".top")?.classList.add("v2-legacy-heading");'''
+          shell = replace_once(shell, mount_anchor, mount_new, "backlink workspace mount")
+          shell_path.write_text(shell)
+
+          css_path = Path("public/v2-shell.css")
+          css = css_path.read_text()
+          css += r'''
+
+          /* Backlink Research workspace redesign */
+          .v2-backlink-workspace{
+            margin-top:0;
+          }
+          .v2-backlink-hero{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:20px;
+            padding:4px 2px 18px;
+          }
+          .v2-backlink-eyebrow{
+            margin-bottom:6px;
+            color:#6f93c6;
+            font-size:10px;
+            font-weight:800;
+            letter-spacing:.16em;
+          }
+          .v2-backlink-hero h2{
+            margin:0;
+            color:#edf4ff;
+            font-size:24px;
+            line-height:1.2;
+          }
+          .v2-backlink-hero p{
+            max-width:800px;
+            margin:7px 0 0;
+            color:#8098b9;
+            font-size:13px;
+          }
+          .v2-backlink-hero-meta{
+            display:flex;
+            gap:7px;
+            flex-wrap:wrap;
+            justify-content:flex-end;
+          }
+          .v2-backlink-hero-meta span{
+            display:inline-flex;
+            align-items:center;
+            min-height:30px;
+            padding:0 9px;
+            border:1px solid #203b5d;
+            border-radius:999px;
+            background:#0c1c30;
+            color:#7ea6d8;
+            font-size:10px;
+            font-weight:800;
+            white-space:nowrap;
+          }
+          .v2-backlink-tabs{
+            display:flex;
+            gap:4px;
+            width:max-content;
+            max-width:100%;
+            margin-bottom:14px;
+            padding:4px;
+            border:1px solid #1d3554;
+            border-radius:10px;
+            background:#0b1829;
+          }
+          .v2-backlink-tabs button{
+            min-height:34px;
+            padding:0 14px;
+            border:0;
+            border-radius:7px;
+            background:transparent;
+            color:#7188a9;
+            font-size:12px;
+            font-weight:750;
+          }
+          .v2-backlink-tabs button.active{
+            background:#172b49;
+            color:#e8f1ff;
+            box-shadow:inset 0 0 0 1px #294d77;
+          }
+          .v2-backlink-stage{
+            border:1px solid #1b3352;
+            border-radius:12px;
+            background:#0c192b;
+            overflow:hidden;
+          }
+          .v2-backlink-panel[hidden]{display:none!important}
+          .v2-backlink-panel{
+            margin:0!important;
+            padding:0!important;
+            border:0!important;
+            border-radius:0!important;
+            background:transparent!important;
+            box-shadow:none!important;
+          }
+          .v2-backlink-panel>.section-title{
+            margin:0;
+            padding:17px 18px 4px;
+            color:#e8f1ff;
+            font-size:17px;
+          }
+          .v2-backlink-panel>.section-title+.sub{
+            padding:0 18px 13px;
+            color:#7189aa;
+            font-size:12px;
+          }
+          .v2-backlink-panel>.batchform,
+          .v2-backlink-panel>.refdomainform,
+          .v2-backlink-panel>.backlinkdetailsform,
+          .v2-backlink-panel>.anchorform{
+            display:grid;
+            gap:9px;
+            margin:0;
+            padding:13px 18px;
+            border-top:1px solid #172d49;
+            border-bottom:1px solid #172d49;
+            background:#0d1d32;
+          }
+          .v2-backlink-panel>.refdomainform{
+            grid-template-columns:minmax(260px,1.4fr) 120px 180px auto;
+          }
+          .v2-backlink-panel>.backlinkdetailsform{
+            grid-template-columns:minmax(240px,1.4fr) 110px 180px 120px 140px auto;
+          }
+          .v2-backlink-panel>.anchorform{
+            grid-template-columns:minmax(220px,1.2fr) minmax(220px,1.1fr) 110px 180px 110px auto;
+          }
+          .v2-backlink-panel>.batchform textarea{
+            min-height:110px;
+            resize:vertical;
+            border:1px solid #274563;
+            border-radius:8px;
+            background:#0b1728;
+            color:#e0e9f7;
+          }
+          .v2-backlink-panel>.refdomainform input,
+          .v2-backlink-panel>.refdomainform select,
+          .v2-backlink-panel>.backlinkdetailsform input,
+          .v2-backlink-panel>.backlinkdetailsform select,
+          .v2-backlink-panel>.anchorform input,
+          .v2-backlink-panel>.anchorform select{
+            min-height:40px;
+            border:1px solid #274563;
+            border-radius:8px;
+            background:#0b1728;
+            color:#dbe7f7;
+          }
+          .v2-backlink-panel>.refdomainform button,
+          .v2-backlink-panel>.backlinkdetailsform button,
+          .v2-backlink-panel>.anchorform button,
+          .v2-backlink-panel .batchactions button{
+            min-height:38px;
+            padding:0 12px;
+            border:1px solid #3c6ee6;
+            border-radius:8px;
+            background:#4f78e8;
+            color:#fff;
+            font-weight:800;
+            white-space:nowrap;
+          }
+          .v2-backlink-panel .batchactions{
+            display:flex;
+            align-items:center;
+            gap:8px;
+            flex-wrap:wrap;
+          }
+          .v2-backlink-panel .batchactions .secondary,
+          .v2-backlink-panel .refdomaintools button,
+          .v2-backlink-panel .backlinkdetailtools button,
+          .v2-backlink-panel .anchortools button,
+          .v2-backlink-panel .refpager button,
+          .v2-backlink-panel .backlinkdetailpager button,
+          .v2-backlink-panel .anchorpager button{
+            border:1px solid #294d77;
+            background:#10243c;
+            color:#a9bdd8;
+          }
+          .v2-backlink-panel>.paidtoggle{
+            display:flex;
+            align-items:center;
+            gap:7px;
+            margin:0;
+            padding:9px 18px 0;
+            color:#8aa1c0;
+            font-size:11px;
+          }
+          .v2-backlink-panel>.paidtoggle input{
+            width:auto;
+          }
+          .v2-backlink-panel>.note{
+            margin:0;
+            padding:9px 18px;
+            border:0;
+            border-bottom:1px solid #152b47;
+            border-radius:0;
+            background:#0a1727;
+            color:#7189aa;
+            font-size:11px;
+          }
+          .v2-backlink-panel>.status{
+            margin:0 18px;
+          }
+          .v2-backlink-panel>#backlinkBatchResult,
+          .v2-backlink-panel>#refResult,
+          .v2-backlink-panel>#detailResult,
+          .v2-backlink-panel>#anchorResult{
+            padding:14px 18px 18px;
+          }
+          .v2-backlink-panel .backlinkmetrics{
+            gap:8px;
+            margin:0 0 10px;
+          }
+          .v2-backlink-panel .metric{
+            padding:13px;
+            border:1px solid #1d3554;
+            border-radius:9px;
+            background:#0b1728;
+          }
+          .v2-backlink-panel .metric .value{
+            margin-top:6px;
+            color:#eef5ff;
+          }
+          .v2-backlink-panel .batchactions,
+          .v2-backlink-panel .refdomaintools,
+          .v2-backlink-panel .backlinkdetailtools,
+          .v2-backlink-panel .anchortools{
+            margin:0;
+            padding:10px;
+            border:1px solid #1b3352;
+            border-radius:10px 10px 0 0;
+            background:#0d1d32;
+          }
+          .v2-backlink-panel .refdomaintools,
+          .v2-backlink-panel .backlinkdetailtools,
+          .v2-backlink-panel .anchortools{
+            display:grid;
+            gap:7px;
+          }
+          .v2-backlink-panel .refdomaintools{
+            grid-template-columns:minmax(240px,1.5fr) 160px auto;
+          }
+          .v2-backlink-panel .backlinkdetailtools{
+            grid-template-columns:minmax(300px,1.6fr) 210px auto;
+          }
+          .v2-backlink-panel .anchortools{
+            grid-template-columns:minmax(260px,1.5fr) 180px auto;
+          }
+          .v2-backlink-panel .refdomaintools input,
+          .v2-backlink-panel .refdomaintools select,
+          .v2-backlink-panel .backlinkdetailtools input,
+          .v2-backlink-panel .backlinkdetailtools select,
+          .v2-backlink-panel .anchortools input,
+          .v2-backlink-panel .anchortools select{
+            min-height:34px;
+            border:1px solid #233d5d;
+            border-radius:7px;
+            background:#0b1728;
+            color:#cdd9eb;
+          }
+          .v2-backlink-panel .tablewrap{
+            border:1px solid #1b3352;
+            background:#0b1728;
+          }
+          .v2-backlink-panel .ideastable thead th{
+            background:#0d1d32;
+            color:#6f8cb3;
+            font-size:10px;
+            text-transform:uppercase;
+            letter-spacing:.05em;
+          }
+          .v2-backlink-panel .ideastable tbody tr:hover{
+            background:#0f2036;
+          }
+          .v2-backlink-panel .refpager,
+          .v2-backlink-panel .backlinkdetailpager,
+          .v2-backlink-panel .anchorpager{
+            display:flex;
+            align-items:center;
+            justify-content:flex-end;
+            gap:8px;
+            margin-top:10px;
+          }
+          .v2-backlink-panel .batchmissing{
+            margin-top:12px;
+            padding:12px;
+            border:1px dashed #28496f;
+            border-radius:9px;
+            background:#0a1727;
+          }
+          @media(max-width:1100px){
+            .v2-backlink-panel>.refdomainform,
+            .v2-backlink-panel>.backlinkdetailsform,
+            .v2-backlink-panel>.anchorform,
+            .v2-backlink-panel .refdomaintools,
+            .v2-backlink-panel .backlinkdetailtools,
+            .v2-backlink-panel .anchortools{
+              grid-template-columns:1fr 1fr;
+            }
+          }
+          @media(max-width:720px){
+            .v2-backlink-hero{flex-direction:column}
+            .v2-backlink-hero-meta{justify-content:flex-start}
+            .v2-backlink-tabs{width:100%;overflow:auto}
+            .v2-backlink-tabs button{flex:0 0 auto}
+            .v2-backlink-panel>.refdomainform,
+            .v2-backlink-panel>.backlinkdetailsform,
+            .v2-backlink-panel>.anchorform,
+            .v2-backlink-panel .refdomaintools,
+            .v2-backlink-panel .backlinkdetailtools,
+            .v2-backlink-panel .anchortools{
+              grid-template-columns:1fr;
+            }
+          }
+          '''
+          css_path.write_text(css)
+
+          test_path = Path("tests/v2-shell-ui.test.mjs")
+          tests = test_path.read_text()
+          if 'test("backlink research is reorganized into a four-tab workspace' not in tests:
+              tests += r'''
+
+          test("backlink research is reorganized into a four-tab workspace without changing backlink APIs", () => {
+            assert.match(shell, /createBacklinkResearchWorkspace/);
+            assert.match(shell, /data-v2-backlink-tab/);
+            assert.match(shell, /data-v2-backlink-panel/);
+            assert.match(shell, /批量概览/);
+            assert.match(shell, /Referring Domains/);
+            assert.match(shell, /Backlink Details/);
+            assert.match(shell, /Anchor Text/);
+            assert.match(shell, /Cache First/);
+            assert.match(shell, /Cost Guard/);
+            assert.match(shell, /delete panel\.dataset\.v2View/);
+            assert.match(shell, /createBacklinkResearchWorkspace\(content\)/);
+          });
+          '''
+          test_path.write_text(tests)
+          PY
+      - name: Validate
+        run: |
+          git diff --check
+          node --test
+      - name: Commit redesign
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/v2-shell.js public/v2-shell.css tests/v2-shell-ui.test.mjs
+          git commit -m "feat: redesign Backlink Research workspace"
+          git push origin HEAD:seo-pro-v2
