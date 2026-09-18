@@ -484,7 +484,7 @@ jobs:
           if 'const shellCss = await readFile(new URL("../public/v2-shell.css", import.meta.url), "utf8");' not in tests:
               tests = tests.replace(
                   'const shell = await readFile(new URL("../public/v2-shell.js", import.meta.url), "utf8");',
-                  'const shell = await readFile(new URL("../public/v2-shell.js", import.meta.url), "utf8");\\nconst shellCss = await readFile(new URL("../public/v2-shell.css", import.meta.url), "utf8");',
+                  'const shell = await readFile(new URL("../public/v2-shell.js", import.meta.url), "utf8");\nconst shellCss = await readFile(new URL("../public/v2-shell.css", import.meta.url), "utf8");',
                   1,
               )
           if 'test("global UI consistency layer defines shared visual primitives' not in tests:
