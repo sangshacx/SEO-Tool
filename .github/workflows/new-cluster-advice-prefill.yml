@@ -1,0 +1,249 @@
+name: New Cluster Advice Prefill
+on:
+  push:
+    branches: [seo-pro-v2]
+    paths:
+      - ".github/workflows/new-cluster-advice-prefill.yml"
+permissions:
+  contents: write
+jobs:
+  edit-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: seo-pro-v2
+          fetch-depth: 0
+      - name: Apply targeted edits
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"missing anchor: {label}")
+              return text.replace(old, new, 1)
+
+          path = Path("public/v2-keyword-library.js")
+          text = path.read_text()
+
+          anchor = '''export function buildSavedKeywordListUrl({'''
+          helper = '''export function newClusterSuggestionPrefill({ suggestion } = {}) {
+            const savedKeywordId = Number(suggestion?.saved_keyword_id);
+            const keyword = clean(suggestion?.keyword).replace(/\\s+/g, " ");
+            if (!Number.isInteger(savedKeywordId) || savedKeywordId < 1) {
+              throw new Error("建议关键词缺少有效 Saved Keyword ID。");
+            }
+            if (!keyword) {
+              throw new Error("建议关键词为空，无法预填新 Cluster。");
+            }
+            return {
+              selected_item: { id: savedKeywordId, keyword },
+              cluster_name: keyword,
+              primary_id: savedKeywordId,
+            };
+          }
+
+          '''
+          text = replace_once(text, anchor, helper + anchor, "new cluster helper")
+
+          old_state = '''  let refreshClusterControls = () => {};
+            let prefillClusterSuggestion = async () => {};'''
+          new_state = '''  let refreshClusterControls = () => {};
+            let prefillClusterSuggestion = async () => {};
+            let prefillNewClusterSuggestion = async () => {};'''
+          text = replace_once(text, old_state, new_state, "prefill state")
+
+          old_action = '''      const actionCell = documentLike.createElement("td");
+            if (item.suggested_cluster?.id) {
+              const adopt = documentLike.createElement("button");
+              adopt.type = "button";
+              adopt.className = "v2-cluster-adopt";
+              adopt.dataset.v2ClusterAdopt = String(item.saved_keyword_id);
+              adopt.textContent = "采用此建议";
+              adopt.title = "只预填关键词、Cluster 和 Primary/Supporting；不会立即写入数据库。";
+              adopt.addEventListener("click", async () => {
+                adopt.disabled = true;
+                const original = adopt.textContent;
+                adopt.textContent = "预填中…";
+                try {
+                  await prefillClusterSuggestion(item);
+                  adopt.textContent = "已预填";
+                } catch (error) {
+                  adopt.textContent = "重试";
+                  adopt.title = error?.message || "预填失败";
+                  showIntelligenceStatus(error?.message || "建议预填失败", "error");
+                } finally {
+                  if (adopt.textContent !== "已预填") adopt.disabled = false;
+                  if (!adopt.textContent) adopt.textContent = original;
+                }
+              });
+              actionCell.appendChild(adopt);
+            } else {
+              const hint = documentLike.createElement("span");
+              hint.className = "sub";
+              hint.textContent = "需手动新建 Cluster";
+              actionCell.appendChild(hint);
+            }'''
+          new_action = '''      const actionCell = documentLike.createElement("td");
+            const decisionCode = String(item.decision?.code || "");
+            if (decisionCode === "new_cluster_candidate") {
+              const createPrefill = documentLike.createElement("button");
+              createPrefill.type = "button";
+              createPrefill.className = "v2-cluster-adopt";
+              createPrefill.dataset.v2ClusterCreatePrefill = String(item.saved_keyword_id);
+              createPrefill.textContent = "按建议新建 Cluster";
+              createPrefill.title = "只预填新 Cluster 名称和 Primary Keyword；不会立即创建或写入数据库。";
+              createPrefill.addEventListener("click", async () => {
+                createPrefill.disabled = true;
+                createPrefill.textContent = "预填中…";
+                try {
+                  await prefillNewClusterSuggestion(item);
+                  createPrefill.textContent = "已预填";
+                } catch (error) {
+                  createPrefill.textContent = "重试";
+                  createPrefill.title = error?.message || "预填失败";
+                  showIntelligenceStatus(error?.message || "新 Cluster 预填失败", "error");
+                } finally {
+                  if (createPrefill.textContent !== "已预填") createPrefill.disabled = false;
+                }
+              });
+              actionCell.appendChild(createPrefill);
+            } else if (item.suggested_cluster?.id) {
+              const adopt = documentLike.createElement("button");
+              adopt.type = "button";
+              adopt.className = "v2-cluster-adopt";
+              adopt.dataset.v2ClusterAdopt = String(item.saved_keyword_id);
+              adopt.textContent = decisionCode === "review_cluster_fit" ? "预填复核" : "采用此建议";
+              adopt.title = "只预填关键词、Cluster 和 Primary/Supporting；不会立即写入数据库。";
+              adopt.addEventListener("click", async () => {
+                adopt.disabled = true;
+                const original = adopt.textContent;
+                adopt.textContent = "预填中…";
+                try {
+                  await prefillClusterSuggestion(item);
+                  adopt.textContent = "已预填";
+                } catch (error) {
+                  adopt.textContent = "重试";
+                  adopt.title = error?.message || "预填失败";
+                  showIntelligenceStatus(error?.message || "建议预填失败", "error");
+                } finally {
+                  if (adopt.textContent !== "已预填") adopt.disabled = false;
+                  if (!adopt.textContent) adopt.textContent = original;
+                }
+              });
+              actionCell.appendChild(adopt);
+            } else {
+              const hint = documentLike.createElement("span");
+              hint.className = "sub";
+              hint.textContent = "暂无可预填建议";
+              actionCell.appendChild(hint);
+            }'''
+          text = replace_once(text, old_action, new_action, "intelligence action")
+
+          anchor_prefill = '''  prefillClusterSuggestion = async (suggestion) => {'''
+          new_prefill = '''  prefillNewClusterSuggestion = async (suggestion) => {
+            const prefill = newClusterSuggestionPrefill({ suggestion });
+            selectedLibraryIds.clear();
+            selectedLibraryItems.clear();
+            selectedLibraryIds.add(prefill.selected_item.id);
+            selectedLibraryItems.set(prefill.selected_item.id, prefill.selected_item);
+            clusterSelect.value = "";
+            clusterNameInput.value = prefill.cluster_name;
+
+            renderRows({
+              documentLike,
+              body,
+              items: currentItems,
+              keywordInput,
+              locationLike,
+              selectedIds: selectedLibraryIds,
+              onSelectionChange: handleLibrarySelectionChange,
+            });
+            updateLibrarySelection();
+            refreshClusterControls();
+            clusterPrimarySelect.value = String(prefill.primary_id);
+            refreshClusterControls();
+
+            showClusterStatus(
+              `已预填新 Cluster“${prefill.cluster_name}”，Primary 为“${prefill.selected_item.keyword}”。尚未创建，请检查名称后点击“创建 Cluster”；创建后再点击“分配已选关键词”。`,
+              "success",
+            );
+            showIntelligenceStatus("新 Cluster 建议已预填；尚未创建 Cluster，也未修改数据库。", "success");
+            clusterNameInput.focus?.();
+            clusterNameInput.scrollIntoView?.({ behavior: "smooth", block: "center" });
+          };
+
+          '''
+          text = replace_once(text, anchor_prefill, new_prefill + anchor_prefill, "new prefill handler")
+          path.write_text(text)
+
+          shell = Path("public/v2-shell.js")
+          shell_text = shell.read_text()
+          shell_text = replace_once(
+              shell_text,
+              '{ id: "keywords", label: "关键词", group: "research" },',
+              '{ id: "keywords", label: "关键词研究", group: "research" },',
+              "keyword navigation label",
+          )
+          shell.write_text(shell_text)
+
+          test_path = Path("tests/keyword-library-ui.test.mjs")
+          tests = test_path.read_text()
+          tests = replace_once(
+              tests,
+              '''  clusterIntelligenceRiskLabel,
+            clusterSuggestionPrefill,''',
+              '''  clusterIntelligenceRiskLabel,
+            clusterSuggestionPrefill,
+            newClusterSuggestionPrefill,''',
+              "helper import",
+          )
+          tests += r'''
+
+          test("new Cluster candidate prefill uses the suggested keyword as an editable Cluster name and Primary", () => {
+            assert.deepEqual(newClusterSuggestionPrefill({
+              suggestion: {
+                saved_keyword_id: 31,
+                keyword: "  epoxy   floor coating ",
+                decision: { code: "new_cluster_candidate" },
+              },
+            }), {
+              selected_item: { id: 31, keyword: "epoxy floor coating" },
+              cluster_name: "epoxy floor coating",
+              primary_id: 31,
+            });
+          });
+
+          test("new Cluster candidate action only prefills creation and still requires explicit create and assignment clicks", async () => {
+            const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+            assert.match(source, /按建议新建 Cluster/);
+            assert.match(source, /dataset\.v2ClusterCreatePrefill/);
+            assert.match(source, /尚未创建，请检查名称后点击“创建 Cluster”/);
+            assert.match(source, /尚未创建 Cluster，也未修改数据库/);
+            assert.match(source, /decisionCode === "new_cluster_candidate"/);
+          });
+          '''
+          test_path.write_text(tests)
+
+          nav_test = Path("tests/v2-shell-navigation.test.mjs")
+          nav_text = nav_test.read_text()
+          nav_anchor = '''  assert.equal(V2_VIEWS.some((view) => /content brief/i.test(view.label)), false);'''
+          nav_replace = '''  assert.equal(V2_VIEWS.find((view) => view.id === "keywords")?.label, "关键词研究");
+            assert.equal(V2_VIEWS.find((view) => view.id === "keyword-library")?.label, "关键词库");
+            assert.equal(V2_VIEWS.some((view) => /content brief/i.test(view.label)), false);'''
+          nav_text = replace_once(nav_text, nav_anchor, nav_replace, "navigation test")
+          nav_test.write_text(nav_text)
+          PY
+      - name: Validate
+        run: |
+          git diff --check
+          node --test
+      - name: Commit feature
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/v2-keyword-library.js public/v2-shell.js tests/keyword-library-ui.test.mjs tests/v2-shell-navigation.test.mjs
+          git commit -m "feat: prefill new clusters from intelligence advice"
+          git push origin HEAD:seo-pro-v2
