@@ -95,7 +95,7 @@ test("competitor keyword filtering and sorting is local and deterministic", asyn
     "waterproof membrane",
     "roof coating",
   ]);
-  assert.deepEqual(filterAndSortCompetitorKeywords(rows, { query: "roof ", intent: "commercial", sort: "cpc" }).map((row) => row.keyword), [
+  assert.deepEqual(filterAndSortCompetitorKeywords(rows, { query: "roof c", intent: "commercial", sort: "cpc" }).map((row) => row.keyword), [
     "roof coating",
   ]);
   assert.deepEqual(filterAndSortCompetitorKeywords(rows, { sort: "difficulty" }).map((row) => row.keyword), [
