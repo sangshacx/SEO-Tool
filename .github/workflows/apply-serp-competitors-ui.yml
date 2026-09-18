@@ -26,6 +26,6 @@ jobs:
           rm .github/scripts/apply-serp-competitors-ui.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/v2.html public/v2-shell.js tests/v2-market-request-wiring.test.mjs tests/serp-competitors.test.mjs .github/workflows/cloudflare-preview-migrate.yml .github/workflows/apply-serp-competitors-ui.yml .github/scripts/apply-serp-competitors-ui.py
+          git add public/v2.html public/v2-shell.js tests/v2-market-request-wiring.test.mjs tests/serp-competitors.test.mjs .github/workflows/apply-serp-competitors-ui.yml .github/scripts/apply-serp-competitors-ui.py
           git commit -m "feat: expose guarded Top 10 SERP competitors"
           git push origin HEAD:seo-pro-v2

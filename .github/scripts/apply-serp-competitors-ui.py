@@ -8,8 +8,6 @@ market_test_path = Path("tests/v2-market-request-wiring.test.mjs")
 market_tests = market_test_path.read_text()
 serp_test_path = Path("tests/serp-competitors.test.mjs")
 serp_tests = serp_test_path.read_text()
-migration_workflow_path = Path(".github/workflows/cloudflare-preview-migrate.yml")
-migration_workflow = migration_workflow_path.read_text()
 
 def replace_html(old, new, label):
     global html
@@ -63,28 +61,3 @@ test("Top 10 SERP UI requires an explicit paid confirmation on cache miss", asyn
 });
 '''
 serp_test_path.write_text(serp_tests)
-
-verify_tables_old = "AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots', 'keyword_idea_runs', 'keyword_idea_members', 'backlink_snapshots', 'backlink_opportunities', 'site_profiles', 'site_dashboard_snapshots', 'dashboard_refresh_leases')"
-verify_tables_new = "AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots', 'serp_competitor_snapshots', 'serp_competitor_pages', 'keyword_idea_runs', 'keyword_idea_members', 'backlink_snapshots', 'backlink_opportunities', 'site_profiles', 'site_dashboard_snapshots', 'dashboard_refresh_leases')"
-if verify_tables_old not in migration_workflow:
-    raise SystemExit("migration table verification anchor not found")
-migration_workflow = migration_workflow.replace(verify_tables_old, verify_tables_new, 1)
-
-verify_args_old = "api_usage app_settings backlink_opportunities backlink_snapshots dashboard_refresh_leases keyword_idea_members \\\n          keyword_idea_runs keyword_metrics keywords serp_weakness_snapshots site_dashboard_snapshots site_profiles"
-verify_args_new = "api_usage app_settings backlink_opportunities backlink_snapshots dashboard_refresh_leases keyword_idea_members \\\n          keyword_idea_runs keyword_metrics keywords serp_competitor_pages serp_competitor_snapshots serp_weakness_snapshots site_dashboard_snapshots site_profiles"
-if verify_args_old not in migration_workflow:
-    raise SystemExit("migration assertion anchor not found")
-migration_workflow = migration_workflow.replace(verify_args_old, verify_args_new, 1)
-
-ledger_old = "WHERE name IN ('0006_backlink_outreach_intelligence.sql', '0007_site_profiles.sql', '0008_site_dashboard_snapshots.sql', '0009_nullable_api_usage_task_count.sql', '0010_atomic_dashboard_modules.sql')"
-ledger_new = "WHERE name IN ('0006_backlink_outreach_intelligence.sql', '0007_site_profiles.sql', '0008_site_dashboard_snapshots.sql', '0009_nullable_api_usage_task_count.sql', '0010_atomic_dashboard_modules.sql', '0011_serp_competitor_pages.sql')"
-if ledger_old not in migration_workflow:
-    raise SystemExit("migration ledger query anchor not found")
-migration_workflow = migration_workflow.replace(ledger_old, ledger_new, 1)
-
-ledger_args_old = "0006_backlink_outreach_intelligence.sql 0007_site_profiles.sql 0008_site_dashboard_snapshots.sql 0009_nullable_api_usage_task_count.sql 0010_atomic_dashboard_modules.sql"
-ledger_args_new = ledger_args_old + " 0011_serp_competitor_pages.sql"
-if ledger_args_old not in migration_workflow:
-    raise SystemExit("migration ledger assertion anchor not found")
-migration_workflow = migration_workflow.replace(ledger_args_old, ledger_args_new, 1)
-migration_workflow_path.write_text(migration_workflow)
