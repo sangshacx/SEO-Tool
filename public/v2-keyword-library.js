@@ -2,6 +2,10 @@ const SAVED_KEYWORDS_URL = "/api/v2/keywords/saved";
 const KEYWORD_CLUSTERS_URL = "/api/v2/keywords/clusters";
 const CLUSTER_INTELLIGENCE_URL = "/api/v2/keywords/cluster-intelligence";
 
+export const CLUSTER_SERP_VERIFICATION_SESSION_KEY = "seo-pro-v2.cluster-serp-verification.v1";
+export const CLUSTER_INTELLIGENCE_RETURN_SESSION_KEY = "seo-pro-v2.cluster-intelligence-return.v1";
+const CLUSTER_SERP_VERIFICATION_TTL_MS = 2 * 60 * 60 * 1000;
+
 const SOURCE_LABELS = Object.freeze({
   manual: "手动",
   keyword_explorer: "Keyword Explorer",
@@ -294,13 +298,106 @@ export function buildClusterSerpVerificationQueue({
   });
 }
 
+export function writeClusterSerpVerificationContext({
+  storageLike,
+  keyword,
+  siteDomain,
+  verification = {},
+  now = new Date().toISOString(),
+} = {}) {
+  const value = clean(keyword).replace(/\s+/g, " ");
+  if (!storageLike?.setItem || !value) return null;
+  const payload = {
+    keyword: value,
+    site_domain: clean(siteDomain),
+    evidence_status: clean(verification.evidence_status),
+    evidence_label: clean(verification.evidence_label),
+    priority: clean(verification.priority),
+    priority_label: clean(verification.priority_label),
+    reason: clean(verification.reason),
+    suggested_cluster: clean(verification.suggested_cluster),
+    source_keyword: clean(verification.source_keyword),
+    created_at: now,
+  };
+  storageLike.setItem(CLUSTER_SERP_VERIFICATION_SESSION_KEY, JSON.stringify(payload));
+  return payload;
+}
+
+export function readClusterSerpVerificationContext({
+  storageLike,
+  now = Date.now(),
+} = {}) {
+  if (!storageLike?.getItem) return null;
+  try {
+    const payload = JSON.parse(storageLike.getItem(CLUSTER_SERP_VERIFICATION_SESSION_KEY) || "null");
+    if (!payload?.keyword) return null;
+    const created = Date.parse(payload.created_at || "");
+    if (!Number.isFinite(created) || Number(now) - created > CLUSTER_SERP_VERIFICATION_TTL_MS) {
+      storageLike.removeItem?.(CLUSTER_SERP_VERIFICATION_SESSION_KEY);
+      return null;
+    }
+    return payload;
+  } catch {
+    storageLike.removeItem?.(CLUSTER_SERP_VERIFICATION_SESSION_KEY);
+    return null;
+  }
+}
+
+export function clearClusterSerpVerificationContext(storageLike) {
+  storageLike?.removeItem?.(CLUSTER_SERP_VERIFICATION_SESSION_KEY);
+}
+
+export function requestClusterIntelligenceReturn({
+  storageLike,
+  keyword,
+  siteDomain,
+  now = new Date().toISOString(),
+} = {}) {
+  if (!storageLike?.setItem) return null;
+  const payload = {
+    keyword: clean(keyword).replace(/\s+/g, " "),
+    site_domain: clean(siteDomain),
+    requested_at: now,
+  };
+  storageLike.setItem(CLUSTER_INTELLIGENCE_RETURN_SESSION_KEY, JSON.stringify(payload));
+  return payload;
+}
+
+export function consumeClusterIntelligenceReturn({
+  storageLike,
+  siteDomain,
+} = {}) {
+  if (!storageLike?.getItem) return null;
+  try {
+    const payload = JSON.parse(storageLike.getItem(CLUSTER_INTELLIGENCE_RETURN_SESSION_KEY) || "null");
+    storageLike.removeItem?.(CLUSTER_INTELLIGENCE_RETURN_SESSION_KEY);
+    if (!payload) return null;
+    if (clean(payload.site_domain) && clean(siteDomain) && clean(payload.site_domain) !== clean(siteDomain)) return null;
+    return payload;
+  } catch {
+    storageLike.removeItem?.(CLUSTER_INTELLIGENCE_RETURN_SESSION_KEY);
+    return null;
+  }
+}
+
 export function handoffClusterSerpVerification({
   keyword,
   keywordInput,
   locationLike,
+  storageLike,
+  verification,
+  siteDomain,
 } = {}) {
   const value = clean(keyword).replace(/\s+/g, " ");
   if (!value) throw new Error("待验证关键词为空。");
+  if (storageLike && verification) {
+    writeClusterSerpVerificationContext({
+      storageLike,
+      keyword: value,
+      siteDomain,
+      verification,
+    });
+  }
   if (keywordInput) keywordInput.value = value;
   if (locationLike) locationLike.hash = "keywords";
   keywordInput?.focus?.();
@@ -801,6 +898,8 @@ export function mountKeywordLibrary({
   fetchImpl = globalThis.fetch?.bind(globalThis),
   documentLike = globalThis.document,
   locationLike = globalThis.location,
+  windowLike = globalThis.window,
+  sessionStorageLike = globalThis.sessionStorage,
   confirmImpl = globalThis.confirm?.bind(globalThis) || (() => true),
 } = {}) {
   const section = root?.querySelector?.("[data-v2-keyword-library]");
@@ -872,6 +971,8 @@ export function mountKeywordLibrary({
     button.addEventListener("click", () => activateLibraryTab(button.dataset.v2LibraryTab));
   });
 
+
+
   const showStatus = (message = "", type = "info") => {
     status.textContent = message;
     status.className = message ? `status on ${type}` : "status";
@@ -888,6 +989,27 @@ export function mountKeywordLibrary({
       ? `v2-cluster-intelligence-status ${type}`
       : "v2-cluster-intelligence-status";
   };
+
+  const resumeClusterIntelligence = () => {
+    const view = String(locationLike?.hash || "").replace(/^#/, "");
+    if (view !== "keyword-library") return false;
+    const marker = consumeClusterIntelligenceReturn({
+      storageLike: sessionStorageLike,
+      siteDomain: context.get()?.domain,
+    });
+    if (!marker) return false;
+    activateLibraryTab("intelligence");
+    showIntelligenceStatus(
+      marker.keyword
+        ? `“${marker.keyword}”的 SERP 证据已更新，正在用 D1 数据重新计算 Cluster Intelligence…`
+        : "SERP 证据已更新，正在用 D1 数据重新计算 Cluster Intelligence…",
+      "info",
+    );
+    intelligenceRunButton.click();
+    return true;
+  };
+
+  windowLike?.addEventListener?.("hashchange", resumeClusterIntelligence);
 
   const renderSerpVerificationQueue = (data = {}) => {
     const queue = buildClusterSerpVerificationQueue({
@@ -928,6 +1050,9 @@ export function mountKeywordLibrary({
           keyword: item.keyword,
           keywordInput,
           locationLike,
+          storageLike: sessionStorageLike,
+          verification: item,
+          siteDomain: context.get()?.domain,
         });
       });
 
@@ -1889,10 +2014,12 @@ export function mountKeywordLibrary({
   updateLibrarySelection();
   updateSaveButton();
   if (context.get()?.domain) loadClusters();
+  resumeClusterIntelligence();
 
   return () => {
     unsubscribe?.();
     surfaceObservers.forEach((observer) => observer.disconnect?.());
     keywordInput?.removeEventListener("input", handleKeywordInput);
+    windowLike?.removeEventListener?.("hashchange", resumeClusterIntelligence);
   };
 }

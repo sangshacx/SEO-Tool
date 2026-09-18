@@ -4,8 +4,12 @@ import { readFile } from "node:fs/promises";
 
 import {
   BATCH_SAVE_SURFACES,
+  CLUSTER_INTELLIGENCE_RETURN_SESSION_KEY,
+  CLUSTER_SERP_VERIFICATION_SESSION_KEY,
   RESEARCH_SAVE_SURFACES,
   buildClusterSerpVerificationQueue,
+  clearClusterSerpVerificationContext,
+  consumeClusterIntelligenceReturn,
   buildKeywordClusterAssignments,
   buildSavedKeywordListUrl,
   clusterConfidencePresentation,
@@ -14,12 +18,15 @@ import {
   clusterSerpEvidencePresentation,
   clusterSuggestionPrefill,
   handoffClusterSerpVerification,
+  readClusterSerpVerificationContext,
+  requestClusterIntelligenceReturn,
   newClusterSuggestionPrefill,
   normalizeBatchTagInput,
   researchSurfaceKeyword,
   savedKeywordCreatePayload,
   saveKeywordSelection,
   selectedResearchKeywords,
+  writeClusterSerpVerificationContext,
 } from "../public/v2-keyword-library.js";
 
 test("Keyword Library list URL is site scoped and keeps filters explicit", () => {
@@ -540,4 +547,105 @@ test("Cluster Intelligence UI exposes a manual SERP Evidence Coverage queue with
   assert.match(source, /不会自动提交或产生 DataForSEO 费用/);
   assert.match(source, /handoffClusterSerpVerification/);
   assert.doesNotMatch(source, /\.requestSubmit\(|\.submit\(\)|submitSeoResearchRequest|dataforseo\.com/i);
+});
+
+
+test("controlled SERP verification context is session-scoped, expiring, and site-aware", () => {
+  const map = new Map();
+  const storageLike = {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => map.set(key, value),
+    removeItem: (key) => map.delete(key),
+  };
+  const saved = writeClusterSerpVerificationContext({
+    storageLike,
+    keyword: " waterproof membrane ",
+    siteDomain: "great-ocean-waterproof.com",
+    verification: {
+      evidence_status: "stale",
+      evidence_label: "SERP 已过期",
+      priority: "high",
+      priority_label: "优先验证",
+      reason: "候选关键词的 SERP 快照超过 30 天。",
+      suggested_cluster: "Waterproof Membrane",
+    },
+    now: "2026-09-18T10:00:00Z",
+  });
+  assert.equal(saved.keyword, "waterproof membrane");
+  assert.ok(map.has(CLUSTER_SERP_VERIFICATION_SESSION_KEY));
+  assert.equal(readClusterSerpVerificationContext({
+    storageLike,
+    now: Date.parse("2026-09-18T11:00:00Z"),
+  }).suggested_cluster, "Waterproof Membrane");
+  assert.equal(readClusterSerpVerificationContext({
+    storageLike,
+    now: Date.parse("2026-09-18T13:01:00Z"),
+  }), null);
+  assert.equal(map.has(CLUSTER_SERP_VERIFICATION_SESSION_KEY), false);
+});
+
+test("SERP verification return marker is consumed once and rejects a different active site", () => {
+  const map = new Map();
+  const storageLike = {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => map.set(key, value),
+    removeItem: (key) => map.delete(key),
+  };
+  requestClusterIntelligenceReturn({
+    storageLike,
+    keyword: "roof membrane",
+    siteDomain: "great-ocean-waterproof.com",
+    now: "2026-09-18T10:00:00Z",
+  });
+  assert.ok(map.has(CLUSTER_INTELLIGENCE_RETURN_SESSION_KEY));
+  assert.equal(consumeClusterIntelligenceReturn({
+    storageLike,
+    siteDomain: "other-example.com",
+  }), null);
+  assert.equal(map.has(CLUSTER_INTELLIGENCE_RETURN_SESSION_KEY), false);
+
+  requestClusterIntelligenceReturn({
+    storageLike,
+    keyword: "roof membrane",
+    siteDomain: "great-ocean-waterproof.com",
+  });
+  assert.equal(consumeClusterIntelligenceReturn({
+    storageLike,
+    siteDomain: "great-ocean-waterproof.com",
+  }).keyword, "roof membrane");
+  assert.equal(consumeClusterIntelligenceReturn({
+    storageLike,
+    siteDomain: "great-ocean-waterproof.com",
+  }), null);
+  clearClusterSerpVerificationContext(storageLike);
+});
+
+test("SERP verification handoff stores context but still never submits the keyword form", () => {
+  const map = new Map();
+  const storageLike = {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => map.set(key, value),
+    removeItem: (key) => map.delete(key),
+  };
+  const keywordInput = { value: "", focus() {} };
+  const locationLike = { hash: "" };
+  const result = handoffClusterSerpVerification({
+    keyword: "waterproof membrane",
+    keywordInput,
+    locationLike,
+    storageLike,
+    siteDomain: "great-ocean-waterproof.com",
+    verification: {
+      evidence_status: "unavailable",
+      reason: "缺少 SERP",
+      suggested_cluster: "Membrane",
+    },
+  });
+  assert.deepEqual(result, {
+    keyword: "waterproof membrane",
+    view: "keywords",
+    submitted: false,
+  });
+  assert.equal(locationLike.hash, "keywords");
+  assert.equal(JSON.parse(map.get(CLUSTER_SERP_VERIFICATION_SESSION_KEY)).suggested_cluster, "Membrane");
 });

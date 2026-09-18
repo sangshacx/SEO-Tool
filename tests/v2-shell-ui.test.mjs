@@ -149,3 +149,18 @@ test("global UI consistency layer defines shared visual primitives across redesi
   assert.match(shellCss, /\.v2-website-data-tabs/);
   assert.match(shellCss, /\.v2-library-tabs/);
 });
+
+
+test("controlled Cluster SERP verification reuses the existing Cost Guard and returns to Intelligence", () => {
+  assert.match(shell, /mountClusterSerpVerificationFlow/);
+  assert.match(shell, /#serpCompetitorsBtn/);
+  assert.match(shell, /#serpCompetitorsAllowPaid/);
+  assert.match(shell, /检查 Top 10 SERP/);
+  assert.match(shell, /未勾选付费确认时只读取 D1/);
+  assert.match(shell, /costGuard\.checked = paidCheckbox\.checked/);
+  assert.match(shell, /serpButton\.click\(\)/);
+  assert.match(shell, /Top 10 页面读取成功/);
+  assert.match(shell, /requestClusterIntelligenceReturn/);
+  assert.match(shell, /locationLike\.hash = "keyword-library"/);
+  assert.match(shell, /返回 Cluster Intelligence 并重新分析/);
+});

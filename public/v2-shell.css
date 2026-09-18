@@ -2729,3 +2729,121 @@
   .v2-serp-verification-item{grid-template-columns:1fr}
   .v2-serp-verification-action{width:100%}
 }
+
+
+/* Controlled Cluster SERP verification flow */
+.v2-cluster-serp-flow{
+  margin:0 0 14px;
+  padding:14px;
+  border:1px solid #31547d;
+  border-radius:12px;
+  background:linear-gradient(145deg,#0d2037,#0b1829);
+}
+.v2-cluster-serp-flow[hidden]{display:none!important}
+.v2-cluster-serp-flow-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+}
+.v2-cluster-serp-flow-eyebrow{
+  color:#72a0dc;
+  font-size:9px;
+  font-weight:850;
+  letter-spacing:.14em;
+}
+.v2-cluster-serp-flow-head b{
+  display:block;
+  margin-top:4px;
+  color:#e8f1ff;
+  font-size:14px;
+}
+.v2-cluster-serp-flow-head p{
+  margin:5px 0 0;
+  color:#7891b3;
+  font-size:11px;
+  line-height:1.5;
+}
+.v2-cluster-serp-flow-steps{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:12px;
+}
+.v2-cluster-serp-flow-steps span{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:5px 8px;
+  border:1px solid #203b5d;
+  border-radius:999px;
+  background:#0a1727;
+  color:#8199b9;
+  font-size:10px;
+  font-weight:750;
+}
+.v2-cluster-serp-flow-steps span:first-child,
+.v2-cluster-serp-flow-steps span.complete{
+  border-color:#28594e;
+  background:#102d29;
+  color:#92d7bd;
+}
+.v2-cluster-serp-flow-steps b{
+  display:grid;
+  place-items:center;
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  background:#173966;
+  color:#cfe0ff;
+  font-size:9px;
+}
+.v2-cluster-serp-flow-actions{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  flex-wrap:wrap;
+  margin-top:12px;
+}
+.v2-cluster-serp-flow-actions button{
+  min-height:34px;
+  padding:0 11px;
+}
+.v2-cluster-serp-paid{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  color:#aebfd6;
+  font-size:11px;
+}
+.v2-cluster-serp-paid input{
+  width:16px!important;
+  min-height:16px!important;
+  height:16px;
+  accent-color:#f7ba4b;
+}
+.v2-cluster-serp-flow-status{
+  margin-top:10px;
+  padding:9px 10px;
+  border-left:2px solid #31547d;
+  background:#0a1727;
+  color:#8ea6c6;
+  font-size:11px;
+  line-height:1.5;
+}
+.v2-cluster-serp-flow-status[data-state="success"]{border-left-color:#28594e;color:#92d7bd}
+.v2-cluster-serp-flow-status[data-state="warning"]{border-left-color:#82642a;color:#ffd38c}
+.v2-cluster-serp-flow-status[data-state="error"]{border-left-color:#5d3140;color:#ef9aaa}
+.v2-cluster-serp-flow-meta{
+  margin-top:6px;
+  color:#647d9f;
+  font-size:10px;
+  line-height:1.45;
+}
+@media(max-width:720px){
+  .v2-cluster-serp-flow-head{flex-direction:column}
+  .v2-cluster-serp-flow-actions{align-items:stretch;flex-direction:column}
+  .v2-cluster-serp-flow-actions button{width:100%}
+  .v2-cluster-serp-paid{width:100%;align-items:flex-start}
+}

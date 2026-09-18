@@ -17,7 +17,13 @@ import {
   marketRequestFields,
 } from "./v2-market-context.js";
 import { createDashboardOverview, mountDashboard } from "./v2-dashboard.js";
-import { createKeywordLibrarySection, mountKeywordLibrary } from "./v2-keyword-library.js";
+import {
+  clearClusterSerpVerificationContext,
+  createKeywordLibrarySection,
+  mountKeywordLibrary,
+  readClusterSerpVerificationContext,
+  requestClusterIntelligenceReturn,
+} from "./v2-keyword-library.js";
 
 export const V2_VIEWS = Object.freeze([
   { id: "overview", label: "总览", group: "primary" },
@@ -648,6 +654,210 @@ export function createWebsiteDataWorkspace(root) {
   return { workspace, activateTab };
 }
 
+export function mountClusterSerpVerificationFlow({
+  root,
+  keywordResearchWorkspace,
+  context,
+  storageLike = globalThis.sessionStorage,
+  locationLike = globalThis.location,
+  windowLike = globalThis.window,
+  documentLike = globalThis.document,
+  MutationObserverImpl = globalThis.MutationObserver,
+} = {}) {
+  const workspace = root?.querySelector?.(".v2-keyword-research-workspace");
+  const tabs = workspace?.querySelector?.(".v2-keyword-research-tabs");
+  const keywordInput = root?.querySelector?.("#keyword");
+  const serpButton = root?.querySelector?.("#serpCompetitorsBtn");
+  const costGuard = root?.querySelector?.("#serpCompetitorsAllowPaid");
+  const sourceStatus = root?.querySelector?.("#serpCompetitorsStatus");
+  const sourceResult = root?.querySelector?.("#serpCompetitorsResult");
+  const sourceMeta = root?.querySelector?.("#serpCompetitorsMeta");
+  if (!workspace || !tabs || !keywordInput || !serpButton || !costGuard || !sourceStatus || !sourceResult) {
+    return () => {};
+  }
+
+  const card = documentLike.createElement("section");
+  card.className = "v2-cluster-serp-flow";
+  card.dataset.v2ClusterSerpFlow = "";
+  card.hidden = true;
+  card.innerHTML = `
+    <div class="v2-cluster-serp-flow-head">
+      <div>
+        <div class="v2-cluster-serp-flow-eyebrow">CLUSTER INTELLIGENCE · SERP VERIFICATION</div>
+        <b data-v2-cluster-serp-flow-title>补充 SERP 证据</b>
+        <p data-v2-cluster-serp-flow-context></p>
+      </div>
+      <button type="button" class="secondary-action" data-v2-cluster-serp-flow-cancel>取消</button>
+    </div>
+    <div class="v2-cluster-serp-flow-steps">
+      <span data-v2-cluster-serp-step="keyword"><b>1</b>关键词已预填</span>
+      <span data-v2-cluster-serp-step="guard"><b>2</b>Cost Guard</span>
+      <span data-v2-cluster-serp-step="return"><b>3</b>返回重算</span>
+    </div>
+    <div class="v2-cluster-serp-flow-actions">
+      <button type="button" class="primary-action" data-v2-cluster-serp-run>检查 Top 10 SERP</button>
+      <label class="v2-cluster-serp-paid">
+        <input type="checkbox" data-v2-cluster-serp-allow-paid>
+        无新鲜快照时，允许本次付费 DataForSEO SERP 请求
+      </label>
+      <button type="button" class="secondary-action" data-v2-cluster-serp-return disabled>返回 Cluster Intelligence 并重新分析</button>
+    </div>
+    <div class="v2-cluster-serp-flow-status" data-v2-cluster-serp-flow-status>
+      先点击“检查 Top 10 SERP”。未勾选付费确认时只读取 D1，费用为 $0。
+    </div>
+    <div class="v2-cluster-serp-flow-meta" data-v2-cluster-serp-flow-meta></div>
+  `;
+  tabs.after(card);
+
+  const title = card.querySelector("[data-v2-cluster-serp-flow-title]");
+  const contextText = card.querySelector("[data-v2-cluster-serp-flow-context]");
+  const runButton = card.querySelector("[data-v2-cluster-serp-run]");
+  const paidCheckbox = card.querySelector("[data-v2-cluster-serp-allow-paid]");
+  const returnButton = card.querySelector("[data-v2-cluster-serp-return]");
+  const cancelButton = card.querySelector("[data-v2-cluster-serp-flow-cancel]");
+  const flowStatus = card.querySelector("[data-v2-cluster-serp-flow-status]");
+  const flowMeta = card.querySelector("[data-v2-cluster-serp-flow-meta]");
+  const returnStep = card.querySelector('[data-v2-cluster-serp-step="return"]');
+  let activeContext = null;
+  let attemptStarted = false;
+  let completed = false;
+
+  const keywordMatches = () =>
+    Boolean(activeContext?.keyword)
+    && keywordInput.value.trim().toLowerCase() === String(activeContext.keyword).trim().toLowerCase();
+
+  const syncControls = () => {
+    const market = context?.get?.();
+    const siteMatches = !activeContext?.site_domain || !market?.domain || activeContext.site_domain === market.domain;
+    runButton.disabled = !activeContext || !keywordMatches() || !siteMatches || serpButton.disabled;
+    returnButton.disabled = !completed;
+    if (!siteMatches) {
+      flowStatus.textContent = "当前网站与这条 Cluster Intelligence 验证任务不一致，请切回原网站后继续。";
+      flowStatus.dataset.state = "warning";
+    } else if (activeContext && !keywordMatches()) {
+      flowStatus.textContent = `验证任务要求关键词“${activeContext.keyword}”。请恢复该关键词后再继续。`;
+      flowStatus.dataset.state = "warning";
+    }
+  };
+
+  const syncSourceState = () => {
+    if (!activeContext || !attemptStarted) {
+      syncControls();
+      return;
+    }
+    const sourceMessage = sourceStatus.textContent.trim();
+    if (sourceMessage) flowStatus.textContent = sourceMessage;
+    const success = /Top 10 页面读取成功/.test(sourceMessage) && !sourceResult.classList.contains("hidden");
+    if (success) {
+      completed = true;
+      paidCheckbox.checked = false;
+      returnStep?.classList.add("complete");
+      flowStatus.dataset.state = "success";
+      flowMeta.textContent = sourceMeta?.textContent?.trim()
+        ? `${sourceMeta.textContent.trim()} · 已写入/复用 D1，可返回 Cluster Intelligence 重算。`
+        : "Top 10 SERP 证据已写入/复用 D1，可返回 Cluster Intelligence 重算。";
+    } else if (/没有 7 天内 Top 10 快照/.test(sourceMessage)) {
+      flowStatus.dataset.state = "warning";
+      flowMeta.textContent = "如需实时验证，请明确勾选上方付费确认后再次点击；否则不会调用 DataForSEO。";
+    } else if (sourceStatus.classList.contains("error")) {
+      flowStatus.dataset.state = "error";
+    } else {
+      flowStatus.dataset.state = "info";
+    }
+    syncControls();
+  };
+
+  const render = () => {
+    const view = String(locationLike?.hash || "").replace(/^#/, "");
+    activeContext = readClusterSerpVerificationContext({ storageLike });
+    const market = context?.get?.();
+    const visible = view === "keywords" && activeContext;
+    card.hidden = !visible;
+    if (!visible) return;
+    keywordResearchWorkspace?.activateTab?.("overview");
+    keywordInput.value = activeContext.keyword;
+    title.textContent = `补充“${activeContext.keyword}”的 SERP 证据`;
+    contextText.textContent = [
+      activeContext.priority_label,
+      activeContext.evidence_label,
+      activeContext.suggested_cluster ? `影响 Cluster：${activeContext.suggested_cluster}` : null,
+      activeContext.reason,
+    ].filter(Boolean).join(" · ");
+    completed = false;
+    attemptStarted = false;
+    returnStep?.classList.remove("complete");
+    paidCheckbox.checked = false;
+    flowMeta.textContent = market?.domain ? `当前网站：${market.domain}` : "";
+    flowStatus.textContent = "先点击“检查 Top 10 SERP”。未勾选付费确认时只读取 D1，费用为 $0。";
+    flowStatus.dataset.state = "info";
+    syncControls();
+  };
+
+  runButton.addEventListener("click", () => {
+    if (!activeContext || !keywordMatches()) return;
+    attemptStarted = true;
+    completed = false;
+    returnStep?.classList.remove("complete");
+    sourceResult.classList.add("hidden");
+    costGuard.checked = paidCheckbox.checked;
+    flowStatus.textContent = paidCheckbox.checked
+      ? "已明确允许本次实时 SERP 请求；正在先检查缓存，再按现有 Cost Guard 规则执行。"
+      : "正在检查 D1 7 天 Top 10 快照；本次不会调用 DataForSEO。";
+    flowStatus.dataset.state = "info";
+    flowMeta.textContent = "";
+    returnButton.disabled = true;
+    serpButton.click();
+  });
+
+  paidCheckbox.addEventListener("change", () => {
+    flowStatus.textContent = paidCheckbox.checked
+      ? "你已明确允许：仅当没有新鲜 D1 快照时，本次验证可以调用 DataForSEO SERP。"
+      : "付费确认已关闭；再次检查时只读取 D1，不会调用 DataForSEO。";
+    flowStatus.dataset.state = paidCheckbox.checked ? "warning" : "info";
+  });
+
+  returnButton.addEventListener("click", () => {
+    if (!completed || !activeContext) return;
+    requestClusterIntelligenceReturn({
+      storageLike,
+      keyword: activeContext.keyword,
+      siteDomain: activeContext.site_domain || context?.get?.()?.domain,
+    });
+    clearClusterSerpVerificationContext(storageLike);
+    activeContext = null;
+    card.hidden = true;
+    locationLike.hash = "keyword-library";
+  });
+
+  cancelButton.addEventListener("click", () => {
+    clearClusterSerpVerificationContext(storageLike);
+    activeContext = null;
+    card.hidden = true;
+  });
+
+  const handleKeywordInput = () => syncControls();
+  const handleHashChange = () => render();
+  keywordInput.addEventListener("input", handleKeywordInput);
+  windowLike?.addEventListener?.("hashchange", handleHashChange);
+
+  const observers = [];
+  if (typeof MutationObserverImpl === "function") {
+    const sourceObserver = new MutationObserverImpl(syncSourceState);
+    sourceObserver.observe(sourceStatus, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    sourceObserver.observe(sourceResult, { attributes: true, attributeFilter: ["class"] });
+    sourceObserver.observe(serpButton, { attributes: true, attributeFilter: ["disabled"] });
+    observers.push(sourceObserver);
+  }
+
+  render();
+  return () => {
+    observers.forEach((observer) => observer.disconnect?.());
+    keywordInput.removeEventListener("input", handleKeywordInput);
+    windowLike?.removeEventListener?.("hashchange", handleHashChange);
+    card.remove?.();
+  };
+}
+
 function createPlaceholder(view, title, description) {
   const section = createElement("section", "panel v2-placeholder");
   section.dataset.v2View = view;
@@ -1000,7 +1210,7 @@ function buildShell() {
   if (!content || document.querySelector(".v2-app-shell")) return;
   annotateExistingTools(content);
   markDomainFields(content);
-  createKeywordResearchWorkspace(content);
+  const keywordResearchWorkspace = createKeywordResearchWorkspace(content);
   createCompetitorResearchWorkspace(content);
   createBacklinkResearchWorkspace(content);
   createOpportunityWorkspace(content);
@@ -1121,6 +1331,7 @@ function buildShell() {
   const gate = window.__seoProV2ResearchGate;
   let dashboardCleanup = () => {};
   let keywordLibraryCleanup = () => {};
+  let clusterSerpVerificationCleanup = () => {};
   const marketInitialization = createMarketInitializationCoordinator({
     initialize: () => initializeSites(shell),
     onReady: ({ context, fetchImpl }) => {
@@ -1130,6 +1341,12 @@ function buildShell() {
       dashboardCleanup = mountDashboard({ root: shell, context, fetchImpl });
       keywordLibraryCleanup();
       keywordLibraryCleanup = mountKeywordLibrary({ root: shell, context, fetchImpl });
+      clusterSerpVerificationCleanup();
+      clusterSerpVerificationCleanup = mountClusterSerpVerificationFlow({
+        root: shell,
+        keywordResearchWorkspace,
+        context,
+      });
       setResearchControlsReady(shell, true);
       marketInputs.forEach((input) => { input.disabled = false; });
       retryMarket.hidden = true;
