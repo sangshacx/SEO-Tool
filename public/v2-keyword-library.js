@@ -101,9 +101,21 @@ export function decorateResearchKeywordRows({
   [...(body.children || [])].forEach((row) => {
     if (row.querySelector?.(".emptyrow")) return;
     const cell = row.children?.[spec.keyword_cell_index];
-    if (!cell || cell.querySelector?.("[data-v2-inline-save-keyword]")) return;
+    if (!cell) return;
     const keyword = researchSurfaceKeyword(row, spec);
     if (!keyword) return;
+    const existing = cell.querySelector?.("[data-v2-inline-save-keyword]");
+    if (existing) {
+      const savedForCurrentSite = Boolean(market?.domain) && existing.dataset?.savedSiteDomain === market.domain;
+      existing.classList?.toggle?.("saved", savedForCurrentSite);
+      existing.classList?.remove?.("error");
+      existing.textContent = savedForCurrentSite ? "已保存" : "保存";
+      existing.disabled = !market?.domain || savedForCurrentSite;
+      existing.title = market?.domain
+        ? `保存“${keyword}”到当前网站关键词库`
+        : "请先在网站管理添加并选择当前网站";
+      return;
+    }
 
     const button = documentLike.createElement("button");
     button.type = "button";
@@ -121,8 +133,10 @@ export function decorateResearchKeywordRows({
       const original = button.textContent;
       button.textContent = "保存中…";
       try {
-        await onSave({ keyword, source: spec.source });
+        const result = await onSave({ keyword, source: spec.source });
         button.textContent = "已保存";
+        button.dataset.savedSiteDomain = result?.data?.site_domain || market?.domain || "";
+        button.classList?.remove?.("error");
         button.classList?.add?.("saved");
       } catch (error) {
         button.textContent = "重试";
@@ -419,8 +433,10 @@ export function mountKeywordLibrary({
   const handleKeywordInput = () => updateSaveButton();
   keywordInput?.addEventListener("input", handleKeywordInput);
 
+  let refreshResearchSurfaceButtons = () => {};
   const unsubscribe = context.subscribe(() => {
     updateSaveButton();
+    refreshResearchSurfaceButtons();
     resetAndLoad();
   });
 
@@ -454,10 +470,16 @@ export function mountKeywordLibrary({
     onSave: saveToLibrary,
   });
 
-  Object.entries(RESEARCH_SAVE_SURFACES).forEach(([bodyId, spec]) => {
-    const body = root.querySelector(`#${bodyId}`);
-    if (!body) return;
-    decorateSurface(body, spec);
+  const surfaceEntries = Object.entries(RESEARCH_SAVE_SURFACES)
+    .map(([bodyId, spec]) => ({ body: root.querySelector(`#${bodyId}`), spec }))
+    .filter(({ body }) => Boolean(body));
+
+  refreshResearchSurfaceButtons = () => {
+    surfaceEntries.forEach(({ body, spec }) => decorateSurface(body, spec));
+  };
+  refreshResearchSurfaceButtons();
+
+  surfaceEntries.forEach(({ body, spec }) => {
     if (typeof globalThis.MutationObserver === "function") {
       const observer = new globalThis.MutationObserver(() => decorateSurface(body, spec));
       observer.observe(body, { childList: true });

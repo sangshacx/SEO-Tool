@@ -3,7 +3,9 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 
 import {
+  RESEARCH_SAVE_SURFACES,
   buildSavedKeywordListUrl,
+  researchSurfaceKeyword,
   savedKeywordCreatePayload,
 } from "../public/v2-keyword-library.js";
 
@@ -67,4 +69,44 @@ test("V2 shell exposes Keyword Library as a first-class research view", async ()
   assert.match(source, /id: "keyword-library", label: "关键词库"/);
   assert.match(source, /createKeywordLibrarySection/);
   assert.match(source, /mountKeywordLibrary/);
+});
+
+
+test("research surfaces map to the Saved Keywords contract sources", () => {
+  assert.deepEqual(RESEARCH_SAVE_SURFACES, {
+    ideasBody: { source: "keyword_ideas", keyword_cell_index: 2 },
+    competitorBody: { source: "competitor_snapshot", keyword_cell_index: 1 },
+    gapBody: { source: "keyword_gap", keyword_cell_index: 2 },
+  });
+});
+
+test("researchSurfaceKeyword reads linked and direct keyword cells deterministically", () => {
+  const linkedCell = {
+    querySelector(selector) {
+      if (selector === ".emptyrow") return null;
+      if (selector === "a") return { textContent: " waterproof membrane " };
+      return null;
+    },
+    childNodes: [],
+    textContent: "ignored",
+  };
+  const linkedRow = { children: [{}, linkedCell] };
+  assert.equal(researchSurfaceKeyword(linkedRow, RESEARCH_SAVE_SURFACES.competitorBody), "waterproof membrane");
+
+  const directCell = {
+    querySelector() { return null; },
+    childNodes: [{ nodeType: 3, textContent: " roof   coating " }],
+    textContent: "roof coating",
+  };
+  const directRow = { children: [{}, {}, directCell] };
+  assert.equal(researchSurfaceKeyword(directRow, RESEARCH_SAVE_SURFACES.ideasBody), "roof coating");
+});
+
+test("research surface saves stay on the zero-provider-cost Saved Keywords API", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /ideasBody[\s\S]*keyword_ideas/);
+  assert.match(source, /competitorBody[\s\S]*competitor_snapshot/);
+  assert.match(source, /gapBody[\s\S]*keyword_gap/);
+  assert.match(source, /data-v2-inline-save-keyword/);
+  assert.doesNotMatch(source, /submitSeoResearchRequest|dataforseo\.com/i);
 });
