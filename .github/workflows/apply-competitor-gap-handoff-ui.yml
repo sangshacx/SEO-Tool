@@ -1,0 +1,71 @@
+name: Apply Competitor Gap Handoff UI
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - .github/workflows/apply-competitor-gap-handoff-ui.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: seo-pro-v2
+
+      - name: Wire competitor keywords into Keyword Gap
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          html_path = Path("public/v2.html")
+          html = html_path.read_text()
+
+          old_header = '<thead><tr><th>#</th><th>关键词</th><th>排名</th><th>搜索量</th><th>KD</th><th>CPC</th><th>意图</th></tr></thead><tbody id="competitorBody"></tbody>'
+          new_header = '<thead><tr><th>#</th><th>关键词</th><th>排名</th><th>搜索量</th><th>KD</th><th>CPC</th><th>意图</th><th>下一步</th></tr></thead><tbody id="competitorBody"></tbody>'
+          if old_header not in html:
+              raise SystemExit("competitor header anchor not found")
+          html = html.replace(old_header, new_header, 1)
+
+          old_css = '.competitorkeywordlink:hover,.competitorkeywordlink:focus{text-decoration:underline}'
+          new_css = old_css + '.competitorgapbtn{padding:5px 8px;background:#112a49;border:1px solid #294d77;font-size:11px;white-space:nowrap}.competitorgapbtn:hover{filter:brightness(1.12)}'
+          if old_css not in html:
+              raise SystemExit("competitor CSS anchor not found")
+          html = html.replace(old_css, new_css, 1)
+
+          old_mount = 'sortSelect:document.getElementById("competitorSort")});return competitorKeywordTable}'
+          new_mount = 'sortSelect:document.getElementById("competitorSort"),competitorDomainInput:document.getElementById("competitorDomain"),gapCompetitorInput:document.getElementById("gapCompetitorDomain"),gapFilterInput:document.getElementById("gapFilter"),gapForm:document.getElementById("gapForm")});return competitorKeywordTable}'
+          if old_mount not in html:
+              raise SystemExit("competitor table mount anchor not found")
+          html = html.replace(old_mount, new_mount, 1)
+
+          html_path.write_text(html)
+
+          test_path = Path("tests/competitor-keyword-pagination.test.mjs")
+          tests = test_path.read_text()
+          anchor = '  assert.match(html, /id="competitorSort"/);\n'
+          addition = anchor + '  assert.match(html, /<th>下一步<\\/th>/);\n  assert.match(html, /gapCompetitorInput:document.getElementById\\("gapCompetitorDomain"\\)/);\n  assert.match(html, /gapFilterInput:document.getElementById\\("gapFilter"\\)/);\n  assert.match(html, /gapForm:document.getElementById\\("gapForm"\\)/);\n'
+          if anchor not in tests:
+              raise SystemExit("competitor handoff test anchor not found")
+          test_path.write_text(tests.replace(anchor, addition, 1))
+          PY
+
+          git diff --check
+          node --test
+
+      - name: Commit feature and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/apply-competitor-gap-handoff-ui.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/v2.html tests/competitor-keyword-pagination.test.mjs .github/workflows/apply-competitor-gap-handoff-ui.yml
+          git commit -m "feat: expose competitor gap validation action"
+          git push origin HEAD:seo-pro-v2
