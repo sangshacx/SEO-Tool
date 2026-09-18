@@ -20,3 +20,5 @@
 .v2-inline-save-keyword{margin-left:8px;padding:3px 7px;background:#123c37;border:1px solid #245f56;color:#9ff0d1;font-size:10px;vertical-align:middle}.v2-inline-save-keyword:hover{filter:brightness(1.1)}.v2-inline-save-keyword.saved{background:#173966;border-color:#31547d;color:#a9c8f7}.v2-inline-save-keyword.error{background:#4c1c2b;border-color:#6a2841;color:#ffb1be}
 
 .v2-batch-save-keywords{background:#123c37;border:1px solid #245f56;color:#9ff0d1}.v2-batch-save-status{font-size:11px;color:var(--muted);margin-left:4px}.v2-batch-save-status.success{color:#70e2bb}.v2-batch-save-status.error-text{color:#ff9bad}
+
+.v2-library-selection{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}.v2-library-selection input{min-width:240px;flex:1}.v2-library-selection button{padding:7px 10px;background:#112a49;border:1px solid #294d77}.v2-library-selection [data-v2-library-add-tags]{background:#123c37;border-color:#245f56;color:#9ff0d1}.v2-library-batch-status{font-size:11px;color:var(--muted)}.v2-library-batch-status.success{color:#70e2bb}.v2-library-batch-status.error-text{color:#ff9bad}

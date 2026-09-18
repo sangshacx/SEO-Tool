@@ -52,6 +52,20 @@ function formatDate(value) {
     : date.toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
+export function normalizeBatchTagInput(value) {
+  const seen = new Set();
+  return String(value ?? "")
+    .split(/[,;\n]+/)
+    .map((tag) => tag.trim().replace(/\s+/g, " "))
+    .filter((tag) => {
+      if (!tag) return false;
+      const key = tag.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 export function buildSavedKeywordListUrl({
   siteDomain,
   q = "",
@@ -257,10 +271,33 @@ function keywordButton(documentLike, item, keywordInput, locationLike) {
   return button;
 }
 
-function renderRows({ documentLike, body, items, keywordInput, locationLike }) {
+function renderRows({
+  documentLike,
+  body,
+  items,
+  keywordInput,
+  locationLike,
+  selectedIds,
+  onSelectionChange,
+}) {
   body.replaceChildren();
   for (const item of items) {
     const row = documentLike.createElement("tr");
+    const selectCell = documentLike.createElement("td");
+    const checkbox = documentLike.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "rowcheck";
+    checkbox.checked = selectedIds?.has?.(Number(item.id)) || false;
+    checkbox.setAttribute?.("aria-label", `选择 ${item.keyword}`);
+    checkbox.addEventListener("change", () => {
+      const id = Number(item.id);
+      if (checkbox.checked) selectedIds?.add?.(id);
+      else selectedIds?.delete?.(id);
+      onSelectionChange?.();
+    });
+    selectCell.appendChild(checkbox);
+    row.appendChild(selectCell);
+
     const keywordCell = documentLike.createElement("td");
     keywordCell.appendChild(keywordButton(documentLike, item, keywordInput, locationLike));
     row.appendChild(keywordCell);
@@ -296,7 +333,7 @@ function renderRows({ documentLike, body, items, keywordInput, locationLike }) {
   if (!items.length) {
     const row = documentLike.createElement("tr");
     const cell = documentLike.createElement("td");
-    cell.colSpan = 10;
+    cell.colSpan = 11;
     cell.className = "emptyrow";
     cell.textContent = "当前网站还没有保存关键词。可先在 Keyword Explorer 中保存一个关键词。";
     row.appendChild(cell);
@@ -332,11 +369,19 @@ export function createKeywordLibrarySection(documentLike = globalThis.document) 
         <option value="asc">升序</option>
       </select>
     </div>
-    <div class="note"><b>费用：</b>关键词库读取、筛选、删除均为 $0；这里不会主动刷新 DataForSEO 指标。</div>
+    <div class="v2-library-selection">
+      <span class="sub" data-v2-library-selected>已选择 0 条</span>
+      <button type="button" data-v2-library-select-page>选择当前页</button>
+      <button type="button" data-v2-library-clear-selected>清空选择</button>
+      <input type="text" data-v2-library-batch-tags placeholder="添加 Tag，例如 Commercial, Saudi">
+      <button type="button" data-v2-library-add-tags>批量添加 Tag</button>
+      <span data-v2-library-batch-status class="v2-library-batch-status"></span>
+    </div>
+    <div class="note"><b>费用：</b>关键词库读取、筛选、Tag 管理、删除均为 $0；这里不会主动刷新 DataForSEO 指标。</div>
     <div data-v2-library-status class="status"></div>
     <div class="tablewrap">
       <table class="ideastable v2-library-table">
-        <thead><tr><th>关键词</th><th>搜索量</th><th>KD</th><th>CPC</th><th>Intent</th><th>市场</th><th>Tags</th><th>来源</th><th>指标时间</th><th>操作</th></tr></thead>
+        <thead><tr><th>选择</th><th>关键词</th><th>搜索量</th><th>KD</th><th>CPC</th><th>Intent</th><th>市场</th><th>Tags</th><th>来源</th><th>指标时间</th><th>操作</th></tr></thead>
         <tbody data-v2-library-body></tbody>
       </table>
     </div>
@@ -370,22 +415,57 @@ export function mountKeywordLibrary({
   const previousButton = section.querySelector("[data-v2-library-prev]");
   const nextButton = section.querySelector("[data-v2-library-next]");
   const refreshButton = section.querySelector("[data-v2-library-refresh]");
+  const selectedSummary = section.querySelector("[data-v2-library-selected]");
+  const selectPageButton = section.querySelector("[data-v2-library-select-page]");
+  const clearSelectedButton = section.querySelector("[data-v2-library-clear-selected]");
+  const batchTagsInput = section.querySelector("[data-v2-library-batch-tags]");
+  const addTagsButton = section.querySelector("[data-v2-library-add-tags]");
+  const batchStatus = section.querySelector("[data-v2-library-batch-status]");
   const keywordInput = root.querySelector("#keyword");
 
   let page = 1;
   let totalPages = 1;
   let loading = false;
+  let currentItems = [];
+  const selectedLibraryIds = new Set();
 
   const showStatus = (message = "", type = "info") => {
     status.textContent = message;
     status.className = message ? `status on ${type}` : "status";
   };
 
+  const updateLibrarySelection = () => {
+    const market = context.get();
+    const tags = normalizeBatchTagInput(batchTagsInput?.value);
+    selectedSummary.textContent = `已选择 ${selectedLibraryIds.size} 条`;
+    addTagsButton.disabled = !market?.domain || !selectedLibraryIds.size || !tags.length;
+    addTagsButton.title = !market?.domain
+      ? "请先在网站管理添加并选择当前网站"
+      : !selectedLibraryIds.size
+        ? "请先选择关键词"
+        : !tags.length
+          ? "请输入至少一个 Tag"
+          : `给已选 ${selectedLibraryIds.size} 个关键词添加 ${tags.length} 个 Tag`;
+    clearSelectedButton.disabled = !selectedLibraryIds.size;
+    selectPageButton.disabled = !currentItems.length;
+  };
+
   async function load() {
     const market = context.get();
     if (!market?.domain) {
       body.replaceChildren();
-      renderRows({ documentLike, body, items: [], keywordInput, locationLike });
+      currentItems = [];
+      selectedLibraryIds.clear();
+      renderRows({
+        documentLike,
+        body,
+        items: [],
+        keywordInput,
+        locationLike,
+        selectedIds: selectedLibraryIds,
+        onSelectionChange: updateLibrarySelection,
+      });
+      updateLibrarySelection();
       summary.textContent = "请先在“网站管理”添加网站";
       previousButton.disabled = true;
       nextButton.disabled = true;
@@ -411,7 +491,17 @@ export function mountKeywordLibrary({
         page = totalPages;
         return load();
       }
-      renderRows({ documentLike, body, items: data.items || [], keywordInput, locationLike });
+      currentItems = data.items || [];
+      renderRows({
+        documentLike,
+        body,
+        items: currentItems,
+        keywordInput,
+        locationLike,
+        selectedIds: selectedLibraryIds,
+        onSelectionChange: updateLibrarySelection,
+      });
+      updateLibrarySelection();
       summary.textContent = `第 ${data.page || page} / ${totalPages} 页 · ${data.total || 0} 个关键词 · 本次 $0`;
       previousButton.disabled = page <= 1;
       nextButton.disabled = page >= totalPages;
@@ -453,6 +543,68 @@ export function mountKeywordLibrary({
   sortSelect.addEventListener("change", resetAndLoad);
   orderSelect.addEventListener("change", resetAndLoad);
   refreshButton.addEventListener("click", load);
+  batchTagsInput.addEventListener("input", updateLibrarySelection);
+  selectPageButton.addEventListener("click", () => {
+    currentItems.forEach((item) => selectedLibraryIds.add(Number(item.id)));
+    renderRows({
+      documentLike,
+      body,
+      items: currentItems,
+      keywordInput,
+      locationLike,
+      selectedIds: selectedLibraryIds,
+      onSelectionChange: updateLibrarySelection,
+    });
+    updateLibrarySelection();
+  });
+  clearSelectedButton.addEventListener("click", () => {
+    selectedLibraryIds.clear();
+    renderRows({
+      documentLike,
+      body,
+      items: currentItems,
+      keywordInput,
+      locationLike,
+      selectedIds: selectedLibraryIds,
+      onSelectionChange: updateLibrarySelection,
+    });
+    updateLibrarySelection();
+  });
+  addTagsButton.addEventListener("click", async () => {
+    const market = context.get();
+    const tags = normalizeBatchTagInput(batchTagsInput.value);
+    if (!market?.domain || !selectedLibraryIds.size || !tags.length) {
+      updateLibrarySelection();
+      return;
+    }
+    addTagsButton.disabled = true;
+    addTagsButton.textContent = "添加中…";
+    batchStatus.textContent = "";
+    batchStatus.className = "v2-library-batch-status";
+    try {
+      const result = await readJson(await fetchImpl(SAVED_KEYWORDS_URL, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          site_domain: market.domain,
+          ids: [...selectedLibraryIds],
+          tags,
+        }),
+      }));
+      const count = Number(result.data?.updated_count || selectedLibraryIds.size);
+      batchStatus.textContent = `已给 ${count} 个关键词添加 Tag：${tags.join(" · ")} · 本次 $0`;
+      batchStatus.className = "v2-library-batch-status success";
+      selectedLibraryIds.clear();
+      batchTagsInput.value = "";
+      await load();
+    } catch (error) {
+      batchStatus.textContent = error.message || "批量添加 Tag 失败";
+      batchStatus.className = "v2-library-batch-status error-text";
+    } finally {
+      addTagsButton.textContent = "批量添加 Tag";
+      updateLibrarySelection();
+    }
+  });
   previousButton.addEventListener("click", () => {
     if (loading || page <= 1) return;
     page -= 1;
@@ -477,6 +629,7 @@ export function mountKeywordLibrary({
         headers: { "content-type": "application/json", accept: "application/json" },
         body: JSON.stringify({ site_domain: market.domain, id: Number(button.dataset.savedKeywordId) }),
       }));
+      selectedLibraryIds.delete(Number(button.dataset.savedKeywordId));
       showStatus("已从关键词库删除。本次费用 $0。");
       await load();
     } catch (error) {
@@ -524,6 +677,8 @@ export function mountKeywordLibrary({
 
   let refreshResearchSurfaceButtons = () => {};
   const unsubscribe = context.subscribe(() => {
+    selectedLibraryIds.clear();
+    updateLibrarySelection();
     updateSaveButton();
     refreshResearchSurfaceButtons();
     resetAndLoad();
@@ -644,6 +799,7 @@ export function mountKeywordLibrary({
     }
   });
 
+  updateLibrarySelection();
   updateSaveButton();
 
   return () => {

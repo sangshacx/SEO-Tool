@@ -6,6 +6,7 @@ import {
   BATCH_SAVE_SURFACES,
   RESEARCH_SAVE_SURFACES,
   buildSavedKeywordListUrl,
+  normalizeBatchTagInput,
   researchSurfaceKeyword,
   savedKeywordCreatePayload,
   saveKeywordSelection,
@@ -189,6 +190,26 @@ test("batch saves use only the zero-cost Saved Keywords API and refresh library 
   assert.match(source, /data-v2-batch-save-keywords/);
   assert.match(source, /保存已选到关键词库/);
   assert.match(source, /saveKeywordSelection/);
+  assert.match(source, /本次 \$0/);
+  assert.doesNotMatch(source, /submitSeoResearchRequest|dataforseo\.com/i);
+});
+
+
+test("Keyword Library batch Tag input trims and deduplicates case-insensitively", () => {
+  assert.deepEqual(
+    normalizeBatchTagInput(" Commercial, commercial ; Saudi\nHigh Intent "),
+    ["Commercial", "Saudi", "High Intent"],
+  );
+  assert.deepEqual(normalizeBatchTagInput("   "), []);
+});
+
+test("Keyword Library batch Tag UI uses PATCH on the zero-cost Saved Keywords API", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /data-v2-library-selected/);
+  assert.match(source, /data-v2-library-select-page/);
+  assert.match(source, /data-v2-library-batch-tags/);
+  assert.match(source, /method:\s*"PATCH"/);
+  assert.match(source, /批量添加 Tag/);
   assert.match(source, /本次 \$0/);
   assert.doesNotMatch(source, /submitSeoResearchRequest|dataforseo\.com/i);
 });
