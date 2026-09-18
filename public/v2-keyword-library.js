@@ -1,4 +1,5 @@
 const SAVED_KEYWORDS_URL = "/api/v2/keywords/saved";
+const KEYWORD_CLUSTERS_URL = "/api/v2/keywords/clusters";
 
 const SOURCE_LABELS = Object.freeze({
   manual: "手动",
@@ -64,6 +65,40 @@ export function normalizeBatchTagInput(value) {
       seen.add(key);
       return true;
     });
+}
+
+export function buildKeywordClusterAssignments({
+  cluster,
+  selectedItems,
+  primaryId,
+} = {}) {
+  const primary = Number(primaryId);
+  const selected = Array.from(selectedItems || []);
+  if (!Number.isInteger(primary) || primary < 1) {
+    throw new Error("请选择一个 Primary Keyword。");
+  }
+  if (!selected.some((item) => Number(item?.id) === primary)) {
+    throw new Error("Primary Keyword 必须来自当前已选关键词。");
+  }
+
+  const roles = new Map();
+  const existingMembers = [
+    ...(cluster?.primary ? [cluster.primary] : []),
+    ...(Array.isArray(cluster?.supporting) ? cluster.supporting : []),
+  ];
+  existingMembers.forEach((member) => {
+    const id = Number(member?.saved_keyword_id);
+    if (Number.isInteger(id) && id > 0) roles.set(id, "supporting");
+  });
+  selected.forEach((item) => {
+    const id = Number(item?.id);
+    if (Number.isInteger(id) && id > 0) roles.set(id, "supporting");
+  });
+  roles.set(primary, "primary");
+
+  return [...roles.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([saved_keyword_id, role]) => ({ saved_keyword_id, role }));
 }
 
 export function buildSavedKeywordListUrl({
@@ -293,7 +328,7 @@ function renderRows({
       const id = Number(item.id);
       if (checkbox.checked) selectedIds?.add?.(id);
       else selectedIds?.delete?.(id);
-      onSelectionChange?.();
+      onSelectionChange?.({ item, selected: checkbox.checked });
     });
     selectCell.appendChild(checkbox);
     row.appendChild(selectCell);
@@ -379,6 +414,29 @@ export function createKeywordLibrarySection(documentLike = globalThis.document) 
       <span data-v2-library-batch-status class="v2-library-batch-status"></span>
     </div>
     <div class="note"><b>费用：</b>关键词库读取、筛选、Tag 管理、删除均为 $0；这里不会主动刷新 DataForSEO 指标。</div>
+    <div class="v2-cluster-panel">
+      <div class="v2-cluster-head">
+        <div>
+          <div class="section-title">Topic Clusters</div>
+          <div class="sub">手动管理 Primary / Supporting 关系，为后续 SERP-overlap 自动聚类保留同一数据模型。</div>
+        </div>
+        <button type="button" data-v2-cluster-refresh>刷新 Cluster</button>
+      </div>
+      <div class="v2-cluster-controls">
+        <select data-v2-cluster-select aria-label="选择 Topic Cluster">
+          <option value="">选择 Topic Cluster</option>
+        </select>
+        <input type="text" maxlength="80" data-v2-cluster-name placeholder="新建 Cluster 名称">
+        <button type="button" data-v2-cluster-create>创建 Cluster</button>
+        <select data-v2-cluster-primary aria-label="选择 Primary Keyword">
+          <option value="">选择 Primary Keyword</option>
+        </select>
+        <button type="button" data-v2-cluster-assign>分配已选关键词</button>
+      </div>
+      <div class="note"><b>分配规则：</b>选择一个 Primary；其余已选词作为 Supporting。若目标 Cluster 已有成员，会保留原成员并把原 Primary 调整为 Supporting。已选词若属于其他 Cluster，会移动到当前 Cluster。全部操作 $0。</div>
+      <div data-v2-cluster-status class="v2-cluster-status"></div>
+      <div data-v2-cluster-list class="v2-cluster-list"></div>
+    </div>
     <div data-v2-library-status class="status"></div>
     <div class="tablewrap">
       <table class="ideastable v2-library-table">
@@ -423,17 +481,42 @@ export function mountKeywordLibrary({
   const addTagsButton = section.querySelector("[data-v2-library-add-tags]");
   const deleteSelectedButton = section.querySelector("[data-v2-library-delete-selected]");
   const batchStatus = section.querySelector("[data-v2-library-batch-status]");
+  const clusterRefreshButton = section.querySelector("[data-v2-cluster-refresh]");
+  const clusterSelect = section.querySelector("[data-v2-cluster-select]");
+  const clusterNameInput = section.querySelector("[data-v2-cluster-name]");
+  const clusterCreateButton = section.querySelector("[data-v2-cluster-create]");
+  const clusterPrimarySelect = section.querySelector("[data-v2-cluster-primary]");
+  const clusterAssignButton = section.querySelector("[data-v2-cluster-assign]");
+  const clusterStatus = section.querySelector("[data-v2-cluster-status]");
+  const clusterList = section.querySelector("[data-v2-cluster-list]");
   const keywordInput = root.querySelector("#keyword");
 
   let page = 1;
   let totalPages = 1;
   let loading = false;
   let currentItems = [];
+  let keywordClusters = [];
   const selectedLibraryIds = new Set();
+  const selectedLibraryItems = new Map();
+  let refreshClusterControls = () => {};
 
   const showStatus = (message = "", type = "info") => {
     status.textContent = message;
     status.className = message ? `status on ${type}` : "status";
+  };
+
+  const showClusterStatus = (message = "", type = "info") => {
+    clusterStatus.textContent = message;
+    clusterStatus.className = message ? `v2-cluster-status ${type}` : "v2-cluster-status";
+  };
+
+  const handleLibrarySelectionChange = ({ item, selected } = {}) => {
+    const id = Number(item?.id);
+    if (Number.isInteger(id) && id > 0) {
+      if (selected) selectedLibraryItems.set(id, item);
+      else selectedLibraryItems.delete(id);
+    }
+    updateLibrarySelection();
   };
 
   const updateLibrarySelection = () => {
@@ -459,6 +542,7 @@ export function mountKeywordLibrary({
           : "请先选择关键词";
     clearSelectedButton.disabled = !selectedLibraryIds.size;
     selectPageButton.disabled = !currentItems.length;
+    refreshClusterControls();
   };
 
   async function load() {
@@ -467,6 +551,7 @@ export function mountKeywordLibrary({
       body.replaceChildren();
       currentItems = [];
       selectedLibraryIds.clear();
+      selectedLibraryItems.clear();
       renderRows({
         documentLike,
         body,
@@ -474,7 +559,7 @@ export function mountKeywordLibrary({
         keywordInput,
         locationLike,
         selectedIds: selectedLibraryIds,
-        onSelectionChange: updateLibrarySelection,
+        onSelectionChange: handleLibrarySelectionChange,
       });
       updateLibrarySelection();
       summary.textContent = "请先在“网站管理”添加网站";
@@ -503,6 +588,10 @@ export function mountKeywordLibrary({
         return load();
       }
       currentItems = data.items || [];
+      currentItems.forEach((item) => {
+        const id = Number(item.id);
+        if (selectedLibraryIds.has(id)) selectedLibraryItems.set(id, item);
+      });
       renderRows({
         documentLike,
         body,
@@ -510,7 +599,7 @@ export function mountKeywordLibrary({
         keywordInput,
         locationLike,
         selectedIds: selectedLibraryIds,
-        onSelectionChange: updateLibrarySelection,
+        onSelectionChange: handleLibrarySelectionChange,
       });
       updateLibrarySelection();
       summary.textContent = `第 ${data.page || page} / ${totalPages} 页 · ${data.total || 0} 个关键词 · 本次 $0`;
@@ -556,7 +645,11 @@ export function mountKeywordLibrary({
   refreshButton.addEventListener("click", load);
   batchTagsInput.addEventListener("input", updateLibrarySelection);
   selectPageButton.addEventListener("click", () => {
-    currentItems.forEach((item) => selectedLibraryIds.add(Number(item.id)));
+    currentItems.forEach((item) => {
+      const id = Number(item.id);
+      selectedLibraryIds.add(id);
+      selectedLibraryItems.set(id, item);
+    });
     renderRows({
       documentLike,
       body,
@@ -564,12 +657,13 @@ export function mountKeywordLibrary({
       keywordInput,
       locationLike,
       selectedIds: selectedLibraryIds,
-      onSelectionChange: updateLibrarySelection,
+      onSelectionChange: handleLibrarySelectionChange,
     });
     updateLibrarySelection();
   });
   clearSelectedButton.addEventListener("click", () => {
     selectedLibraryIds.clear();
+    selectedLibraryItems.clear();
     renderRows({
       documentLike,
       body,
@@ -577,7 +671,7 @@ export function mountKeywordLibrary({
       keywordInput,
       locationLike,
       selectedIds: selectedLibraryIds,
-      onSelectionChange: updateLibrarySelection,
+      onSelectionChange: handleLibrarySelectionChange,
     });
     updateLibrarySelection();
   });
@@ -606,6 +700,7 @@ export function mountKeywordLibrary({
       batchStatus.textContent = `已给 ${count} 个关键词添加 Tag：${tags.join(" · ")} · 本次 $0`;
       batchStatus.className = "v2-library-batch-status success";
       selectedLibraryIds.clear();
+      selectedLibraryItems.clear();
       batchTagsInput.value = "";
       await load();
     } catch (error) {
@@ -642,6 +737,7 @@ export function mountKeywordLibrary({
       }));
       const count = Number(result.data?.deleted_count || ids.length);
       selectedLibraryIds.clear();
+      selectedLibraryItems.clear();
       batchStatus.textContent = `已删除 ${count} 个关键词 · 本次 $0`;
       batchStatus.className = "v2-library-batch-status success";
       await load();
@@ -653,6 +749,235 @@ export function mountKeywordLibrary({
       updateLibrarySelection();
     }
   });
+  function renderClusterList() {
+    clusterList.replaceChildren();
+    keywordClusters.forEach((cluster) => {
+      const card = documentLike.createElement("div");
+      card.className = "v2-cluster-card";
+
+      const head = documentLike.createElement("div");
+      head.className = "v2-cluster-card-head";
+      const name = documentLike.createElement("b");
+      name.textContent = cluster.name || "Unnamed Cluster";
+      const count = documentLike.createElement("span");
+      count.className = "sub";
+      count.textContent = `${cluster.member_count || 0} 个关键词 · ${cluster.source || "manual"}`;
+      head.append(name, count);
+
+      const primary = documentLike.createElement("div");
+      primary.className = "v2-cluster-primary";
+      primary.textContent = `Primary：${cluster.primary?.keyword || "尚未指定"}`;
+
+      const supporting = documentLike.createElement("div");
+      supporting.className = "v2-cluster-supporting";
+      const supportingKeywords = (cluster.supporting || []).map((item) => item.keyword).filter(Boolean);
+      supporting.textContent = supportingKeywords.length
+        ? `Supporting：${supportingKeywords.slice(0, 8).join(" · ")}${supportingKeywords.length > 8 ? ` · +${supportingKeywords.length - 8}` : ""}`
+        : "Supporting：—";
+
+      card.append(head, primary, supporting);
+      clusterList.appendChild(card);
+    });
+
+    if (!keywordClusters.length) {
+      const empty = documentLike.createElement("div");
+      empty.className = "v2-cluster-empty";
+      empty.textContent = "当前网站还没有 Topic Cluster。可以先创建一个，再把已选关键词分配进去。";
+      clusterList.appendChild(empty);
+    }
+  }
+
+  function renderClusterSelect(preferredId = null) {
+    const current = String(preferredId ?? clusterSelect.value ?? "");
+    clusterSelect.replaceChildren();
+    const placeholder = documentLike.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "选择 Topic Cluster";
+    clusterSelect.appendChild(placeholder);
+    keywordClusters.forEach((cluster) => {
+      const option = documentLike.createElement("option");
+      option.value = String(cluster.id);
+      option.textContent = cluster.name;
+      clusterSelect.appendChild(option);
+    });
+    if (keywordClusters.some((cluster) => String(cluster.id) === current)) {
+      clusterSelect.value = current;
+    }
+  }
+
+  async function loadClusters(preferredId = null) {
+    const market = context.get();
+    if (!market?.domain) {
+      keywordClusters = [];
+      renderClusterSelect();
+      renderClusterList();
+      refreshClusterControls();
+      return;
+    }
+    clusterRefreshButton.disabled = true;
+    try {
+      const response = await fetchImpl(
+        KEYWORD_CLUSTERS_URL + "?site_domain=" + encodeURIComponent(market.domain),
+        { headers: { accept: "application/json" } },
+      );
+      const payload = await readJson(response);
+      keywordClusters = payload.data?.clusters || [];
+      renderClusterSelect(preferredId);
+      renderClusterList();
+      showClusterStatus();
+    } catch (error) {
+      showClusterStatus(error.message || "Topic Cluster 读取失败", "error");
+    } finally {
+      clusterRefreshButton.disabled = false;
+      refreshClusterControls();
+    }
+  }
+
+  refreshClusterControls = () => {
+    const market = context.get();
+    const selectedItems = [...selectedLibraryItems.values()];
+    const previousPrimary = clusterPrimarySelect.value;
+
+    clusterPrimarySelect.replaceChildren();
+    const placeholder = documentLike.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "选择 Primary Keyword";
+    clusterPrimarySelect.appendChild(placeholder);
+    selectedItems
+      .slice()
+      .sort((a, b) => String(a.keyword).localeCompare(String(b.keyword)))
+      .forEach((item) => {
+        const option = documentLike.createElement("option");
+        option.value = String(item.id);
+        option.textContent = item.keyword;
+        clusterPrimarySelect.appendChild(option);
+      });
+    if (selectedItems.some((item) => String(item.id) === previousPrimary)) {
+      clusterPrimarySelect.value = previousPrimary;
+    } else if (selectedItems.length === 1) {
+      clusterPrimarySelect.value = String(selectedItems[0].id);
+    }
+
+    const cluster = keywordClusters.find((item) => String(item.id) === clusterSelect.value);
+    let assignments = [];
+    try {
+      if (cluster && clusterPrimarySelect.value) {
+        assignments = buildKeywordClusterAssignments({
+          cluster,
+          selectedItems,
+          primaryId: clusterPrimarySelect.value,
+        });
+      }
+    } catch {}
+
+    const tooMany = assignments.length > 100 || selectedItems.length > 100;
+    clusterCreateButton.disabled = !market?.domain || !clean(clusterNameInput.value);
+    clusterAssignButton.disabled = !market?.domain
+      || !cluster
+      || !selectedItems.length
+      || !clusterPrimarySelect.value
+      || tooMany;
+    clusterAssignButton.title = !market?.domain
+      ? "请先在网站管理添加并选择当前网站"
+      : !cluster
+        ? "请选择 Topic Cluster"
+        : !selectedItems.length
+          ? "请先在关键词库选择关键词"
+          : !clusterPrimarySelect.value
+            ? "请选择一个 Primary Keyword"
+            : tooMany
+              ? "合并现有成员后最多允许 100 个关键词"
+              : `把已选 ${selectedItems.length} 个关键词分配到 ${cluster.name}`;
+  };
+
+  clusterRefreshButton.addEventListener("click", () => loadClusters());
+  clusterNameInput.addEventListener("input", refreshClusterControls);
+  clusterSelect.addEventListener("change", refreshClusterControls);
+  clusterPrimarySelect.addEventListener("change", refreshClusterControls);
+
+  clusterCreateButton.addEventListener("click", async () => {
+    const market = context.get();
+    const name = clean(clusterNameInput.value).replace(/\s+/g, " ");
+    if (!market?.domain || !name) {
+      refreshClusterControls();
+      return;
+    }
+    clusterCreateButton.disabled = true;
+    clusterCreateButton.textContent = "创建中…";
+    try {
+      const result = await readJson(await fetchImpl(KEYWORD_CLUSTERS_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          site_domain: market.domain,
+          name,
+          source: "manual",
+        }),
+      }));
+      clusterNameInput.value = "";
+      await loadClusters(result.data?.id);
+      showClusterStatus(`已创建 Topic Cluster“${result.data?.name || name}” · 本次 $0`, "success");
+    } catch (error) {
+      showClusterStatus(error.message || "Topic Cluster 创建失败", "error");
+    } finally {
+      clusterCreateButton.textContent = "创建 Cluster";
+      refreshClusterControls();
+    }
+  });
+
+  clusterAssignButton.addEventListener("click", async () => {
+    const market = context.get();
+    const cluster = keywordClusters.find((item) => String(item.id) === clusterSelect.value);
+    const selectedItems = [...selectedLibraryItems.values()];
+    if (!market?.domain || !cluster || !selectedItems.length || !clusterPrimarySelect.value) {
+      refreshClusterControls();
+      return;
+    }
+
+    let assignments;
+    try {
+      assignments = buildKeywordClusterAssignments({
+        cluster,
+        selectedItems,
+        primaryId: clusterPrimarySelect.value,
+      });
+    } catch (error) {
+      showClusterStatus(error.message || "Cluster 分配参数无效", "error");
+      return;
+    }
+    if (assignments.length > 100) {
+      showClusterStatus("合并现有成员后最多允许 100 个关键词。", "error");
+      return;
+    }
+
+    clusterAssignButton.disabled = true;
+    clusterAssignButton.textContent = "分配中…";
+    try {
+      const result = await readJson(await fetchImpl(KEYWORD_CLUSTERS_URL, {
+        method: "PATCH",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          site_domain: market.domain,
+          cluster_id: cluster.id,
+          assignments,
+        }),
+      }));
+      selectedLibraryIds.clear();
+      selectedLibraryItems.clear();
+      await loadClusters(cluster.id);
+      await load();
+      showClusterStatus(
+        `已更新“${result.data?.name || cluster.name}”：Primary 1 个，Supporting ${Math.max(0, (result.data?.member_count || assignments.length) - 1)} 个 · 本次 $0`,
+        "success",
+      );
+    } catch (error) {
+      showClusterStatus(error.message || "Topic Cluster 分配失败", "error");
+    } finally {
+      clusterAssignButton.textContent = "分配已选关键词";
+      refreshClusterControls();
+    }
+  });
+
   previousButton.addEventListener("click", () => {
     if (loading || page <= 1) return;
     page -= 1;
@@ -678,6 +1003,7 @@ export function mountKeywordLibrary({
         body: JSON.stringify({ site_domain: market.domain, id: Number(button.dataset.savedKeywordId) }),
       }));
       selectedLibraryIds.delete(Number(button.dataset.savedKeywordId));
+      selectedLibraryItems.delete(Number(button.dataset.savedKeywordId));
       showStatus("已从关键词库删除。本次费用 $0。");
       await load();
     } catch (error) {
@@ -726,10 +1052,13 @@ export function mountKeywordLibrary({
   let refreshResearchSurfaceButtons = () => {};
   const unsubscribe = context.subscribe(() => {
     selectedLibraryIds.clear();
+    selectedLibraryItems.clear();
+    keywordClusters = [];
     updateLibrarySelection();
     updateSaveButton();
     refreshResearchSurfaceButtons();
     resetAndLoad();
+    loadClusters();
   });
 
   saveButton?.addEventListener("click", async () => {
@@ -847,8 +1176,12 @@ export function mountKeywordLibrary({
     }
   });
 
+  renderClusterSelect();
+  renderClusterList();
+  refreshClusterControls();
   updateLibrarySelection();
   updateSaveButton();
+  if (context.get()?.domain) loadClusters();
 
   return () => {
     unsubscribe?.();

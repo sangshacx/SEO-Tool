@@ -5,6 +5,7 @@ import { readFile } from "node:fs/promises";
 import {
   BATCH_SAVE_SURFACES,
   RESEARCH_SAVE_SURFACES,
+  buildKeywordClusterAssignments,
   buildSavedKeywordListUrl,
   normalizeBatchTagInput,
   researchSurfaceKeyword,
@@ -224,4 +225,51 @@ test("Keyword Library batch delete is explicit, bounded, and stays on the zero-c
   assert.match(source, /确定从当前网站关键词库删除已选的/);
   assert.match(source, /已删除 .* 个关键词 · 本次 \$0/);
   assert.doesNotMatch(source, /submitSeoResearchRequest|dataforseo\.com/i);
+});
+
+
+test("Keyword Library cluster assignments preserve existing members and promote the chosen selected keyword", () => {
+  const assignments = buildKeywordClusterAssignments({
+    cluster: {
+      primary: { saved_keyword_id: 1, keyword: "waterproof membrane" },
+      supporting: [
+        { saved_keyword_id: 2, keyword: "bitumen membrane" },
+        { saved_keyword_id: 4, keyword: "roof membrane" },
+      ],
+    },
+    selectedItems: [
+      { id: 2, keyword: "bitumen membrane" },
+      { id: 3, keyword: "self adhesive membrane" },
+    ],
+    primaryId: 3,
+  });
+  assert.deepEqual(assignments, [
+    { saved_keyword_id: 1, role: "supporting" },
+    { saved_keyword_id: 2, role: "supporting" },
+    { saved_keyword_id: 3, role: "primary" },
+    { saved_keyword_id: 4, role: "supporting" },
+  ]);
+  assert.throws(
+    () => buildKeywordClusterAssignments({
+      cluster: null,
+      selectedItems: [{ id: 5, keyword: "roof coating" }],
+      primaryId: 6,
+    }),
+    /必须来自当前已选关键词/,
+  );
+});
+
+test("Keyword Library exposes manual Topic Cluster creation, primary selection, assignment, and overview at zero provider cost", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /\/api\/v2\/keywords\/clusters/);
+  assert.match(source, /data-v2-cluster-select/);
+  assert.match(source, /data-v2-cluster-name/);
+  assert.match(source, /data-v2-cluster-primary/);
+  assert.match(source, /data-v2-cluster-assign/);
+  assert.match(source, /method:\s*"POST"/);
+  assert.match(source, /method:\s*"PATCH"/);
+  assert.match(source, /Primary：/);
+  assert.match(source, /Supporting：/);
+  assert.match(source, /本次 \$0/);
+  assert.doesNotMatch(source, /dataforseo\.com|submitSeoResearchRequest/i);
 });
