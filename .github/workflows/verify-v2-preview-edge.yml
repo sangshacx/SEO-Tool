@@ -1,0 +1,44 @@
+name: Verify V2 Preview Edge
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - .github/workflows/verify-v2-preview-edge.yml
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: seo-pro-v2
+
+      - name: Verify branch Preview is protected by Access
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in             "https://seo-pro-v2.seo-tool-dme.pages.dev/v2.html"             "https://bc6667e7.seo-tool-dme.pages.dev/v2.html"
+          do
+            status="$(curl --silent --show-error --output /tmp/body --write-out "%{http_code}" "$url" || true)"
+            echo "$url -> HTTP $status"
+            case "$status" in
+              301|302|303|307|308|401|403) ;;
+              *) echo "Expected Cloudflare Access protection, got HTTP $status"; cat /tmp/body; exit 1 ;;
+            esac
+          done
+
+      - name: Remove temporary workflow and commit cleanup
+        shell: bash
+        run: |
+          rm .github/workflows/verify-v2-preview-edge.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/verify-v2-preview-edge.yml
+          git commit -m "chore: remove temporary preview edge check"
+          git push origin HEAD:seo-pro-v2
