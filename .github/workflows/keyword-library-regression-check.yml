@@ -1,4 +1,5 @@
 name: Keyword Library Regression Check
+# rerun after expectation alignment
 on:
   push:
     branches: [seo-pro-v2]
