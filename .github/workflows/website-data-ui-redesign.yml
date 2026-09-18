@@ -1,0 +1,466 @@
+name: Website Data UI Redesign
+on:
+  push:
+    branches: [seo-pro-v2]
+    paths:
+      - ".github/workflows/website-data-ui-redesign.yml"
+permissions:
+  contents: write
+jobs:
+  edit-test-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: seo-pro-v2
+          fetch-depth: 0
+      - name: Redesign Website Data workspace
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"missing anchor: {label}")
+              return text.replace(old, new, 1)
+
+          shell_path = Path("public/v2-shell.js")
+          shell = shell_path.read_text()
+
+          anchor = '''function createPlaceholder(view, title, description) {
+            const section = createElement("section", "panel v2-placeholder");
+            section.dataset.v2View = view;
+            section.innerHTML = `<div class="section-title">${title}</div><p class="lead">${description}</p>`;
+            return section;
+          }
+          '''
+          helper = r'''
+          export function createWebsiteDataWorkspace(root) {
+            const snapshot = root.querySelector(".backlinks");
+            const history = root.querySelector(".backlinkhistory");
+            if (!snapshot || !history) return null;
+
+            const workspace = createElement("section", "v2-website-data-workspace");
+            workspace.dataset.v2View = "website";
+
+            const hero = createElement("div", "v2-website-data-hero");
+            hero.innerHTML = `
+              <div>
+                <div class="v2-website-data-eyebrow">SITE OVERVIEW</div>
+                <h2>网站数据</h2>
+                <p>查看当前站点的 Link Profile Health、核心外链指标和历史变化，先判断站点状态，再决定是否深入外链研究。</p>
+              </div>
+              <div class="v2-website-data-hero-meta">
+                <span>7 天快照</span>
+                <span>历史读取 $0</span>
+              </div>
+            `;
+
+            const tabs = createElement("div", "v2-website-data-tabs");
+            tabs.setAttribute("role", "tablist");
+            tabs.setAttribute("aria-label", "网站数据视图");
+            const tabConfig = [
+              ["overview", "Link Profile Overview"],
+              ["history", "历史与提醒"],
+            ];
+            tabConfig.forEach(([id, label], index) => {
+              const button = createElement("button", index === 0 ? "active" : "", label);
+              button.type = "button";
+              button.setAttribute("role", "tab");
+              button.setAttribute("aria-selected", index === 0 ? "true" : "false");
+              button.dataset.v2WebsiteDataTab = id;
+              tabs.appendChild(button);
+            });
+
+            const stage = createElement("div", "v2-website-data-stage");
+            const panels = [
+              [snapshot, "overview", "v2-website-overview-panel"],
+              [history, "history", "v2-website-history-panel"],
+            ];
+            panels.forEach(([panel, id, className], index) => {
+              panel.classList.add("v2-website-data-panel", className);
+              panel.dataset.v2WebsiteDataPanel = id;
+              delete panel.dataset.v2View;
+              panel.hidden = index !== 0;
+            });
+
+            const activateTab = (tabId) => {
+              const target = tabConfig.some(([id]) => id === tabId) ? tabId : "overview";
+              tabs.querySelectorAll("[data-v2-website-data-tab]").forEach((button) => {
+                const active = button.dataset.v2WebsiteDataTab === target;
+                button.classList.toggle("active", active);
+                button.setAttribute("aria-selected", active ? "true" : "false");
+              });
+              stage.querySelectorAll("[data-v2-website-data-panel]").forEach((panel) => {
+                const active = panel.dataset.v2WebsiteDataPanel === target;
+                panel.hidden = !active;
+                panel.classList.toggle("active", active);
+              });
+              return target;
+            };
+
+            tabs.addEventListener("click", (event) => {
+              const button = event.target.closest("[data-v2-website-data-tab]");
+              if (button) activateTab(button.dataset.v2WebsiteDataTab);
+            });
+
+            const toSnapshot = history.querySelector("#historyToSnapshot");
+            toSnapshot?.addEventListener("click", () => activateTab("overview"));
+
+            snapshot.before(workspace);
+            workspace.append(hero, tabs, stage);
+            stage.append(snapshot, history);
+            activateTab("overview");
+            return { workspace, activateTab };
+          }
+          '''
+          shell = replace_once(shell, anchor, helper + "\n" + anchor, "website data workspace helper")
+
+          mount_anchor = '''  createBacklinkResearchWorkspace(content);
+            createOpportunityWorkspace(content);
+            content.querySelector(".top")?.classList.add("v2-legacy-heading");'''
+          mount_new = '''  createBacklinkResearchWorkspace(content);
+            createOpportunityWorkspace(content);
+            createWebsiteDataWorkspace(content);
+            content.querySelector(".top")?.classList.add("v2-legacy-heading");'''
+          shell = replace_once(shell, mount_anchor, mount_new, "website data workspace mount")
+          shell_path.write_text(shell)
+
+          css_path = Path("public/v2-shell.css")
+          css = css_path.read_text()
+          css += r'''
+
+          /* Website Data workspace redesign */
+          .v2-website-data-workspace{
+            margin-top:0;
+          }
+          .v2-website-data-hero{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:20px;
+            padding:4px 2px 18px;
+          }
+          .v2-website-data-eyebrow{
+            margin-bottom:6px;
+            color:#6f93c6;
+            font-size:10px;
+            font-weight:800;
+            letter-spacing:.16em;
+          }
+          .v2-website-data-hero h2{
+            margin:0;
+            color:#edf4ff;
+            font-size:24px;
+            line-height:1.2;
+          }
+          .v2-website-data-hero p{
+            max-width:780px;
+            margin:7px 0 0;
+            color:#8098b9;
+            font-size:13px;
+          }
+          .v2-website-data-hero-meta{
+            display:flex;
+            gap:7px;
+            flex-wrap:wrap;
+            justify-content:flex-end;
+          }
+          .v2-website-data-hero-meta span{
+            display:inline-flex;
+            align-items:center;
+            min-height:30px;
+            padding:0 9px;
+            border:1px solid #203b5d;
+            border-radius:999px;
+            background:#0c1c30;
+            color:#7ea6d8;
+            font-size:10px;
+            font-weight:800;
+            white-space:nowrap;
+          }
+          .v2-website-data-tabs{
+            display:flex;
+            gap:4px;
+            width:max-content;
+            max-width:100%;
+            margin-bottom:14px;
+            padding:4px;
+            border:1px solid #1d3554;
+            border-radius:10px;
+            background:#0b1829;
+          }
+          .v2-website-data-tabs button{
+            min-height:34px;
+            padding:0 14px;
+            border:0;
+            border-radius:7px;
+            background:transparent;
+            color:#7188a9;
+            font-size:12px;
+            font-weight:750;
+          }
+          .v2-website-data-tabs button.active{
+            background:#172b49;
+            color:#e8f1ff;
+            box-shadow:inset 0 0 0 1px #294d77;
+          }
+          .v2-website-data-stage{
+            border:1px solid #1b3352;
+            border-radius:12px;
+            background:#0c192b;
+            overflow:hidden;
+          }
+          .v2-website-data-panel[hidden]{display:none!important}
+          .v2-website-data-panel{
+            margin:0!important;
+            padding:0!important;
+            border:0!important;
+            border-radius:0!important;
+            background:transparent!important;
+            box-shadow:none!important;
+          }
+          .v2-website-data-panel>.section-title,
+          .v2-website-history-panel .historyhead{
+            margin:0;
+            padding:17px 18px 4px;
+          }
+          .v2-website-data-panel>.section-title{
+            color:#e8f1ff;
+            font-size:17px;
+          }
+          .v2-website-data-panel>.section-title+.sub{
+            padding:0 18px 13px;
+            color:#7189aa;
+            font-size:12px;
+          }
+          .v2-website-overview-panel>.backlinkform,
+          .v2-website-history-panel>.historyform{
+            display:grid;
+            gap:9px;
+            margin:0;
+            padding:13px 18px;
+            border-top:1px solid #172d49;
+            border-bottom:1px solid #172d49;
+            background:#0d1d32;
+          }
+          .v2-website-overview-panel>.backlinkform{
+            grid-template-columns:minmax(320px,1fr) auto;
+          }
+          .v2-website-history-panel>.historyform{
+            grid-template-columns:minmax(280px,1.4fr) 150px auto;
+          }
+          .v2-website-overview-panel>.backlinkform input,
+          .v2-website-history-panel>.historyform input,
+          .v2-website-history-panel>.historyform select,
+          .v2-website-history-panel .historyhead select{
+            min-height:40px;
+            border:1px solid #274563;
+            border-radius:8px;
+            background:#0b1728;
+            color:#dbe7f7;
+          }
+          .v2-website-overview-panel>.backlinkform button,
+          .v2-website-history-panel>.historyform button{
+            min-height:40px;
+            padding:0 14px;
+            border:1px solid #3c6ee6;
+            border-radius:8px;
+            background:#4f78e8;
+            color:#fff;
+            font-weight:800;
+            white-space:nowrap;
+          }
+          .v2-website-data-panel>.paidtoggle{
+            display:flex;
+            align-items:center;
+            gap:7px;
+            margin:0;
+            padding:9px 18px 0;
+            color:#8aa1c0;
+            font-size:11px;
+          }
+          .v2-website-data-panel>.paidtoggle input{width:auto}
+          .v2-website-data-panel>.note{
+            margin:0;
+            padding:9px 18px;
+            border:0;
+            border-bottom:1px solid #152b47;
+            border-radius:0;
+            background:#0a1727;
+            color:#7189aa;
+            font-size:11px;
+          }
+          .v2-website-data-panel>.status{
+            margin:0 18px;
+          }
+          .v2-website-data-panel>#backlinkResult,
+          .v2-website-data-panel>#backlinkHistoryResult{
+            padding:14px 18px 18px;
+          }
+          .v2-website-overview-panel .healthpanel{
+            margin:0 0 10px;
+            padding:15px;
+            border:1px solid #23486f;
+            border-radius:10px;
+            background:#0d1f36;
+          }
+          .v2-website-overview-panel .healthhead{
+            grid-template-columns:130px 1fr;
+          }
+          .v2-website-overview-panel .healthscore{
+            color:#a9c8f7;
+          }
+          .v2-website-overview-panel .healthcomponent{
+            border:1px solid #1d3554;
+            background:#0b1728;
+          }
+          .v2-website-overview-panel .healthlists{
+            gap:10px;
+          }
+          .v2-website-overview-panel .healthlist{
+            margin-top:6px;
+            color:#a9bad1;
+          }
+          .v2-website-data-panel .backlinkmetrics{
+            gap:8px;
+            margin:0 0 10px;
+          }
+          .v2-website-data-panel .metric{
+            padding:13px;
+            border:1px solid #1d3554;
+            border-radius:9px;
+            background:#0b1728;
+          }
+          .v2-website-data-panel .metric .value{
+            margin-top:6px;
+            color:#eef5ff;
+          }
+          .v2-website-overview-panel .distributiongrid{
+            gap:9px;
+            margin-top:10px;
+          }
+          .v2-website-overview-panel .distributioncard{
+            padding:12px;
+            border:1px solid #1d3554;
+            border-radius:9px;
+            background:#0b1728;
+          }
+          .v2-website-overview-panel .distributioncard h3{
+            color:#7ea6d8;
+          }
+          .v2-website-history-panel .historyhead{
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:16px;
+          }
+          .v2-website-history-panel .historyhead .section-title{
+            margin:0 0 4px;
+            color:#e8f1ff;
+            font-size:17px;
+          }
+          .v2-website-history-panel .historyhead .sub{
+            color:#7189aa;
+          }
+          .v2-website-history-panel .historyhead select{
+            width:190px;
+          }
+          .v2-website-history-panel .historychart{
+            margin-top:10px;
+            border:1px solid #1d3554;
+            border-radius:9px;
+            background:#0b1728;
+          }
+          .v2-website-history-panel .briefsection{
+            margin-top:10px;
+            padding:12px 14px;
+            border:1px solid #1d3554;
+            border-radius:9px;
+            background:#0b1728;
+          }
+          .v2-website-history-panel .historyalerts{
+            color:#a9bad1;
+          }
+          .v2-website-history-panel .tablewrap{
+            border:1px solid #1b3352;
+            background:#0b1728;
+          }
+          .v2-website-history-panel .ideastable thead th{
+            background:#0d1d32;
+            color:#6f8cb3;
+            font-size:10px;
+            text-transform:uppercase;
+            letter-spacing:.05em;
+          }
+          .v2-website-history-panel .ideastable tbody tr:hover{
+            background:#0f2036;
+          }
+          .v2-website-history-panel .historyempty{
+            margin:14px 18px 18px;
+            padding:14px;
+            border:1px dashed #28496f;
+            border-radius:9px;
+            background:#0a1727;
+            color:#7189aa;
+          }
+          .v2-website-history-panel .historyempty button{
+            min-height:30px;
+            padding:0 9px;
+            border:1px solid #294d77;
+            border-radius:7px;
+            background:#10243c;
+            color:#a9bdd8;
+            font-size:11px;
+            font-weight:750;
+          }
+          @media(max-width:760px){
+            .v2-website-data-hero,
+            .v2-website-history-panel .historyhead{
+              flex-direction:column;
+            }
+            .v2-website-data-hero-meta{justify-content:flex-start}
+            .v2-website-data-tabs{width:100%;overflow:auto}
+            .v2-website-data-tabs button{flex:0 0 auto}
+            .v2-website-overview-panel>.backlinkform,
+            .v2-website-history-panel>.historyform{
+              grid-template-columns:1fr;
+            }
+            .v2-website-history-panel .historyhead select{width:100%}
+          }
+          '''
+          css_path.write_text(css)
+
+          test_path = Path("tests/v2-shell-ui.test.mjs")
+          tests = test_path.read_text()
+          if 'test("website data is reorganized into overview and history tabs' not in tests:
+              tests += r'''
+
+          test("website data is reorganized into overview and history tabs without changing backlink APIs", () => {
+            assert.match(shell, /createWebsiteDataWorkspace/);
+            assert.match(shell, /data-v2-website-data-tab/);
+            assert.match(shell, /data-v2-website-data-panel/);
+            assert.match(shell, /Link Profile Overview/);
+            assert.match(shell, /历史与提醒/);
+            assert.match(shell, /7 天快照/);
+            assert.match(shell, /历史读取 \$0/);
+            assert.match(shell, /historyToSnapshot/);
+            assert.match(shell, /activateTab\("overview"\)/);
+            assert.match(shell, /delete panel\.dataset\.v2View/);
+            assert.match(shell, /createWebsiteDataWorkspace\(content\)/);
+          });
+          '''
+          test_path.write_text(tests)
+          PY
+      - name: Validate
+        run: |
+          git diff --check
+          node --test
+      - name: Commit redesign
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/v2-shell.js public/v2-shell.css tests/v2-shell-ui.test.mjs
+          git commit -m "feat: redesign Website Data workspace"
+          git push origin HEAD:seo-pro-v2
