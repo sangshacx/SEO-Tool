@@ -17,12 +17,14 @@ import {
   marketRequestFields,
 } from "./v2-market-context.js";
 import { createDashboardOverview, mountDashboard } from "./v2-dashboard.js";
+import { createKeywordLibrarySection, mountKeywordLibrary } from "./v2-keyword-library.js";
 
 export const V2_VIEWS = Object.freeze([
   { id: "overview", label: "总览", group: "primary" },
   { id: "website", label: "网站数据", group: "research" },
   { id: "competitors", label: "竞争对手", group: "research" },
   { id: "keywords", label: "关键词", group: "research" },
+  { id: "keyword-library", label: "关键词库", group: "research" },
   { id: "backlinks", label: "外链", group: "research" },
   { id: "opportunities", label: "机会清单", group: "action" },
   { id: "more", label: "更多工具", group: "secondary" },
@@ -601,6 +603,7 @@ function buildShell() {
   content.querySelector("h1")?.classList.add("v2-legacy-heading");
   content.querySelector("h1 + .lead")?.classList.add("v2-legacy-heading");
   content.prepend(createOverview());
+  content.append(createKeywordLibrarySection());
   content.append(
     createPlaceholder("more", "更多工具", "Content Brief 已按项目决定暂停，现有代码和数据继续保留，但不占用主工作区。"),
     createPlaceholder("settings", "费用与设置", "DataForSEO 费用仍由 Cost Guard、7 天缓存和 D1 用量记录共同控制。"),
@@ -627,6 +630,7 @@ function buildShell() {
   marketInputs.forEach((input) => { input.disabled = true; });
   const gate = window.__seoProV2ResearchGate;
   let dashboardCleanup = () => {};
+  let keywordLibraryCleanup = () => {};
   const marketInitialization = createMarketInitializationCoordinator({
     initialize: () => initializeSites(shell),
     onReady: ({ context, fetchImpl }) => {
@@ -634,6 +638,8 @@ function buildShell() {
       gate.submit = (workflow, fields) => submitSeoResearchRequest(workflow, fields, { context, fetchImpl });
       dashboardCleanup();
       dashboardCleanup = mountDashboard({ root: shell, context, fetchImpl });
+      keywordLibraryCleanup();
+      keywordLibraryCleanup = mountKeywordLibrary({ root: shell, context, fetchImpl });
       setResearchControlsReady(shell, true);
       marketInputs.forEach((input) => { input.disabled = false; });
       retryMarket.hidden = true;
