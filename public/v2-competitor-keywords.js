@@ -100,6 +100,31 @@ export function prefillKeywordExplorer(keyword, {
   return true;
 }
 
+export function prefillKeywordGapValidation(keyword, {
+  competitorDomainInput,
+  gapCompetitorInput,
+  gapFilterInput,
+  gapForm,
+  locationLike = globalThis.location,
+  requestAnimationFrameImpl = globalThis.requestAnimationFrame,
+} = {}) {
+  const normalizedKeyword = typeof keyword === "string" ? keyword.trim() : "";
+  const competitorDomain = String(competitorDomainInput?.value || "").trim();
+  if (!normalizedKeyword || !competitorDomain || !gapCompetitorInput || !gapFilterInput) return false;
+
+  gapCompetitorInput.value = competitorDomain;
+  gapFilterInput.value = normalizedKeyword;
+  gapFilterInput.dispatchEvent?.(new Event("input"));
+  if (locationLike) locationLike.hash = "competitors";
+  const reveal = () => {
+    gapForm?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    gapCompetitorInput.focus?.();
+  };
+  if (typeof requestAnimationFrameImpl === "function") requestAnimationFrameImpl(reveal);
+  else reveal();
+  return true;
+}
+
 function displayNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString("en-US") : "—";
 }
@@ -118,6 +143,18 @@ export function createCompetitorKeywordTable({
   intentSelect,
   presetSelect,
   sortSelect,
+  competitorDomainInput,
+  gapCompetitorInput,
+  gapFilterInput,
+  gapForm,
+  onGapValidate = (item) => prefillKeywordGapValidation(item?.keyword, {
+    competitorDomainInput,
+    gapCompetitorInput,
+    gapFilterInput,
+    gapForm,
+    locationLike,
+    requestAnimationFrameImpl,
+  }),
   locationLike = globalThis.location,
   documentLike = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame,
@@ -138,7 +175,7 @@ export function createCompetitorKeywordTable({
     if (!model.rows.length) {
       const row = documentLike.createElement("tr");
       const cell = documentLike.createElement("td");
-      cell.colSpan = 7;
+      cell.colSpan = 8;
       cell.className = "emptyrow";
       cell.textContent = "暂无排名关键词";
       row.appendChild(cell);
@@ -175,6 +212,16 @@ export function createCompetitorKeywordTable({
         cell.textContent = value;
         row.appendChild(cell);
       });
+
+      const actionCell = documentLike.createElement("td");
+      const gapButton = documentLike.createElement("button");
+      gapButton.type = "button";
+      gapButton.className = "competitorgapbtn";
+      gapButton.textContent = "验证 Gap";
+      gapButton.setAttribute?.("aria-label", `在 Keyword Gap 中验证 ${item.keyword}`);
+      gapButton.addEventListener("click", () => onGapValidate(item));
+      actionCell.appendChild(gapButton);
+      row.appendChild(actionCell);
       body.appendChild(row);
     });
     previousButton.disabled = !model.has_previous;

@@ -145,6 +145,42 @@ test("competitor opportunity presets are transparent and deterministic", async (
   ]);
 });
 
+test("competitor keyword handoff prefills Keyword Gap without submitting", async () => {
+  const { prefillKeywordGapValidation } = await import("../public/v2-competitor-keywords.js");
+  let submitted = 0;
+  let filterEvents = 0;
+  const competitorDomainInput = { value: "yuruwaterproof.com" };
+  const gapCompetitorInput = { value: "", focused: false, focus() { this.focused = true; } };
+  const gapFilterInput = {
+    value: "",
+    dispatchEvent(event) { if (event?.type === "input") filterEvents += 1; },
+  };
+  const gapForm = {
+    scrolled: null,
+    scrollIntoView(options) { this.scrolled = options; },
+    submit() { submitted += 1; },
+  };
+  const locationLike = { hash: "#competitors" };
+
+  const changed = prefillKeywordGapValidation(" waterproof membrane ", {
+    competitorDomainInput,
+    gapCompetitorInput,
+    gapFilterInput,
+    gapForm,
+    locationLike,
+    requestAnimationFrameImpl(callback) { callback(); },
+  });
+
+  assert.equal(changed, true);
+  assert.equal(gapCompetitorInput.value, "yuruwaterproof.com");
+  assert.equal(gapFilterInput.value, "waterproof membrane");
+  assert.equal(filterEvents, 1);
+  assert.equal(locationLike.hash, "competitors");
+  assert.equal(gapCompetitorInput.focused, true);
+  assert.deepEqual(gapForm.scrolled, { behavior: "smooth", block: "center" });
+  assert.equal(submitted, 0);
+});
+
 test("clicking a competitor keyword only prefills Keyword Explorer and never submits", async () => {
   const { prefillKeywordExplorer } = await import("../public/v2-competitor-keywords.js");
   let focused = 0;
@@ -185,6 +221,9 @@ function fakeElement(tagName = "div") {
     click() { this.listeners.click?.({ preventDefault() {} }); },
     input() { this.listeners.input?.(); },
     change() { this.listeners.change?.(); },
+    dispatchEvent(event) { this.listeners[event?.type]?.(event); },
+    focus() { this.focused = true; },
+    scrollIntoView(options) { this.scrolled = options || true; },
   };
 }
 
@@ -199,6 +238,11 @@ test("competitor table renders 10 linked rows and changes pages locally", async 
   const intentSelect = fakeElement("select");
   const presetSelect = fakeElement("select");
   const sortSelect = fakeElement("select");
+  const competitorDomainInput = fakeElement("input");
+  const gapCompetitorInput = fakeElement("input");
+  const gapFilterInput = fakeElement("input");
+  const gapForm = fakeElement("form");
+  competitorDomainInput.value = "competitor.example";
   presetSelect.value = "all";
   sortSelect.value = "position";
   const locationLike = { hash: "#competitors" };
@@ -222,6 +266,10 @@ test("competitor table renders 10 linked rows and changes pages locally", async 
     intentSelect,
     presetSelect,
     sortSelect,
+    competitorDomainInput,
+    gapCompetitorInput,
+    gapFilterInput,
+    gapForm,
     locationLike,
     documentLike,
     requestAnimationFrameImpl(callback) { callback(); },
@@ -232,6 +280,11 @@ test("competitor table renders 10 linked rows and changes pages locally", async 
   assert.equal(body.children[0].children[1].children[0].tagName, "A");
   assert.equal(body.children[0].children[1].children[0].textContent, "keyword-1");
   assert.equal(label.textContent, "第 1 / 3 页 · 23 条关键词");
+  assert.equal(body.children[0].children[7].children[0].textContent, "验证 Gap");
+  body.children[0].children[7].children[0].click();
+  assert.equal(gapCompetitorInput.value, "competitor.example");
+  assert.equal(gapFilterInput.value, "keyword-1");
+  assert.equal(gapCompetitorInput.focused, true);
   assert.equal(previous.disabled, true);
   assert.equal(next.disabled, false);
 
