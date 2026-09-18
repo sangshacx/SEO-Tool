@@ -21,6 +21,11 @@ function memberFromRow(row, serpMap) {
     keyword: row.keyword,
     role: row.role,
     intent_primary: row.intent_primary ?? null,
+    metrics: {
+      search_volume: row.search_volume == null ? null : Number(row.search_volume),
+      keyword_difficulty: row.keyword_difficulty == null ? null : Number(row.keyword_difficulty),
+      cpc_usd: row.cpc_usd == null ? null : Number(row.cpc_usd),
+    },
     location_code: Number(row.location_code),
     language_code: row.language_code,
     serp: serpFor(serpMap, row.saved_keyword_id),
@@ -62,7 +67,10 @@ export async function loadClusterIntelligenceInput(db, input) {
       k.keyword,
       k.location_code,
       k.language_code,
-      km.intent_primary
+      km.intent_primary,
+      km.search_volume,
+      km.keyword_difficulty,
+      km.cpc_usd
     FROM saved_keywords sk
     JOIN keywords k ON k.id = sk.keyword_id
     LEFT JOIN keyword_metrics km ON km.id = (
@@ -86,7 +94,10 @@ export async function loadClusterIntelligenceInput(db, input) {
       k.keyword,
       k.location_code,
       k.language_code,
-      km.intent_primary
+      km.intent_primary,
+      km.search_volume,
+      km.keyword_difficulty,
+      km.cpc_usd
     FROM topic_clusters c
     LEFT JOIN topic_cluster_members m ON m.cluster_id = c.id
     LEFT JOIN saved_keywords sk ON sk.id = m.saved_keyword_id
@@ -146,6 +157,11 @@ export async function loadClusterIntelligenceInput(db, input) {
       saved_keyword_id: Number(row.saved_keyword_id),
       keyword: row.keyword,
       intent_primary: row.intent_primary ?? null,
+      metrics: {
+        search_volume: row.search_volume == null ? null : Number(row.search_volume),
+        keyword_difficulty: row.keyword_difficulty == null ? null : Number(row.keyword_difficulty),
+        cpc_usd: row.cpc_usd == null ? null : Number(row.cpc_usd),
+      },
       location_code: Number(row.location_code),
       language_code: row.language_code,
       serp: serpFor(serpMap, row.saved_keyword_id),

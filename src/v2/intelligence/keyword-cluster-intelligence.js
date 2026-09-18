@@ -1,4 +1,5 @@
 import { compareSerpOverlap } from "./serp-overlap.js";
+import { buildSerpVerificationPriority } from "./serp-verification-priority.js";
 
 export const CLUSTER_INTELLIGENCE_VERSION = "cluster-intelligence-v0.2";
 
@@ -170,6 +171,8 @@ function scoreAgainstCluster(keyword, cluster, analysisTime) {
         matched_keyword: strongestSerp.member.keyword,
         matched_role: strongestSerp.member.role
           ?? (Number(strongestSerp.member.saved_keyword_id) === Number(cluster.primary?.saved_keyword_id) ? "primary" : "supporting"),
+        matched_metrics: strongestSerp.member.metrics ?? null,
+        matched_intent_primary: strongestSerp.member.intent_primary ?? null,
       }
     : null;
   const score = serpEvidence?.status === "available"
@@ -325,11 +328,28 @@ export function buildClusterIntelligence({
     const best = matches[0] ?? null;
     const decision = decisionFor(best?.score ?? 0, best?.serp_overlap);
     const cannibalization = cannibalizationFor(best);
+    const verificationPriority = buildSerpVerificationPriority({
+      decision_code: decision.code,
+      match_score: best?.score ?? 0,
+      search_volume: keyword.metrics?.search_volume,
+      keyword_difficulty: keyword.metrics?.keyword_difficulty,
+      intent_primary: keyword.intent_primary,
+    });
+    const matchedMemberVerificationPriority = best?.serp_overlap?.matched_keyword
+      ? buildSerpVerificationPriority({
+          decision_code: decision.code,
+          match_score: best?.score ?? 0,
+          search_volume: best.serp_overlap.matched_metrics?.search_volume,
+          keyword_difficulty: best.serp_overlap.matched_metrics?.keyword_difficulty,
+          intent_primary: best.serp_overlap.matched_intent_primary,
+        })
+      : null;
 
     return {
       saved_keyword_id: Number(keyword.saved_keyword_id),
       keyword: keyword.keyword,
       intent_primary: keyword.intent_primary ?? null,
+      metrics: keyword.metrics ?? null,
       decision,
       suggested_cluster: best
         ? {
@@ -351,7 +371,13 @@ export function buildClusterIntelligence({
             shared_tokens: best.shared_tokens,
           }
         : null,
-      serp_overlap: best?.serp_overlap ?? null,
+      serp_overlap: best?.serp_overlap
+        ? {
+            ...best.serp_overlap,
+            matched_verification_priority: matchedMemberVerificationPriority,
+          }
+        : null,
+      verification_priority: verificationPriority,
       confidence: best?.serp_overlap?.status === "available"
         ? {
             level: "high",
@@ -398,6 +424,9 @@ export function buildClusterIntelligence({
       serp_evidence_coverage_pct: suggestions.length
         ? Math.round((suggestions.filter((item) => item.serp_overlap?.status === "available").length / suggestions.length) * 100)
         : 0,
+      verification_priority_high: suggestions.filter((item) => item.verification_priority?.code === "high").length,
+      verification_priority_medium: suggestions.filter((item) => item.verification_priority?.code === "medium").length,
+      verification_priority_low: suggestions.filter((item) => item.verification_priority?.code === "low").length,
       truncated: Boolean(truncated),
     },
     suggestions,

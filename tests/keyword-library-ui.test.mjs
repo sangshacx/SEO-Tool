@@ -649,3 +649,92 @@ test("SERP verification handoff stores context but still never submits the keywo
   assert.equal(locationLike.hash, "keywords");
   assert.equal(JSON.parse(map.get(CLUSTER_SERP_VERIFICATION_SESSION_KEY)).suggested_cluster, "Membrane");
 });
+
+
+test("SERP Evidence Coverage orders work by backend Verification Priority Score", () => {
+  const queue = buildClusterSerpVerificationQueue({
+    analysisTime: "2026-09-18T00:00:00Z",
+    suggestions: [
+      {
+        keyword: "low priority term",
+        decision: { code: "new_cluster_candidate" },
+        suggested_cluster: { id: 1, name: "Low", score: 42 },
+        components: { final_match_score: 42 },
+        verification_priority: {
+          score: 38, code: "low", label: "低优先",
+          factors: { decision_impact: 40, cluster_match: 42, search_demand: 30, commercial_intent: 45, seo_feasibility: 50 },
+          reasons: ["低优先原因"],
+        },
+        serp_overlap: {
+          status: "unavailable",
+          matched_keyword: "low cluster member",
+          candidate_result_count: 0,
+          member_result_count: 7,
+          candidate_fetched_at: null,
+          member_fetched_at: "2026-09-15T00:00:00Z",
+        },
+      },
+      {
+        keyword: "high priority supplier",
+        decision: { code: "review_cluster_fit" },
+        suggested_cluster: { id: 2, name: "High", score: 68 },
+        components: { final_match_score: 68 },
+        verification_priority: {
+          score: 81, code: "high", label: "高优先",
+          factors: { decision_impact: 90, cluster_match: 68, search_demand: 80, commercial_intent: 90, seo_feasibility: 75 },
+          reasons: ["高优先原因"],
+        },
+        serp_overlap: {
+          status: "unavailable",
+          matched_keyword: "high cluster member",
+          candidate_result_count: 0,
+          member_result_count: 7,
+          candidate_fetched_at: null,
+          member_fetched_at: "2026-09-15T00:00:00Z",
+        },
+      },
+    ],
+  });
+  assert.equal(queue[0].keyword, "high priority supplier");
+  assert.equal(queue[0].verification_priority.score, 81);
+  assert.equal(queue[0].priority_label, "高优先 · 81");
+  assert.equal(queue[1].verification_priority.score, 38);
+});
+
+test("cluster-member verification uses the member-specific backend priority score", () => {
+  const queue = buildClusterSerpVerificationQueue({
+    suggestions: [{
+      keyword: "candidate term",
+      decision: { code: "assign_to_existing" },
+      suggested_cluster: { id: 9, name: "Membrane", score: 80 },
+      components: { final_match_score: 80 },
+      verification_priority: { score: 60, code: "medium", label: "中优先", factors: {}, reasons: [] },
+      serp_overlap: {
+        status: "unavailable",
+        matched_keyword: "waterproof membrane",
+        candidate_result_count: 8,
+        member_result_count: 0,
+        candidate_fetched_at: "2026-09-15T00:00:00Z",
+        member_fetched_at: null,
+        matched_verification_priority: {
+          score: 88, code: "high", label: "高优先", factors: {}, reasons: ["核心 Cluster 成员"],
+        },
+      },
+    }],
+  });
+  assert.equal(queue.length, 1);
+  assert.equal(queue[0].keyword, "waterproof membrane");
+  assert.equal(queue[0].verification_priority.score, 88);
+  assert.equal(queue[0].priority_label, "高优先 · 88");
+});
+
+test("SERP Evidence Coverage UI exposes explainable priority factors without provider calls", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /Decision Impact .*30%/);
+  assert.match(source, /Cluster Match .*25%/);
+  assert.match(source, /Search Demand .*20%/);
+  assert.match(source, /Commercial Intent .*15%/);
+  assert.match(source, /SEO Feasibility .*10%/);
+  assert.match(source, /verification_priority_score/);
+  assert.doesNotMatch(source, /submitSeoResearchRequest|dataforseo\.com/i);
+});

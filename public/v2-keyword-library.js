@@ -204,6 +204,7 @@ export function buildClusterSerpVerificationQueue({
       })[status] || "需要验证",
       priority,
       priority_label: priority === "high" ? "优先验证" : "可稍后验证",
+      verification_priority: null,
       match_score: matchScore,
       decision_code: decisionCode,
       source_keyword: clean(suggestion?.keyword),
@@ -211,11 +212,22 @@ export function buildClusterSerpVerificationQueue({
       side,
       reason,
     };
+    const backendPriority = side === "cluster_member"
+      ? suggestion?.serp_overlap?.matched_verification_priority
+      : suggestion?.verification_priority;
+    if (backendPriority?.score != null) {
+      candidate.verification_priority = backendPriority;
+      candidate.priority = backendPriority.code === "high" ? "high" : backendPriority.code === "medium" ? "medium" : "low";
+      candidate.priority_label = `${backendPriority.label} · ${backendPriority.score}`;
+    }
     const existing = queue.get(key);
     if (
       !existing
-      || (candidate.priority === "high" && existing.priority !== "high")
-      || candidate.match_score > existing.match_score
+      || Number(candidate.verification_priority?.score ?? 0) > Number(existing.verification_priority?.score ?? 0)
+      || (
+        Number(candidate.verification_priority?.score ?? 0) === Number(existing.verification_priority?.score ?? 0)
+        && candidate.match_score > existing.match_score
+      )
     ) {
       queue.set(key, candidate);
     }
@@ -293,8 +305,8 @@ export function buildClusterSerpVerificationQueue({
   }
 
   return [...queue.values()].sort((a, b) => {
-    const priority = (b.priority === "high" ? 1 : 0) - (a.priority === "high" ? 1 : 0);
-    return priority || b.match_score - a.match_score || a.keyword.localeCompare(b.keyword);
+    const verification = Number(b.verification_priority?.score ?? 0) - Number(a.verification_priority?.score ?? 0);
+    return verification || b.match_score - a.match_score || a.keyword.localeCompare(b.keyword);
   });
 }
 
@@ -314,6 +326,10 @@ export function writeClusterSerpVerificationContext({
     evidence_label: clean(verification.evidence_label),
     priority: clean(verification.priority),
     priority_label: clean(verification.priority_label),
+    verification_priority_score: Number.isFinite(Number(verification.verification_priority?.score))
+      ? Number(verification.verification_priority.score)
+      : null,
+    verification_priority_label: clean(verification.verification_priority?.label),
     reason: clean(verification.reason),
     suggested_cluster: clean(verification.suggested_cluster),
     source_keyword: clean(verification.source_keyword),
@@ -1018,7 +1034,10 @@ export function mountKeywordLibrary({
       maxAgeDays: Number(data.thresholds?.serp_overlap_max_age_days || 30),
       minResults: Number(data.thresholds?.serp_overlap_min_results || 5),
     });
-    serpVerificationCount.textContent = `待验证 ${queue.length}`;
+    const highPriorityCount = queue.filter((item) => item.verification_priority?.code === "high").length;
+    serpVerificationCount.textContent = highPriorityCount
+      ? `待验证 ${queue.length} · 高优先 ${highPriorityCount}`
+      : `待验证 ${queue.length}`;
     serpVerificationList.replaceChildren();
 
     queue.forEach((item) => {
@@ -1036,8 +1055,20 @@ export function mountKeywordLibrary({
         item.evidence_label,
         item.suggested_cluster ? `影响 Cluster：${item.suggested_cluster}` : null,
       ].filter(Boolean).join(" · ");
+      if (item.verification_priority) {
+        meta.title = [
+          `Decision Impact ${item.verification_priority.factors?.decision_impact ?? "—"} × 30%`,
+          `Cluster Match ${item.verification_priority.factors?.cluster_match ?? "—"} × 25%`,
+          `Search Demand ${item.verification_priority.factors?.search_demand ?? "—"} × 20%`,
+          `Commercial Intent ${item.verification_priority.factors?.commercial_intent ?? "—"} × 15%`,
+          `SEO Feasibility ${item.verification_priority.factors?.seo_feasibility ?? "—"} × 10%`,
+        ].join("\n");
+      }
       const reason = documentLike.createElement("small");
-      reason.textContent = item.reason;
+      const priorityReasons = item.verification_priority?.reasons || [];
+      reason.textContent = priorityReasons.length
+        ? `${item.reason} · ${priorityReasons.join(" ")}`
+        : item.reason;
       main.append(keyword, meta, reason);
 
       const action = documentLike.createElement("button");

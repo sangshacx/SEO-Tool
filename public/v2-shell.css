@@ -2847,3 +2847,9 @@
   .v2-cluster-serp-flow-actions button{width:100%}
   .v2-cluster-serp-paid{width:100%;align-items:flex-start}
 }
+
+
+/* SERP verification priority score */
+.v2-serp-verification-item[data-priority="medium"]{background:#0b1a2d}
+.v2-serp-verification-item[data-priority="low"]{opacity:.82}
+.v2-serp-verification-main span[title]{cursor:help;text-decoration:underline dotted #45678f;text-underline-offset:3px}
