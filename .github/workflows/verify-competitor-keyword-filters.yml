@@ -1,0 +1,34 @@
+name: Verify Competitor Keyword Filters
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - .github/workflows/verify-competitor-keyword-filters.yml
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: seo-pro-v2
+      - name: Run regression tests
+        shell: bash
+        run: |
+          git diff --check
+          node --test
+      - name: Remove temporary workflow and commit cleanup
+        shell: bash
+        run: |
+          rm .github/workflows/verify-competitor-keyword-filters.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/verify-competitor-keyword-filters.yml
+          git commit -m "chore: remove temporary competitor keyword filter check"
+          git push origin HEAD:seo-pro-v2
