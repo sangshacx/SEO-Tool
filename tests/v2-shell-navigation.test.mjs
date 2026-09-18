@@ -21,7 +21,7 @@ import {
 test("registers the approved navigation without promoting Content Brief", () => {
   assert.deepEqual(
     V2_VIEWS.map((view) => view.id),
-    ["overview", "website", "competitors", "keywords", "backlinks", "opportunities", "more", "sites", "settings"],
+    ["overview", "website", "competitors", "keywords", "keyword-library", "backlinks", "opportunities", "more", "sites", "settings"],
   );
   assert.equal(V2_VIEWS.some((view) => /content brief/i.test(view.label)), false);
 });
