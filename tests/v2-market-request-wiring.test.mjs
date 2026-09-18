@@ -45,12 +45,13 @@ const workflows = [
   ["keywordOverview", { keyword: "waterproof membrane" }],
   ["keywordIdeas", { seed_keyword: "waterproof membrane", limit: 25 }],
   ["serpWeakness", { keyword: "waterproof membrane" }],
+  ["serpCompetitors", { keyword: "waterproof membrane", allow_live_request: false }],
   ["seoOpportunity", { keyword: "waterproof membrane" }],
   ["competitorSnapshot", { domain: "competitor.example" }],
   ["keywordGap", { own_domain: "own.example", competitor_domain: "competitor.example" }],
 ];
 
-test("executes all six submit paths with the current non-US market and preserves workflow fields", async () => {
+test("executes all seven submit paths with the current non-US market and preserves workflow fields", async () => {
   const context = createMarketContext({ location_code: 2840, language_code: "en" });
   const spy = fetchSpy();
 
@@ -64,7 +65,7 @@ test("executes all six submit paths with the current non-US market and preserves
     assert.deepEqual(fields, original, `${workflow} input was mutated`);
   }
 
-  assert.equal(spy.calls.length, 6);
+  assert.equal(spy.calls.length, 7);
   workflows.forEach(([workflow, fields], index) => {
     const call = spy.calls[index];
     assert.equal(call.url, SEO_RESEARCH_ENDPOINTS[workflow]);

@@ -38,6 +38,7 @@ export const SEO_RESEARCH_ENDPOINTS = Object.freeze({
   keywordOverview: "/api/v2/keywords/overview",
   keywordIdeas: "/api/v2/keywords/ideas",
   serpWeakness: "/api/v2/keywords/serp-weakness",
+  serpCompetitors: "/api/v2/keywords/serp-competitors",
   seoOpportunity: "/api/v2/keywords/opportunity",
   competitorSnapshot: "/api/v2/competitors/snapshot",
   keywordGap: "/api/v2/competitors/keyword-gap",

@@ -214,3 +214,17 @@ test("SERP competitor migration creates normalized D1 snapshot and page tables",
   assert.match(sql, /FOREIGN KEY \(keyword_id\) REFERENCES keywords\(id\)/);
   assert.match(sql, /PRIMARY KEY \(snapshot_id, organic_position\)/);
 });
+
+
+test("Top 10 SERP UI requires an explicit paid confirmation on cache miss", async () => {
+  const html = await readFile(new URL("../public/v2.html", import.meta.url), "utf8");
+  const shell = await readFile(new URL("../public/v2-shell.js", import.meta.url), "utf8");
+  assert.match(shell, /serpCompetitors: "\/api\/v2\/keywords\/serp-competitors"/);
+  assert.match(html, /id="serpCompetitorsBtn"/);
+  assert.match(html, /data-v2-market-research="serpCompetitors"/);
+  assert.match(html, /id="serpCompetitorsAllowPaid"/);
+  assert.match(html, /LIVE_REQUEST_CONFIRMATION_REQUIRED/);
+  assert.match(html, /allow_live_request:allow\.checked/);
+  assert.match(html, /id="serpCompetitorsBody"/);
+  assert.match(html, /真实 Google 自然结果页面/);
+});
