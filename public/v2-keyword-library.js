@@ -440,70 +440,139 @@ export function createKeywordLibrarySection(documentLike = globalThis.document) 
   section.dataset.v2View = "keyword-library";
   section.dataset.v2KeywordLibrary = "";
   section.innerHTML = `
-    <div class="v2-library-head">
+    <div class="v2-library-hero">
       <div>
-        <div class="section-title">Keyword Library</div>
-        <p class="lead">把研究过的关键词保存成长期资产；查看已有最新指标不会触发 DataForSEO 请求。</p>
+        <div class="v2-library-eyebrow">KEYWORD ASSETS</div>
+        <h2>关键词库</h2>
+        <p>保存、筛选和组织值得持续跟踪的关键词，再把它们分配到 Topic Cluster。</p>
       </div>
-      <button type="button" data-v2-library-refresh>刷新</button>
+      <div class="v2-library-hero-actions">
+        <span class="v2-cost-pill">D1 管理 · $0</span>
+        <button type="button" data-v2-library-refresh>刷新数据</button>
+      </div>
     </div>
-    <div class="v2-library-tools">
-      <input type="search" data-v2-library-query placeholder="搜索已保存关键词">
-      <input type="search" data-v2-library-tag placeholder="Tag（可选）">
-      <select data-v2-library-sort aria-label="关键词库排序">
-        <option value="created_at">最近保存</option>
-        <option value="search_volume">搜索量</option>
-        <option value="keyword_difficulty">KD</option>
-        <option value="cpc_usd">CPC</option>
-        <option value="keyword">关键词</option>
-      </select>
-      <select data-v2-library-order aria-label="关键词库排序方向">
-        <option value="desc">降序</option>
-        <option value="asc">升序</option>
-      </select>
+
+    <div class="v2-library-tabs" role="tablist" aria-label="关键词库视图">
+      <button type="button" role="tab" aria-selected="true" class="active" data-v2-library-tab="keywords">全部关键词</button>
+      <button type="button" role="tab" aria-selected="false" data-v2-library-tab="clusters">Topic Clusters</button>
+      <button type="button" role="tab" aria-selected="false" data-v2-library-tab="intelligence">Cluster Intelligence</button>
     </div>
-    <div class="v2-library-selection">
-      <span class="sub" data-v2-library-selected>已选择 0 条</span>
-      <button type="button" data-v2-library-select-page>选择当前页</button>
-      <button type="button" data-v2-library-clear-selected>清空选择</button>
-      <input type="text" data-v2-library-batch-tags placeholder="添加 Tag，例如 Commercial, Saudi">
-      <button type="button" data-v2-library-add-tags>批量添加 Tag</button>
-      <button type="button" data-v2-library-delete-selected>删除已选关键词</button>
-      <span data-v2-library-batch-status class="v2-library-batch-status"></span>
+
+    <div class="v2-library-panel active" data-v2-library-panel="keywords">
+      <div class="v2-library-filterbar">
+        <div class="v2-library-search">
+          <span aria-hidden="true">⌕</span>
+          <input type="search" data-v2-library-query placeholder="搜索已保存关键词">
+        </div>
+        <input type="search" data-v2-library-tag placeholder="筛选 Tag">
+        <select data-v2-library-sort aria-label="关键词库排序">
+          <option value="created_at">最近保存</option>
+          <option value="search_volume">搜索量</option>
+          <option value="keyword_difficulty">KD</option>
+          <option value="cpc_usd">CPC</option>
+          <option value="keyword">关键词</option>
+        </select>
+        <select data-v2-library-order aria-label="关键词库排序方向">
+          <option value="desc">降序</option>
+          <option value="asc">升序</option>
+        </select>
+      </div>
+
+      <div class="v2-library-bulkbar">
+        <div class="v2-library-bulk-left">
+          <span class="v2-selection-count" data-v2-library-selected>已选择 0 条</span>
+          <button type="button" data-v2-library-select-page>选择当前页</button>
+          <button type="button" data-v2-library-clear-selected>清空</button>
+        </div>
+        <div class="v2-library-bulk-right">
+          <input type="text" data-v2-library-batch-tags placeholder="添加 Tag，例如 Commercial, Saudi">
+          <button type="button" class="secondary-action" data-v2-library-add-tags>添加 Tag</button>
+          <button type="button" class="danger-action" data-v2-library-delete-selected>删除已选</button>
+        </div>
+        <span data-v2-library-batch-status class="v2-library-batch-status"></span>
+      </div>
+
+      <div data-v2-library-status class="status"></div>
+
+      <div class="v2-library-table-shell">
+        <div class="tablewrap">
+          <table class="ideastable v2-library-table">
+            <thead>
+              <tr>
+                <th>选择</th>
+                <th>关键词</th>
+                <th>搜索量</th>
+                <th>KD</th>
+                <th>CPC</th>
+                <th>Intent</th>
+                <th>市场</th>
+                <th>Tags</th>
+                <th>来源</th>
+                <th>指标时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody data-v2-library-body></tbody>
+          </table>
+        </div>
+        <div class="v2-library-pager">
+          <span data-v2-library-summary>—</span>
+          <div>
+            <button type="button" data-v2-library-prev>上一页</button>
+            <button type="button" data-v2-library-next>下一页</button>
+          </div>
+        </div>
+      </div>
     </div>
-    <div class="note"><b>费用：</b>关键词库读取、筛选、Tag 管理、删除均为 $0；这里不会主动刷新 DataForSEO 指标。</div>
-    <div class="v2-cluster-panel">
-      <div class="v2-cluster-head">
+
+    <div class="v2-library-panel" data-v2-library-panel="clusters" hidden>
+      <div class="v2-workspace-section-head">
         <div>
-          <div class="section-title">Topic Clusters</div>
-          <div class="sub">手动管理 Primary / Supporting 关系，为后续 SERP-overlap 自动聚类保留同一数据模型。</div>
+          <h3>Topic Clusters</h3>
+          <p>用 Primary / Supporting 组织关键词。选择关键词后，在这里完成手动分配。</p>
         </div>
         <button type="button" data-v2-cluster-refresh>刷新 Cluster</button>
       </div>
-      <div class="v2-cluster-controls">
-        <select data-v2-cluster-select aria-label="选择 Topic Cluster">
-          <option value="">选择 Topic Cluster</option>
-        </select>
-        <input type="text" maxlength="80" data-v2-cluster-name placeholder="新建 Cluster 名称">
-        <button type="button" data-v2-cluster-create>创建 Cluster</button>
-        <select data-v2-cluster-primary aria-label="选择 Primary Keyword">
-          <option value="">选择 Primary Keyword</option>
-        </select>
-        <button type="button" data-v2-cluster-assign>分配已选关键词</button>
+
+      <div class="v2-cluster-compose">
+        <div class="v2-field">
+          <label>目标 Cluster</label>
+          <select data-v2-cluster-select aria-label="选择 Topic Cluster">
+            <option value="">选择 Topic Cluster</option>
+          </select>
+        </div>
+        <div class="v2-field v2-field-grow">
+          <label>新建 Cluster</label>
+          <input type="text" maxlength="80" data-v2-cluster-name placeholder="输入 Cluster 名称">
+        </div>
+        <button type="button" class="primary-action" data-v2-cluster-create>创建 Cluster</button>
+        <div class="v2-field">
+          <label>Primary Keyword</label>
+          <select data-v2-cluster-primary aria-label="选择 Primary Keyword">
+            <option value="">选择 Primary Keyword</option>
+          </select>
+        </div>
+        <button type="button" class="primary-action" data-v2-cluster-assign>分配已选关键词</button>
       </div>
-      <div class="note"><b>分配规则：</b>选择一个 Primary；其余已选词作为 Supporting。若目标 Cluster 已有成员，会保留原成员并把原 Primary 调整为 Supporting。已选词若属于其他 Cluster，会移动到当前 Cluster。全部操作 $0。</div>
+
+      <div class="v2-inline-help">
+        已有 Cluster 成员会保留；现有 Primary 默认保留。已选词若属于其他 Cluster，会移动到当前 Cluster。全部操作 $0。
+      </div>
       <div data-v2-cluster-status class="v2-cluster-status"></div>
       <div data-v2-cluster-list class="v2-cluster-list"></div>
-      <div class="v2-cluster-intelligence">
-        <div class="v2-cluster-intelligence-head">
-          <div>
-            <b>Cluster Intelligence v0.1</b>
-            <div class="sub">只读确定性建议：关键词结构 + 已缓存 Intent。Cannibalization 仅代表潜在风险，不是已确认蚕食。</div>
-          </div>
-          <button type="button" data-v2-cluster-intelligence-run>分析 Cluster 建议</button>
+    </div>
+
+    <div class="v2-library-panel" data-v2-library-panel="intelligence" hidden>
+      <div class="v2-workspace-section-head">
+        <div>
+          <h3>Cluster Intelligence <span>v0.1</span></h3>
+          <p>基于关键词结构与已缓存 Intent 的只读建议。Cannibalization 仅表示潜在风险。</p>
         </div>
-        <div data-v2-cluster-intelligence-status class="v2-cluster-intelligence-status"></div>
-        <div data-v2-cluster-intelligence-summary class="v2-cluster-intelligence-summary"></div>
+        <button type="button" class="primary-action" data-v2-cluster-intelligence-run>分析 Cluster 建议</button>
+      </div>
+      <div data-v2-cluster-intelligence-status class="v2-cluster-intelligence-status"></div>
+      <div data-v2-cluster-intelligence-summary class="v2-cluster-intelligence-summary"></div>
+      <div class="v2-library-table-shell">
         <div class="tablewrap v2-cluster-intelligence-tablewrap">
           <table class="ideastable v2-cluster-intelligence-table">
             <thead>
@@ -524,18 +593,6 @@ export function createKeywordLibrarySection(documentLike = globalThis.document) 
           </table>
         </div>
       </div>
-    </div>
-    <div data-v2-library-status class="status"></div>
-    <div class="tablewrap">
-      <table class="ideastable v2-library-table">
-        <thead><tr><th>选择</th><th>关键词</th><th>搜索量</th><th>KD</th><th>CPC</th><th>Intent</th><th>市场</th><th>Tags</th><th>来源</th><th>指标时间</th><th>操作</th></tr></thead>
-        <tbody data-v2-library-body></tbody>
-      </table>
-    </div>
-    <div class="v2-library-pager">
-      <span data-v2-library-summary>—</span>
-      <button type="button" data-v2-library-prev>上一页</button>
-      <button type="button" data-v2-library-next>下一页</button>
     </div>
   `;
   return section;
@@ -581,6 +638,8 @@ export function mountKeywordLibrary({
   const intelligenceStatus = section.querySelector("[data-v2-cluster-intelligence-status]");
   const intelligenceSummary = section.querySelector("[data-v2-cluster-intelligence-summary]");
   const intelligenceBody = section.querySelector("[data-v2-cluster-intelligence-body]");
+  const libraryTabs = [...section.querySelectorAll("[data-v2-library-tab]")];
+  const libraryPanels = [...section.querySelectorAll("[data-v2-library-panel]")];
   const keywordInput = root.querySelector("#keyword");
 
   let page = 1;
@@ -593,6 +652,25 @@ export function mountKeywordLibrary({
   let refreshClusterControls = () => {};
   let prefillClusterSuggestion = async () => {};
   let prefillNewClusterSuggestion = async () => {};
+
+  const activateLibraryTab = (tabId) => {
+    const target = ["keywords", "clusters", "intelligence"].includes(tabId) ? tabId : "keywords";
+    libraryTabs.forEach((button) => {
+      const active = button.dataset.v2LibraryTab === target;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    libraryPanels.forEach((panel) => {
+      const active = panel.dataset.v2LibraryPanel === target;
+      panel.hidden = !active;
+      panel.classList.toggle("active", active);
+    });
+    return target;
+  };
+
+  libraryTabs.forEach((button) => {
+    button.addEventListener("click", () => activateLibraryTab(button.dataset.v2LibraryTab));
+  });
 
   const showStatus = (message = "", type = "info") => {
     status.textContent = message;
@@ -1158,6 +1236,7 @@ export function mountKeywordLibrary({
       "success",
     );
     showIntelligenceStatus("新 Cluster 建议已预填；尚未创建 Cluster，也未修改数据库。", "success");
+    activateLibraryTab("clusters");
     clusterNameInput.focus?.();
     clusterNameInput.scrollIntoView?.({ behavior: "smooth", block: "center" });
   };
@@ -1200,6 +1279,7 @@ export function mountKeywordLibrary({
       "success",
     );
     showIntelligenceStatus("建议已预填到手动分配区；尚未修改数据库。", "success");
+    activateLibraryTab("clusters");
     clusterSelect.scrollIntoView?.({ behavior: "smooth", block: "center" });
   };
 
@@ -1515,6 +1595,7 @@ export function mountKeywordLibrary({
     }
   });
 
+  activateLibraryTab("keywords");
   renderClusterSelect();
   renderClusterList();
   clearClusterIntelligence();

@@ -375,3 +375,18 @@ test("new Cluster candidate action only prefills creation and still requires exp
   assert.match(source, /尚未创建 Cluster，也未修改数据库/);
   assert.match(source, /decisionCode === "new_cluster_candidate"/);
 });
+
+
+test("Keyword Library redesign uses three workspace tabs without changing backend contracts", async () => {
+  const source = await readFile(new URL("../public/v2-keyword-library.js", import.meta.url), "utf8");
+  assert.match(source, /data-v2-library-tab="keywords"/);
+  assert.match(source, /data-v2-library-tab="clusters"/);
+  assert.match(source, /data-v2-library-tab="intelligence"/);
+  assert.match(source, /data-v2-library-panel="keywords"/);
+  assert.match(source, /data-v2-library-panel="clusters"/);
+  assert.match(source, /data-v2-library-panel="intelligence"/);
+  assert.match(source, /activateLibraryTab\("keywords"\)/);
+  assert.match(source, /activateLibraryTab\("clusters"\)/);
+  assert.match(source, /保存、筛选和组织值得持续跟踪的关键词/);
+  assert.match(source, /D1 管理 · \$0/);
+});
