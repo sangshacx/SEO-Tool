@@ -1,4 +1,5 @@
 name: Cluster Advice Prefill Regression
+# rerun after assertion alignment
 on:
   push:
     branches: [seo-pro-v2]
