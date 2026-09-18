@@ -43,3 +43,19 @@ test("SERP Reality keeps missing aggregate metrics missing and has no network pa
   const source = await readFile(new URL("../public/v2-serp-reality.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /\bfetch\s*\(|submitSeoResearchRequest|\/api\//);
 });
+
+
+test("SERP Reality UI is wired to existing SERP analysis without another request", async () => {
+  const html = await readFile(new URL("../public/v2.html", import.meta.url), "utf8");
+  assert.match(html, /src="\.\/v2-serp-reality\.js"/);
+  assert.match(html, />SERP Reality</);
+  assert.match(html, /id="serpAvgDomainRank"/);
+  assert.match(html, /id="serpAvgPageRank"/);
+  assert.match(html, /id="serpAvgRefDomains"/);
+  assert.match(html, /id="serpResultCount"/);
+  assert.match(html, /id="serpLimitation"/);
+  assert.match(html, /SerpRealityView\?\.serpRealitySummary/);
+  const calls = [...html.matchAll(/submitSeoResearchRequest\("serpWeakness"/g)];
+  assert.equal(calls.length, 1);
+  assert.match(html, /当前请求不包含逐页 Top 10 URL/);
+});
