@@ -158,6 +158,10 @@ export function createCompetitorKeywordTable({
   locationLike = globalThis.location,
   documentLike = globalThis.document,
   requestAnimationFrameImpl = globalThis.requestAnimationFrame,
+  eventTarget = globalThis.window,
+  customEventFactory = (type, detail) => typeof globalThis.CustomEvent === "function"
+    ? new globalThis.CustomEvent(type, { detail })
+    : { type, detail },
 } = {}) {
   let rows = [];
   let page = 1;
@@ -240,10 +244,16 @@ export function createCompetitorKeywordTable({
   });
 
   return Object.freeze({
-    setRows(nextRows) {
+    setRows(nextRows, metadata = {}) {
       rows = Array.isArray(nextRows) ? nextRows : [];
       page = 1;
-      return render();
+      const model = render();
+      eventTarget?.dispatchEvent?.(customEventFactory("seo-pro-v2:competitor-snapshot-ready", {
+        ...metadata,
+        domain: metadata.domain || competitorDomainInput?.value || "",
+        top_keywords: rows,
+      }));
+      return model;
     },
     render,
   });

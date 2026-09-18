@@ -321,9 +321,61 @@ test("V2 competitor snapshot mounts the local pager and describes the 50-keyword
   assert.match(html, /gapFilterInput:document.getElementById\("gapFilter"\)/);
   assert.match(html, /gapForm:document.getElementById\("gapForm"\)/);
   assert.match(html, /v2-competitor-keywords\.js/);
-  assert.match(html, /competitorKeywordTable\.setRows\(data\.top_keywords\|\|\[\]\)/);
+  assert.match(html, /competitorKeywordTable\.setRows\(data\.top_keywords\|\|\[\],\{domain:data\.domain,organic,intelligence:data\.intelligence\}\)/);
   assert.match(html, /最多 50 个排名关键词/);
 
   const pagerSource = await readFile(new URL("../public/v2-competitor-keywords.js", import.meta.url), "utf8");
   assert.doesNotMatch(pagerSource, /\bfetch\s*\(|submitSeoResearchRequest|\/api\//);
+});
+
+
+test("competitor table emits snapshot metadata locally without a request", async () => {
+  const { createCompetitorKeywordTable } = await import("../public/v2-competitor-keywords.js");
+  const body = fakeElement("tbody");
+  const previousButton = fakeElement("button");
+  const nextButton = fakeElement("button");
+  const pageLabel = fakeElement("span");
+  const queryInput = fakeElement("input");
+  const intentSelect = fakeElement("select");
+  const presetSelect = fakeElement("select");
+  const sortSelect = fakeElement("select");
+  const keywordInput = fakeElement("input");
+  const competitorDomainInput = fakeElement("input");
+  const gapCompetitorInput = fakeElement("input");
+  const gapFilterInput = fakeElement("input");
+  const gapForm = fakeElement("form");
+  competitorDomainInput.value = "competitor.example";
+  presetSelect.value = "all";
+  sortSelect.value = "position";
+  const events = [];
+  const eventTarget = { dispatchEvent(event) { events.push(event); } };
+  const table = createCompetitorKeywordTable({
+    body,
+    previousButton,
+    nextButton,
+    pageLabel,
+    keywordInput,
+    queryInput,
+    intentSelect,
+    presetSelect,
+    sortSelect,
+    competitorDomainInput,
+    gapCompetitorInput,
+    gapFilterInput,
+    gapForm,
+    documentLike: { createElement: fakeElement },
+    eventTarget,
+    customEventFactory(type, detail) { return { type, detail }; },
+  });
+  const rows = [{ keyword: "waterproof membrane", position: 2 }];
+  table.setRows(rows, {
+    domain: "competitor.example",
+    intelligence: { score: 80 },
+    organic: { ranked_keywords: 1000 },
+  });
+  assert.equal(events.length, 1);
+  assert.equal(events[0].type, "seo-pro-v2:competitor-snapshot-ready");
+  assert.equal(events[0].detail.domain, "competitor.example");
+  assert.equal(events[0].detail.intelligence.score, 80);
+  assert.deepEqual(events[0].detail.top_keywords, rows);
 });

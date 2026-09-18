@@ -24,6 +24,7 @@ import {
   readClusterSerpVerificationContext,
   requestClusterIntelligenceReturn,
 } from "./v2-keyword-library.js";
+import { mountCompetitorIntelligence } from "./v2-competitor-intelligence-ui.js";
 
 export const V2_VIEWS = Object.freeze([
   { id: "overview", label: "总览", group: "primary" },
@@ -1211,7 +1212,7 @@ function buildShell() {
   annotateExistingTools(content);
   markDomainFields(content);
   const keywordResearchWorkspace = createKeywordResearchWorkspace(content);
-  createCompetitorResearchWorkspace(content);
+  const competitorWorkspace = createCompetitorResearchWorkspace(content);
   createBacklinkResearchWorkspace(content);
   createOpportunityWorkspace(content);
   createWebsiteDataWorkspace(content);
@@ -1331,6 +1332,7 @@ function buildShell() {
   const gate = window.__seoProV2ResearchGate;
   let dashboardCleanup = () => {};
   let keywordLibraryCleanup = () => {};
+  let competitorIntelligenceCleanup = () => {};
   let clusterSerpVerificationCleanup = () => {};
   const marketInitialization = createMarketInitializationCoordinator({
     initialize: () => initializeSites(shell),
@@ -1341,6 +1343,8 @@ function buildShell() {
       dashboardCleanup = mountDashboard({ root: shell, context, fetchImpl });
       keywordLibraryCleanup();
       keywordLibraryCleanup = mountKeywordLibrary({ root: shell, context, fetchImpl });
+      competitorIntelligenceCleanup();
+      competitorIntelligenceCleanup = mountCompetitorIntelligence({ root: shell, competitorWorkspace });
       clusterSerpVerificationCleanup();
       clusterSerpVerificationCleanup = mountClusterSerpVerificationFlow({
         root: shell,
