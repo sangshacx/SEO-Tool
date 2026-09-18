@@ -1,0 +1,31 @@
+name: Apply Top 10 SERP Competitors UI
+on:
+  push:
+    branches: [seo-pro-v2]
+    paths:
+      - ".github/workflows/apply-serp-competitors-ui.yml"
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: seo-pro-v2
+      - name: Apply Top 10 SERP UI
+        run: python .github/scripts/apply-serp-competitors-ui.py
+      - name: Run regression tests
+        run: |
+          git diff --check
+          node --test
+      - name: Commit and clean up
+        run: |
+          rm .github/workflows/apply-serp-competitors-ui.yml
+          rm .github/scripts/apply-serp-competitors-ui.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/v2.html public/v2-shell.js tests/v2-market-request-wiring.test.mjs tests/serp-competitors.test.mjs .github/workflows/cloudflare-preview-migrate.yml .github/workflows/apply-serp-competitors-ui.yml .github/scripts/apply-serp-competitors-ui.py
+          git commit -m "feat: expose guarded Top 10 SERP competitors"
+          git push origin HEAD:seo-pro-v2
