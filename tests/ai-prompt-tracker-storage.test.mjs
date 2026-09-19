@@ -139,3 +139,65 @@ test("Custom Prompt Tracker status changes are site-scoped", async () => {
   });
   assert.equal(active.length,0);
 });
+
+
+test("Saved Prompt list calculates mention rate, citation rate, cumulative spend and latest signal change from D1 only", async () => {
+  const { d1 } = await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const tracker=await upsertAiPromptTracker(d1,{
+    siteDomain:"example.com",
+    name:"Trend prompt",
+    platform:"chat_gpt",
+    modelName:"gpt-4.1-mini",
+    prompt:"Which waterproofing manufacturers are commonly recommended?",
+    webSearch:true,
+    locationCode:2840,
+    languageCode:"en",
+  });
+
+  await recordAiPromptObservation(d1,{
+    siteDomain:"example.com",
+    trackerId:tracker.id,
+    observedAt:"2026-09-18T08:00:00.000Z",
+    actualCostUsd:0.004,
+    result:{
+      model_name:"gpt-4.1-mini",
+      target_domain_mentioned:true,
+      target_domain_cited:true,
+      annotations:[{domain:"example.com"}],
+      input_tokens:100,
+      output_tokens:200,
+    },
+  });
+  await recordAiPromptObservation(d1,{
+    siteDomain:"example.com",
+    trackerId:tracker.id,
+    observedAt:"2026-09-19T08:00:00.000Z",
+    actualCostUsd:0.005,
+    result:{
+      model_name:"gpt-4.1-mini",
+      target_domain_mentioned:true,
+      target_domain_cited:false,
+      annotations:[{domain:"industry.example"}],
+      input_tokens:120,
+      output_tokens:220,
+    },
+  });
+
+  const [row]=await listAiPromptTrackers(d1,{
+    siteDomain:"example.com",
+    locationCode:2840,
+    languageCode:"en",
+  });
+
+  assert.equal(row.observation_count,2);
+  assert.equal(row.trend.mention_observation_count,2);
+  assert.equal(row.trend.citation_observation_count,1);
+  assert.equal(row.trend.mention_rate_percent,100);
+  assert.equal(row.trend.citation_rate_percent,50);
+  assert.equal(row.trend.total_actual_cost_usd,0.009);
+  assert.equal(row.trend.change.code,"citation_lost");
+  assert.equal(row.trend.change.kind,"negative");
+  assert.equal(row.trend.latest_observed_at,"2026-09-19T08:00:00.000Z");
+  assert.equal(row.trend.previous_observed_at,"2026-09-18T08:00:00.000Z");
+});
