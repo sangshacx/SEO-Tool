@@ -83,3 +83,15 @@ test("Opportunity Center exposes zero-cost persistent workflow controls without 
   assert.doesNotMatch(opportunityUiSource,/allow_live_request/);
   assert.doesNotMatch(opportunityUiSource,/provider_requests\s*:/);
 });
+
+
+test("Decision Queue distinguishes visible Top 5 from active candidates and hidden workflow items", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/data-v2-action-queue-count/);
+  assert.match(markup,/data-v2-action-queue-candidates/);
+  assert.match(markup,/data-v2-action-queue-hidden/);
+  assert.match(markup,/active candidates/);
+  assert.match(markup,/hidden/);
+  assert.match(opportunityUiSource,/workflow_summary\?\.active_candidates/);
+  assert.match(opportunityUiSource,/workflow_summary\?\.suppressed/);
+});
