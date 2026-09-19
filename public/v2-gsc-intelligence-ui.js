@@ -105,7 +105,7 @@ export function gscPerformancePanelMarkup() {
         </div>
         <div class="v2-organic-table-shell">
           <table class="v2-organic-table v2-gsc-page-query-table">
-            <thead><tr><th>Query</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Position</th><th>Clicks Change</th><th>Action</th></tr></thead>
+            <thead><tr><th>Query</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Position</th><th>Clicks Change</th><th>Action</th><th>Next</th></tr></thead>
             <tbody data-v2-gsc-page-query-body></tbody>
           </table>
         </div>
@@ -179,7 +179,7 @@ export function mountGscPerformanceTab({
   const renderHead = () => {
     head.innerHTML = activeView === "pages"
       ? "<tr><th>Page</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Position</th><th>Clicks Change</th><th>Action</th><th>Queries</th></tr>"
-      : "<tr><th>Query</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Position</th><th>Clicks Change</th><th>Action</th></tr>";
+      : "<tr><th>Query</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Position</th><th>Clicks Change</th><th>Action</th><th>Next</th></tr>";
     viewButtons.forEach((button) => button.classList.toggle("active", button.dataset.v2GscPerformanceView === activeView));
   };
 
@@ -209,7 +209,7 @@ export function mountGscPerformanceTab({
     if (!rows.length) {
       const tr = document.createElement("tr");
       const td = document.createElement("td");
-      td.colSpan = activeView === "pages" ? 8 : 7;
+      td.colSpan = 8;
       td.className = "v2-organic-empty";
       td.textContent = data?.latest_date
         ? "当前窗口没有可展示的 GSC 行。"
@@ -253,7 +253,14 @@ export function mountGscPerformanceTab({
         queries.append(button);
         tr.append(primary, clicks, impressions, ctr, position, change, action, queries);
       } else {
-        tr.append(primary, clicks, impressions, ctr, position, change, action);
+        const next = document.createElement("td");
+        const research = document.createElement("button");
+        research.type = "button";
+        research.className = "v2-gsc-page-queries";
+        research.dataset.v2GscResearchKeyword = item.primary_key || "";
+        research.textContent = "Research";
+        next.append(research);
+        tr.append(primary, clicks, impressions, ctr, position, change, action, next);
       }
       body.append(tr);
     });
@@ -322,7 +329,7 @@ export function mountGscPerformanceTab({
     const domain = ownDomain();
     pageQueryPanel.hidden = false;
     pageQueryUrl.textContent = pageUrl;
-    pageQueryBody.innerHTML = '<tr><td colspan="7" class="v2-organic-empty">正在读取页面 Queries…</td></tr>';
+    pageQueryBody.innerHTML = '<tr><td colspan="8" class="v2-organic-empty">正在读取页面 Queries…</td></tr>';
     try {
       const query = new URLSearchParams({
         site_domain: domain,
@@ -335,7 +342,7 @@ export function mountGscPerformanceTab({
       pageQueryBody.replaceChildren();
       const rows = payload.data?.rows ?? [];
       if (!rows.length) {
-        pageQueryBody.innerHTML = '<tr><td colspan="7" class="v2-organic-empty">当前已存数据没有这个页面的 Query+Page 行。</td></tr>';
+        pageQueryBody.innerHTML = '<tr><td colspan="8" class="v2-organic-empty">当前已存数据没有这个页面的 Query+Page 行。</td></tr>';
         return;
       }
       rows.forEach((item) => {
@@ -356,11 +363,18 @@ export function mountGscPerformanceTab({
         });
         const action = document.createElement("td");
         action.append(actionBadge(document, item.action));
-        tr.append(action);
+        const next = document.createElement("td");
+        const research = document.createElement("button");
+        research.type = "button";
+        research.className = "v2-gsc-page-queries";
+        research.dataset.v2GscResearchKeyword = item.primary_key || "";
+        research.textContent = "Research";
+        next.append(research);
+        tr.append(action, next);
         pageQueryBody.append(tr);
       });
     } catch (error) {
-      pageQueryBody.innerHTML = '<tr><td colspan="7" class="v2-organic-empty">' + (error.message || "Page Queries 读取失败") + "</td></tr>";
+      pageQueryBody.innerHTML = '<tr><td colspan="8" class="v2-organic-empty">' + (error.message || "Page Queries 读取失败") + "</td></tr>";
     }
   };
 
@@ -440,9 +454,29 @@ export function mountGscPerformanceTab({
   settings.addEventListener("click", () => {
     if (locationLike) locationLike.hash = "settings";
   }, { signal });
+  const researchKeyword = (keyword) => {
+    const value = String(keyword || "").trim();
+    if (!value) return;
+    const input = section.closest(".v2-app-shell")?.querySelector("#keyword") || document.querySelector("#keyword");
+    if (input) {
+      input.value = value;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    if (locationLike) locationLike.hash = "keywords";
+  };
+
   body.addEventListener("click", (event) => {
+    const research = event.target.closest("[data-v2-gsc-research-keyword]");
+    if (research) {
+      researchKeyword(research.dataset.v2GscResearchKeyword);
+      return;
+    }
     const button = event.target.closest("[data-v2-gsc-page-queries]");
     if (button) loadPageQueries(button.dataset.v2GscPageQueries);
+  }, { signal });
+  pageQueryBody.addEventListener("click", (event) => {
+    const research = event.target.closest("[data-v2-gsc-research-keyword]");
+    if (research) researchKeyword(research.dataset.v2GscResearchKeyword);
   }, { signal });
   pageQueryClose.addEventListener("click", () => { pageQueryPanel.hidden = true; }, { signal });
 
