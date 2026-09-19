@@ -18,6 +18,7 @@ import {
 import { findLocation } from "../../../../src/v2/markets/catalog.js";
 import { normalizeMarketRequest } from "../../../../src/v2/markets/request-market.js";
 import { recordApiUsage } from "../../../../src/v2/storage/keyword-overview.js";
+import { getAiPromptTracker, recordAiPromptObservation } from "../../../../src/v2/storage/ai-prompt-tracker.js";
 
 const ENDPOINT_NAME="ai_optimization/llm_responses/live";
 const MAX_OUTPUT_TOKENS=1024;
@@ -84,6 +85,15 @@ function validate(body){
     throw error;
   }
   const location=findLocation(locationCode);
+  const trackerId=body?.tracker_id==null||body?.tracker_id===""
+    ? null
+    : Number(body.tracker_id);
+  if(trackerId!==null&&(!Number.isInteger(trackerId)||trackerId<=0)){
+    const error=new Error("tracker_id must be a positive integer.");
+    error.code="INVALID_TRACKER_ID";
+    error.httpStatus=400;
+    throw error;
+  }
   return{
     target,
     platform,
@@ -93,6 +103,7 @@ function validate(body){
     languageCode,
     countryIsoCode:location?.country_iso_code??null,
     webSearch:body?.web_search!==false,
+    trackerId,
   };
 }
 
@@ -119,6 +130,49 @@ export async function onRequestPost({request,env}){
       },
       meta:{request_id:requestId,actual_cost_usd:0,provider_requests:0},
     },known?error.httpStatus:error?.httpStatus??400);
+  }
+
+  let tracker=null;
+  if(scope.trackerId!==null){
+    if(!env?.DB){
+      return json({
+        ok:false,
+        error:{code:"BINDING_MISSING",message:"Preview DB binding is required for a saved Prompt Tracker run."},
+        meta:{request_id:requestId,actual_cost_usd:0,provider_requests:0},
+      },503);
+    }
+    tracker=await getAiPromptTracker(env.DB,{
+      siteDomain:scope.target,
+      trackerId:scope.trackerId,
+    });
+    if(!tracker){
+      return json({
+        ok:false,
+        error:{code:"TRACKER_NOT_FOUND",message:"The saved Prompt Tracker item was not found for this site."},
+        meta:{request_id:requestId,actual_cost_usd:0,provider_requests:0},
+      },404);
+    }
+    if(tracker.status!=="active"){
+      return json({
+        ok:false,
+        error:{code:"TRACKER_PAUSED",message:"This Prompt Tracker is paused. Resume it before running a paid observation."},
+        meta:{request_id:requestId,actual_cost_usd:0,provider_requests:0},
+      },409);
+    }
+    const matches=
+      tracker.platform===scope.platform &&
+      tracker.model_name===scope.modelName &&
+      tracker.prompt===scope.prompt &&
+      tracker.web_search===scope.webSearch &&
+      Number(tracker.location_code)===scope.locationCode &&
+      tracker.language_code===scope.languageCode;
+    if(!matches){
+      return json({
+        ok:false,
+        error:{code:"TRACKER_CONFIG_MISMATCH",message:"The current Prompt Test configuration does not match the saved Tracker. Save it as a new Tracker or reload the saved configuration."},
+        meta:{request_id:requestId,actual_cost_usd:0,provider_requests:0},
+      },409);
+    }
   }
 
   const cacheInput={
@@ -154,6 +208,8 @@ export async function onRequestPost({request,env}){
         actual_cost_usd:0,
         provider_requests:0,
         cache_ttl_days:PROMPT_RESULT_CACHE_TTL_SECONDS/86400,
+        observation_recorded:false,
+        tracker_id:scope.trackerId,
         duration_ms:Date.now()-startedAt,
       },
     });
@@ -212,6 +268,17 @@ export async function onRequestPost({request,env}){
     const cachedAt=new Date().toISOString();
     await writePromptResultCache(env.CACHE,cacheInput,provider.data,{cachedAt});
 
+    let observation=null;
+    if(tracker&&env?.DB){
+      observation=await recordAiPromptObservation(env.DB,{
+        siteDomain:scope.target,
+        trackerId:tracker.id,
+        result:provider.data,
+        actualCostUsd:provider.actualCostUsd,
+        observedAt:cachedAt,
+      });
+    }
+
     await logUsage(env,{
       requestId,
       taskCount:provider.taskCount,
@@ -234,6 +301,9 @@ export async function onRequestPost({request,env}){
         provider_requests:1+modelLookup.providerRequests,
         paid_provider_requests:1,
         free_model_provider_requests:modelLookup.providerRequests,
+        tracker_id:tracker?.id??null,
+        observation_recorded:Boolean(observation),
+        observation_id:observation?.id??null,
         max_output_tokens:MAX_OUTPUT_TOKENS,
         model_list_cache_hours:PROMPT_MODELS_CACHE_TTL_SECONDS/3600,
         cache_ttl_days:PROMPT_RESULT_CACHE_TTL_SECONDS/86400,
