@@ -258,4 +258,9 @@ test("Opportunity API returns recent D1 workflow activity without any provider r
   assert.equal(payload.data.workflow_activity[0].priority_score,78);
   assert.equal(payload.data.workflow_activity[1].from_status,null);
   assert.equal(payload.data.workflow_activity[1].to_status,"in_progress");
+  assert.equal(payload.data.workflow_stats.current.done,1);
+  assert.equal(payload.data.workflow_stats.current.total,1);
+  assert.equal(payload.data.workflow_stats.last_7_days.started,1);
+  assert.equal(payload.data.workflow_stats.last_7_days.completed,1);
+  assert.equal(payload.data.workflow_stats.last_30_days.completed,1);
 });
