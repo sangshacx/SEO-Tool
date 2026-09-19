@@ -235,3 +235,40 @@ test("LLM Mentions platform changes do not reinitialize independent Custom Promp
   assert.doesNotMatch(block,/loadPromptModels/);
   assert.doesNotMatch(block,/renderPromptTestResult/);
 });
+
+
+test("AI Visibility separates first-party GSC Generative AI filtered Search Analytics from provider AI visibility", () => {
+  assert.match(ui,/\/api\/v2\/gsc\/generative-ai-sync/);
+  assert.match(ui,/FIRST-PARTY · GOOGLE SEARCH CONSOLE/);
+  assert.match(ui,/Generative AI Search Appearance/);
+  assert.match(ui,/Refresh D1 · \$0/);
+  assert.match(ui,/Filtered Impressions · 28d/);
+  assert.match(ui,/Filtered Clicks · 28d/);
+  assert.match(ui,/Selected Appearance/);
+  assert.match(ui,/data-v2-ai-gsc-pages/);
+  assert.match(ui,/selected searchAppearance/);
+  assert.match(ui,/filtered Search Analytics/);
+  assert.match(ui,/不是推算的 AI traffic/);
+  assert.doesNotMatch(ui,/subtract.*traffic|traffic.*subtract/i);
+});
+
+test("AI Visibility first-party GSC panel reads D1 only and renders top filtered pages without using the paid Cost Guard", () => {
+  const start=ui.indexOf("const loadGscGenerative");
+  const end=ui.indexOf("const loadComparison",start);
+  const block=ui.slice(start,end);
+  assert.match(block,/getJson\(fetchImpl, ENDPOINTS\.gscGenerative/);
+  assert.match(block,/days: "28"/);
+  assert.match(block,/limit: "10"/);
+  assert.doesNotMatch(block,/ensureLive/);
+  assert.doesNotMatch(block,/allow_live_request/);
+  assert.doesNotMatch(block,/force_refresh/);
+  assert.match(ui,/summary\?\.pages/);
+  assert.match(ui,/summary\.coverage_days/);
+});
+
+test("AI Visibility styles the first-party GSC panel as a distinct source surface", () => {
+  assert.match(css,/\.v2-ai-gsc-generative/);
+  assert.match(css,/\.v2-ai-gsc-note/);
+  assert.match(css,/\.v2-ai-gsc-generative \.v2-ai-metrics/);
+  assert.match(css,/\.v2-ai-gsc-generative a/);
+});
