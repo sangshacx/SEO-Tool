@@ -211,3 +211,58 @@ export async function upsertSeoActionWorkflow(db, input) {
   `).bind(row.id).first();
   return rowToWorkflow(saved);
 }
+
+
+export async function getSeoActionWorkflowStats(db, siteDomain) {
+  const currentRows = await db.prepare(`
+    SELECT w.status, COUNT(*) AS total
+    FROM seo_action_workflow w
+    JOIN site_profiles sp ON sp.id = w.site_profile_id
+    WHERE sp.domain = ?
+    GROUP BY w.status
+  `).bind(siteDomain).all();
+
+  const current = { new: 0, in_progress: 0, done: 0, snoozed: 0, total: 0 };
+  for (const row of currentRows?.results ?? []) {
+    const status = String(row.status || "");
+    const total = Number(row.total ?? 0);
+    if (Object.hasOwn(current, status)) current[status] = total;
+    current.total += total;
+  }
+
+  const recent = await db.prepare(`
+    SELECT
+      COUNT(*) AS events_7d,
+      SUM(CASE WHEN e.to_status = 'in_progress' THEN 1 ELSE 0 END) AS started_7d,
+      SUM(CASE WHEN e.to_status = 'done' THEN 1 ELSE 0 END) AS completed_7d,
+      SUM(CASE WHEN e.to_status = 'snoozed' THEN 1 ELSE 0 END) AS snoozed_7d,
+      SUM(CASE WHEN e.to_status = 'new' AND e.from_status IS NOT NULL THEN 1 ELSE 0 END) AS reopened_7d
+    FROM seo_action_workflow_events e
+    JOIN site_profiles sp ON sp.id = e.site_profile_id
+    WHERE sp.domain = ?
+      AND e.created_at >= datetime('now', '-7 days')
+  `).bind(siteDomain).first();
+
+  const month = await db.prepare(`
+    SELECT
+      SUM(CASE WHEN e.to_status = 'done' THEN 1 ELSE 0 END) AS completed_30d
+    FROM seo_action_workflow_events e
+    JOIN site_profiles sp ON sp.id = e.site_profile_id
+    WHERE sp.domain = ?
+      AND e.created_at >= datetime('now', '-30 days')
+  `).bind(siteDomain).first();
+
+  return {
+    current,
+    last_7_days: {
+      events: Number(recent?.events_7d ?? 0),
+      started: Number(recent?.started_7d ?? 0),
+      completed: Number(recent?.completed_7d ?? 0),
+      snoozed: Number(recent?.snoozed_7d ?? 0),
+      reopened: Number(recent?.reopened_7d ?? 0),
+    },
+    last_30_days: {
+      completed: Number(month?.completed_30d ?? 0),
+    },
+  };
+}
