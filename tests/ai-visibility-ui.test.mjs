@@ -88,6 +88,11 @@ test("AI Visibility UI is cache-first and makes paid refresh explicit", () => {
   assert.match(ui, /\/api\/v2\/ai\/visibility/);
   assert.match(ui, /\/api\/v2\/ai\/compare/);
   assert.match(ui, /\/api\/v2\/ai\/pages/);
+  assert.match(ui, /\/api\/v2\/ai\/history/);
+  assert.match(ui, /读取 D1 · \$0/);
+  assert.match(ui, /回填 Historical/);
+  assert.match(ui, /回填 New\/Lost/);
+  assert.match(ui, /series === "new_lost"/);
 });
 
 test("AI Visibility stylesheet is loaded and defines the dedicated workspace primitives", () => {
@@ -96,4 +101,5 @@ test("AI Visibility stylesheet is loaded and defines the dedicated workspace pri
   assert.match(css, /\.v2-ai-cost-guard/);
   assert.match(css, /\.v2-ai-metrics/);
   assert.match(css, /\.v2-ai-tablewrap/);
+  assert.match(css, /\.v2-ai-history-note/);
 });
