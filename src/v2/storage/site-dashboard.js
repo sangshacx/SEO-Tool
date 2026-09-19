@@ -226,13 +226,24 @@ function backlinksPoint(row) {
 
 export async function readDashboardHistory(db, inputScope, rangeDays = 365) {
   const scope = normalizeDashboardScope(inputScope);
-  const cutoff = new Date(Date.now() - Number(rangeDays) * 86400000).toISOString();
-  const rowsResult = await db.prepare(
-    `SELECT modules_json, captured_at
-     FROM site_dashboard_snapshots
-     WHERE site_domain = ? AND location_code = ? AND language_code = ? AND captured_at >= ?
-     ORDER BY captured_at ASC, id ASC`,
-  ).bind(scope.domain, scope.location_code, scope.language_code, cutoff).all();
+  const days = Number(rangeDays);
+  let rowsResult;
+  if (days > 0) {
+    const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+    rowsResult = await db.prepare(
+      `SELECT modules_json, captured_at
+       FROM site_dashboard_snapshots
+       WHERE site_domain = ? AND location_code = ? AND language_code = ? AND captured_at >= ?
+       ORDER BY captured_at ASC, id ASC`,
+    ).bind(scope.domain, scope.location_code, scope.language_code, cutoff).all();
+  } else {
+    rowsResult = await db.prepare(
+      `SELECT modules_json, captured_at
+       FROM site_dashboard_snapshots
+       WHERE site_domain = ? AND location_code = ? AND language_code = ?
+       ORDER BY captured_at ASC, id ASC`,
+    ).bind(scope.domain, scope.location_code, scope.language_code).all();
+  }
 
   const parsed = [];
   for (const row of rowsResult.results ?? []) {
