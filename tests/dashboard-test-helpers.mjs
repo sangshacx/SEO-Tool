@@ -10,6 +10,7 @@ const MIGRATIONS = [
   "0008_site_dashboard_snapshots.sql",
   "0009_nullable_api_usage_task_count.sql",
   "0014_gsc_connections.sql",
+  "0015_gsc_search_analytics.sql",
 ];
 
 export function d1For(database, { before, after } = {}) {
