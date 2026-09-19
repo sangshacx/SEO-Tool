@@ -26,11 +26,13 @@ on:
       - tests/v2-shell-navigation.test.mjs
       - tests/v2-shell-ui.test.mjs
       - migrations/0015_gsc_search_analytics.sql
+      - migrations/0021_gsc_search_appearance_capabilities.sql
       - src/v2/gsc/sync-plan.js
       - src/v2/storage/gsc-search-analytics.js
       - functions/api/v2/gsc/sync.js
       - tests/gsc-sync-plan.test.mjs
       - tests/gsc-search-analytics-storage.test.mjs
+      - tests/gsc-generative-ai-capability.test.mjs
       - tests/gsc-sync-api.test.mjs
       - src/v2/gsc/intelligence.js
       - src/v2/gsc/cannibalization.js
@@ -65,4 +67,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 10 GSC provider tests
-        run: node --test tests/google-search-console-provider.test.mjs tests/secret-crypto.test.mjs tests/google-oauth.test.mjs tests/gsc-oauth-state.test.mjs tests/gsc-connections-storage.test.mjs tests/gsc-connect-api.test.mjs tests/gsc-settings-ui.test.mjs tests/v2-shell-navigation.test.mjs tests/v2-shell-ui.test.mjs tests/gsc-sync-plan.test.mjs tests/gsc-search-analytics-storage.test.mjs tests/gsc-sync-api.test.mjs tests/gsc-intelligence.test.mjs tests/gsc-intelligence-api.test.mjs tests/gsc-intelligence-ui.test.mjs tests/organic-shell-integration.test.mjs tests/organic-opportunities.test.mjs tests/organic-opportunities-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/gsc-cannibalization.test.mjs
+        run: node --test tests/google-search-console-provider.test.mjs tests/secret-crypto.test.mjs tests/google-oauth.test.mjs tests/gsc-oauth-state.test.mjs tests/gsc-connections-storage.test.mjs tests/gsc-connect-api.test.mjs tests/gsc-settings-ui.test.mjs tests/v2-shell-navigation.test.mjs tests/v2-shell-ui.test.mjs tests/gsc-sync-plan.test.mjs tests/gsc-search-analytics-storage.test.mjs tests/gsc-generative-ai-capability.test.mjs tests/gsc-sync-api.test.mjs tests/gsc-intelligence.test.mjs tests/gsc-intelligence-api.test.mjs tests/gsc-intelligence-ui.test.mjs tests/organic-shell-integration.test.mjs tests/organic-opportunities.test.mjs tests/organic-opportunities-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/gsc-cannibalization.test.mjs
