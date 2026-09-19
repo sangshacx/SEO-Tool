@@ -5,6 +5,8 @@ import { normalizeMarketRequest } from "../../../../src/v2/markets/request-marke
 import { normalizeRelevantPagesDomain } from "../../../../src/v2/providers/dataforseo-relevant-pages.js";
 import { readGscIntelligence } from "../../../../src/v2/storage/gsc-search-analytics.js";
 import { enrichGscIntelligenceRows } from "../../../../src/v2/gsc/intelligence.js";
+import { applyDecisionWorkflow } from "../../../../src/v2/intelligence/decision-workflow.js";
+import { listSeoActionWorkflow } from "../../../../src/v2/storage/seo-action-workflow.js";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=UTF-8",
@@ -55,7 +57,7 @@ export async function onRequestPost({ request, env }) {
     return json({ ok: false, error: { code: "VALIDATION_ERROR", field: "market", message: "Select a supported country and language combination." } }, 400);
   }
 
-  const managed = await env.DB.prepare("SELECT domain FROM site_profiles WHERE domain = ? LIMIT 1").bind(domain).first();
+  const managed = await env.DB.prepare("SELECT id, domain FROM site_profiles WHERE domain = ? LIMIT 1").bind(domain).first();
   if (!managed?.domain) {
     return json({
       ok: false,
@@ -132,7 +134,7 @@ export async function onRequestPost({ request, env }) {
       query_page_rows: gscQueryPageRows.length,
     } : null,
   };
-  const data = buildOrganicOpportunities({
+  const rawData = buildOrganicOpportunities({
     target: domain,
     keywordRows: keywords?.data?.items ?? [],
     pageRows: pages?.data?.items ?? [],
@@ -140,6 +142,24 @@ export async function onRequestPost({ request, env }) {
     gscQueryPageRows,
     sources,
   });
+
+  let workflowRows = [];
+  let workflowSource = "d1";
+  try {
+    workflowRows = await listSeoActionWorkflow(env.DB, domain);
+  } catch (error) {
+    workflowSource = "unavailable";
+    console.error(JSON.stringify({
+      message: "Decision workflow read failed",
+      request_id: requestId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+  const data = applyDecisionWorkflow(rawData, workflowRows, new Date());
+  data.workflow_summary = {
+    ...(data.workflow_summary ?? {}),
+    source: workflowSource,
+  };
   const missing = [];
   if (!keywords) missing.push("organic_keywords");
   if (!pages) missing.push("top_pages");
