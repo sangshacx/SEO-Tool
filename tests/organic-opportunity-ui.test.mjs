@@ -126,3 +126,17 @@ test("Opportunity Center shows zero-cost SEO workflow execution statistics", () 
   assert.match(opportunityUiSource,/last_7_days/);
   assert.match(opportunityUiSource,/last_30_days/);
 });
+
+
+test("Workflow tasks support editable notes and preserve notes on ordinary status changes", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/<th>Note<\/th>/);
+  assert.match(opportunityUiSource,/Add Note/);
+  assert.match(opportunityUiSource,/Edit Note/);
+  assert.match(opportunityUiSource,/Save Note/);
+  assert.match(opportunityUiSource,/data-v2-workflow-note-input/);
+  assert.match(opportunityUiSource,/data-v2-workflow-note-save/);
+  assert.match(opportunityUiSource,/Object\.hasOwn\(extra,"note"\)/);
+  assert.match(opportunityUiSource,/payload\.note=extra\.note/);
+  assert.match(opportunityUiSource,/note updated/);
+});
