@@ -88,3 +88,11 @@ test("Site Explorer mounts D1-first GSC Performance with explicit Google sync", 
   assert.match(gscUi, /Sync latest finalized day · \$0/);
   assert.match(gscUi, /GSC 不用于竞争对手域名/);
 });
+
+
+test("GSC Performance hands real queries into Keyword Explorer without an extra Google request", () => {
+  assert.match(gscUi, /data-v2-gsc-research-keyword/);
+  assert.match(gscUi, /querySelector\("#keyword"\)/);
+  assert.match(gscUi, /locationLike\.hash = "keywords"/);
+  assert.match(gscUi, /View Queries/);
+});
