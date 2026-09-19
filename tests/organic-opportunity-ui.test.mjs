@@ -192,7 +192,7 @@ test("AI recovery tasks route to AI Visibility instead of pretending the workflo
   assert.match(opportunityUiSource,/v2OpportunityAiVisibility/);
   assert.match(opportunityUiSource,/Open AI Visibility/);
   assert.match(opportunityUiSource,/globalThis\.location\.hash="ai-visibility"/);
-  assert.match(opportunityUiSource,/\["dataforseo_ai_history","ai_prompt_tracker_d1"\]\.includes\(item\.query_source\)|\["dataforseo_ai_history", "ai_prompt_tracker_d1"\]\.includes\(item\.query_source\)/);
+  assert.match(opportunityUiSource,/gsc_generative_ai_d1/);
   assert.match(opportunityUiSource,/nextBestOpenPage\.hidden = aiWorkspace/);
 });
 
@@ -207,7 +207,9 @@ test("Opportunity Center exposes Prompt Tracker D1 evidence and routes Prompt lo
   assert.match(opportunityUiSource,/ai_prompt_tracker_d1/);
   assert.match(opportunityUiSource,/ai_prompt_recovery/);
   assert.match(opportunityUiSource,/Prompt Tracker · D1/);
-  assert.match(opportunityUiSource,/\["dataforseo_ai_history","ai_prompt_tracker_d1"\]|\["dataforseo_ai_history", "ai_prompt_tracker_d1"\]/);
+  assert.match(opportunityUiSource,/dataforseo_ai_history/);
+  assert.match(opportunityUiSource,/ai_prompt_tracker_d1/);
+  assert.match(opportunityUiSource,/gsc_generative_ai_d1/);
   assert.match(opportunityUiSource,/Open AI Visibility/);
 });
 
