@@ -110,3 +110,19 @@ test("Opportunity Center renders recent D1 workflow activity without another ext
   assert.match(opportunityUiSource,/v2-workflow-transition/);
   assert.match(opportunityUiSource,/events\.slice\(0,10\)/);
 });
+
+
+test("Opportunity Center shows zero-cost SEO workflow execution statistics", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/Completed · 7d/);
+  assert.match(markup,/Started · 7d/);
+  assert.match(markup,/In Progress/);
+  assert.match(markup,/Snoozed/);
+  assert.match(markup,/Completed · 30d/);
+  for(const key of ["completed_7d","started_7d","in_progress","snoozed","completed_30d"]){
+    assert.match(markup,new RegExp('data-v2-workflow-stat="'+key+'"'));
+  }
+  assert.match(opportunityUiSource,/workflow_stats/);
+  assert.match(opportunityUiSource,/last_7_days/);
+  assert.match(opportunityUiSource,/last_30_days/);
+});
