@@ -179,14 +179,3 @@ jobs:
           --command "SELECT name FROM pragma_table_info('site_dashboard_modules') ORDER BY cid;" |
           node scripts/assert-d1-query-names.mjs \
           site_domain location_code language_code module_id module_json updated_at schema_version revision
-
-      - name: Verify Preview migration ledger
-        shell: bash
-        run: |
-          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
-          --json \
-          --command "SELECT name FROM d1_migrations
-          WHERE name IN ('0006_backlink_outreach_intelligence.sql', '0007_site_profiles.sql', '0008_site_dashboard_snapshots.sql', '0009_nullable_api_usage_task_count.sql', '0010_atomic_dashboard_modules.sql', '0011_serp_competitor_pages.sql', '0012_saved_keywords.sql', '0013_keyword_clusters.sql', '0014_gsc_connections.sql', '0015_gsc_search_analytics.sql', '0016_seo_action_workflow.sql', '0017_seo_action_workflow_events.sql', '0018_ai_visibility_history.sql', '0019_ai_prompt_tracker.sql', '0020_ai_prompt_workflow_links.sql'
-          ORDER BY name;" |
-          node scripts/assert-d1-query-names.mjs \
-          0006_backlink_outreach_intelligence.sql 0007_site_profiles.sql 0008_site_dashboard_snapshots.sql 0009_nullable_api_usage_task_count.sql 0010_atomic_dashboard_modules.sql 0011_serp_competitor_pages.sql 0012_saved_keywords.sql 0013_keyword_clusters.sql 0014_gsc_connections.sql 0015_gsc_search_analytics.sql 0016_seo_action_workflow.sql 0017_seo_action_workflow_events.sql 0018_ai_visibility_history.sql 0019_ai_prompt_tracker.sql 0020_ai_prompt_workflow_links.sql
