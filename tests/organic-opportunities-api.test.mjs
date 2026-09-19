@@ -49,7 +49,7 @@ test("Opportunity Center reads the deepest compatible keyword and page caches wi
   assert.equal(payload.data.ready,true);
   assert.equal(payload.data.sources.organic_keywords.depth,1000);
   assert.equal(payload.data.sources.top_pages.depth,500);
-  assert.equal(payload.data.opportunities[0].action.code,"optimize");
+  assert.equal(payload.data.opportunities[0].action.code,"ctr_opportunity");
   assert.equal(payload.meta.actual_cost_usd,0);
   assert.equal(payload.meta.provider_requests,0);
 });
@@ -99,7 +99,7 @@ test("Opportunity Center fuses stored GSC pages at zero provider cost", async (c
   assert.equal(payload.data.sources.gsc_pages.latest_date,"2026-09-16");
   assert.equal(payload.data.opportunities[0].evidence.gsc_pages,true);
   assert.ok(payload.data.opportunities[0].components.gsc_reality_points>0);
-  assert.equal(payload.data.opportunities[0].action.code,"optimize");
+  assert.equal(payload.data.opportunities[0].action.code,"ctr_opportunity");
   assert.equal(payload.meta.source,"cache_d1_only");
   assert.equal(payload.meta.actual_cost_usd,0);
   assert.equal(payload.meta.provider_requests,0);
