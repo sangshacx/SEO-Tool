@@ -341,6 +341,7 @@ export async function readSeoActionOutcomes(db, siteDomain, {
       ON latest.event_id = e.id
     WHERE e.site_profile_id = ?
       AND e.action_code NOT LIKE 'ai_%'
+      AND e.action_code <> 'gsc_generative_recovery'
     ORDER BY e.id DESC
     LIMIT ?
   `).bind(site.id, boundedLimit).all();
