@@ -111,3 +111,21 @@ test("GSC Outcome Validation excludes AI workflow actions so AI tasks are not ju
   assert.equal(outcomes[0].action_code,"optimize");
   assert.equal(outcomes.some((item)=>String(item.action_code).startsWith("ai_")),false);
 });
+
+
+test("normal GSC Outcome Validation excludes GSC Generative recovery workflows", async () => {
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  await upsertSeoActionWorkflow(d1,{
+    site_domain:"example.com",
+    page_url:"https://example.com/",
+    action_code:"gsc_generative_recovery",
+    query:"GSC Generative · AI_OVERVIEW",
+    status:"done",
+    note:"",
+    snooze_until:null,
+    priority_score:84,
+  });
+  const outcomes=await readSeoActionOutcomes(d1,"example.com",{limit:10,windowDays:7});
+  assert.equal(outcomes.some((item)=>item.action_code==="gsc_generative_recovery"),false);
+});
