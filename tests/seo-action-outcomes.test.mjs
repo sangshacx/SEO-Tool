@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { summarizeSeoActionOutcome } from "../src/v2/intelligence/seo-action-outcomes.js";
+import { dashboardDatabase, seedProfile } from "./dashboard-test-helpers.mjs";
+import { readSeoActionOutcomes, upsertSeoActionWorkflow } from "../src/v2/storage/seo-action-workflow.js";
 
 const event={
   event_id:11,
@@ -76,4 +78,36 @@ test("SEO action outcomes wait for enough post-completion coverage before treati
     windowDays:7,
   });
   assert.equal(noBaseline.status,"insufficient_baseline");
+});
+
+
+test("GSC Outcome Validation excludes AI workflow actions so AI tasks are not judged by unrelated search-console metrics", async () => {
+  const { d1 }=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+
+  await upsertSeoActionWorkflow(d1,{
+    site_domain:"example.com",
+    page_url:"https://example.com/page/",
+    action_code:"optimize",
+    query:"waterproof membrane",
+    status:"done",
+    note:"",
+    snooze_until:null,
+    priority_score:70,
+  });
+  await upsertSeoActionWorkflow(d1,{
+    site_domain:"example.com",
+    page_url:"https://example.com/",
+    action_code:"ai_visibility_recovery",
+    query:"AI visibility · google",
+    status:"done",
+    note:"",
+    snooze_until:null,
+    priority_score:78,
+  });
+
+  const outcomes=await readSeoActionOutcomes(d1,"example.com",{limit:10,windowDays:7});
+  assert.equal(outcomes.length,1);
+  assert.equal(outcomes[0].action_code,"optimize");
+  assert.equal(outcomes.some((item)=>String(item.action_code).startsWith("ai_")),false);
 });
