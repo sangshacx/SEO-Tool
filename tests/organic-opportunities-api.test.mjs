@@ -105,3 +105,97 @@ test("Opportunity Center fuses stored GSC pages at zero provider cost", async (c
   assert.equal(payload.meta.provider_requests,0);
   assert.equal(calls,0);
 });
+
+
+test("Opportunity API joins stored GSC Query+Page rows with same-page DataForSEO metrics without provider calls", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let calls=0;
+  globalThis.fetch=async()=>{calls+=1;throw new Error("provider must not execute");};
+
+  const { d1 }=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const site=await d1.prepare("SELECT id FROM site_profiles WHERE domain = ?").bind("example.com").first();
+  await replaceGscAnalyticsPartition(d1,{
+    siteProfileId:site.id,
+    property:"sc-domain:example.com",
+    date:"2026-09-16",
+    dimensionSet:"query_page",
+    rows:[
+      {
+        query:"waterproof membrane supplier",
+        page:"https://example.com/page/",
+        clicks:6,
+        impressions:420,
+        ctr:6/420,
+        position:9,
+      },
+    ],
+  });
+
+  const keywordKey=buildOrganicKeywordsCacheKey({
+    target:"example.com",
+    locationCode:2840,
+    languageCode:"en",
+    historicalSerpMode:"live",
+    depth:1000,
+  });
+  const pagesKey=buildOrganicPagesCacheKey({
+    target:"example.com",
+    locationCode:2840,
+    languageCode:"en",
+    depth:500,
+  });
+  const cache=memoryCache({
+    [keywordKey]:{
+      data:{items:[
+        {
+          keyword:"waterproof membrane supplier",
+          ranking_url:"https://example.com/page/",
+          position:18,
+          search_volume:500,
+          keyword_difficulty:28,
+          estimated_traffic:5,
+          cpc_usd:2.4,
+          intent:{primary:"commercial"},
+        },
+      ]},
+      cached_at:"2026-09-19T01:00:00.000Z",
+    },
+    [pagesKey]:{
+      data:{items:[
+        {
+          url:"https://example.com/page/",
+          organic_traffic:80,
+          organic_keywords:12,
+          positions:{top_10:3},
+          changes:{up:0,down:0,lost:0},
+        },
+      ]},
+      cached_at:"2026-09-19T01:05:00.000Z",
+    },
+  });
+
+  const response=await onRequestPost({
+    request:request({target:"example.com",location_code:2840,language_code:"en"}),
+    env:{DB:d1,CACHE:cache},
+  });
+  const payload=await response.json();
+  assert.equal(response.status,200);
+  assert.equal(payload.meta.source,"cache_d1_only");
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+  assert.equal(calls,0);
+  assert.equal(payload.data.formula.version,"organic-opportunity-v0.3");
+  assert.equal(payload.data.sources.gsc_pages.available,true);
+  assert.equal(payload.data.sources.gsc_pages.query_page_rows,1);
+
+  const page=payload.data.opportunities.find((row)=>row.url==="https://example.com/page/");
+  assert.ok(page);
+  assert.equal(page.action.code,"optimize");
+  assert.equal(page.metrics.gsc_query_opportunities,1);
+  assert.equal(page.gsc_query_opportunities[0].keyword,"waterproof membrane supplier");
+  assert.equal(page.gsc_query_opportunities[0].provider_match,true);
+  assert.equal(page.gsc_query_opportunities[0].search_volume,500);
+  assert.equal(page.gsc_query_opportunities[0].keyword_difficulty,28);
+});
