@@ -48,3 +48,35 @@ test("Opportunity Center can synthesize page opportunities from Organic Keywords
   assert.equal(data.opportunities[0].metrics.organic_keywords,null);
   assert.equal(data.opportunities[0].metrics.sampled_keywords,1);
 });
+
+
+test("GSC page reality is an additive adjustment and never changes the no-GSC base score", () => {
+  const input={
+    target:"example.com",
+    sources:{top_pages:{available:true}},
+    pageRows:[{url:"https://example.com/page/",organic_traffic:50,organic_keywords:5,positions:{top_10:1},changes:{up:0,down:0,lost:0}}],
+  };
+  const base=buildOrganicOpportunities(input);
+  const combined=buildOrganicOpportunities({
+    ...input,
+    sources:{top_pages:{available:true},gsc_pages:{available:true}},
+    gscPageRows:[{
+      primary_key:"https://example.com/page/",
+      clicks:10,
+      impressions:500,
+      position:8,
+      previous_clicks:20,
+      previous_impressions:400,
+      change:{clicks_percent:-50},
+    }],
+  });
+  assert.equal(base.formula.version,"organic-opportunity-v0.2");
+  assert.equal(base.opportunities[0].components.gsc_reality_points,0);
+  assert.equal(base.opportunities[0].priority_score,base.opportunities[0].components.base_score);
+  assert.ok(combined.opportunities[0].components.gsc_reality_points>0);
+  assert.ok(combined.opportunities[0].priority_score>base.opportunities[0].priority_score);
+  assert.equal(combined.opportunities[0].action.code,"recover");
+  assert.equal(combined.opportunities[0].evidence.gsc_pages,true);
+  assert.equal(combined.opportunities[0].metrics.gsc_impressions,500);
+  assert.equal(combined.opportunities[0].confidence,"high");
+});
