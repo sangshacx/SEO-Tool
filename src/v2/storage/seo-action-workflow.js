@@ -116,6 +116,9 @@ export async function upsertSeoActionWorkflow(db, input) {
   const site = await resolveSiteProfile(db, input.site_domain);
   const previous = await readWorkflowIdentity(db, site.id, input);
   const nextSnoozeUntil = input.status === "snoozed" ? input.snooze_until : null;
+  const nextNote = input.note_provided === false
+    ? (previous?.note ?? "")
+    : (input.note ?? "");
 
   const row = await db.prepare(`
     INSERT INTO seo_action_workflow (
@@ -147,7 +150,7 @@ export async function upsertSeoActionWorkflow(db, input) {
     input.action_code,
     input.query ?? "",
     input.status,
-    input.note ?? "",
+    nextNote,
     nextSnoozeUntil,
     input.priority_score ?? null,
   ).first();
@@ -157,7 +160,7 @@ export async function upsertSeoActionWorkflow(db, input) {
   const changed =
     !previous ||
     previous.status !== input.status ||
-    (previous.note ?? "") !== (input.note ?? "") ||
+    (previous.note ?? "") !== nextNote ||
     (previous.snooze_until ?? null) !== (nextSnoozeUntil ?? null);
 
   if (changed) {
@@ -183,7 +186,7 @@ export async function upsertSeoActionWorkflow(db, input) {
       input.query ?? "",
       previous?.status ?? null,
       input.status,
-      input.note ?? "",
+      nextNote,
       nextSnoozeUntil,
       input.priority_score ?? previous?.last_priority_score ?? null,
     ).run();
