@@ -1,4 +1,5 @@
 import { summarizeAiPromptTrend } from "../intelligence/ai-prompt-trends.js";
+import { summarizeAiPromptWorkflowOutcome } from "../intelligence/ai-prompt-outcomes.js";
 
 function integer(value) {
   const number = Number(value);
@@ -358,4 +359,126 @@ export async function listAiPromptObservations(db, {
     actual_cost_usd: row.actual_cost_usd == null ? null : Number(row.actual_cost_usd),
     model_money_spent_usd: row.model_money_spent_usd == null ? null : Number(row.model_money_spent_usd),
   }));
+}
+
+
+export async function linkAiPromptWorkflow(db, {
+  siteDomain,
+  workflowId,
+  trackerId,
+} = {}) {
+  const site = await resolveSite(db, siteDomain);
+  if (!site?.id) {
+    const error = new Error("Prompt workflow link requires a saved own-site profile.");
+    error.code = "MANAGED_SITE_REQUIRED";
+    error.httpStatus = 409;
+    throw error;
+  }
+  const workflow = await db.prepare(`
+    SELECT id, action_code
+    FROM seo_action_workflow
+    WHERE id = ? AND site_profile_id = ?
+    LIMIT 1
+  `).bind(Number(workflowId), site.id).first();
+  if (!workflow?.id || workflow.action_code !== "ai_prompt_recovery") {
+    const error = new Error("Prompt workflow link requires an AI Prompt recovery workflow.");
+    error.code = "INVALID_PROMPT_WORKFLOW";
+    error.httpStatus = 400;
+    throw error;
+  }
+  const tracker = await getAiPromptTracker(db, { siteDomain, trackerId });
+  if (!tracker) {
+    const error = new Error("Prompt Tracker item was not found for this site.");
+    error.code = "TRACKER_NOT_FOUND";
+    error.httpStatus = 404;
+    throw error;
+  }
+  await db.prepare(`
+    INSERT INTO ai_prompt_workflow_links (workflow_id, tracker_id)
+    VALUES (?, ?)
+    ON CONFLICT(workflow_id)
+    DO UPDATE SET tracker_id = excluded.tracker_id, updated_at = CURRENT_TIMESTAMP
+  `).bind(workflow.id, tracker.id).run();
+  return { workflow_id: Number(workflow.id), tracker_id: Number(tracker.id) };
+}
+
+function outcomeObservation(row) {
+  if (!row?.id) return null;
+  return {
+    id: Number(row.id),
+    observed_at: row.observed_at,
+    target_domain_mentioned: row.target_domain_mentioned == null ? null : Number(row.target_domain_mentioned) === 1,
+    target_domain_cited: row.target_domain_cited == null ? null : Number(row.target_domain_cited) === 1,
+    citation_count: Number(row.citation_count ?? 0),
+    actual_cost_usd: row.actual_cost_usd == null ? null : Number(row.actual_cost_usd),
+  };
+}
+
+export async function readAiPromptWorkflowOutcomes(db, {
+  siteDomain,
+  limit = 10,
+} = {}) {
+  const site = await resolveSite(db, siteDomain);
+  if (!site?.id) return [];
+  const boundedLimit = Math.max(1, Math.min(25, Number(limit) || 10));
+
+  const done = await db.prepare(`
+    SELECT
+      e.id AS event_id,
+      e.workflow_id,
+      e.query_text,
+      e.created_at,
+      l.tracker_id,
+      t.name AS tracker_name,
+      t.platform,
+      t.model_name,
+      t.prompt_text
+    FROM seo_action_workflow_events e
+    JOIN (
+      SELECT workflow_id, MAX(id) AS event_id
+      FROM seo_action_workflow_events
+      WHERE to_status = 'done' AND action_code = 'ai_prompt_recovery'
+      GROUP BY workflow_id
+    ) latest ON latest.event_id = e.id
+    JOIN ai_prompt_workflow_links l ON l.workflow_id = e.workflow_id
+    JOIN ai_prompt_trackers t ON t.id = l.tracker_id
+    WHERE e.site_profile_id = ?
+    ORDER BY e.id DESC
+    LIMIT ?
+  `).bind(site.id, boundedLimit).all();
+
+  const outcomes = [];
+  for (const event of done?.results ?? []) {
+    const baselineRow = await db.prepare(`
+      SELECT id, observed_at, target_domain_mentioned, target_domain_cited,
+             citation_count, actual_cost_usd
+      FROM ai_prompt_observations
+      WHERE tracker_id = ? AND datetime(observed_at) <= datetime(?)
+      ORDER BY datetime(observed_at) DESC, id DESC
+      LIMIT 1
+    `).bind(event.tracker_id, event.created_at).first();
+
+    const postRow = await db.prepare(`
+      SELECT id, observed_at, target_domain_mentioned, target_domain_cited,
+             citation_count, actual_cost_usd
+      FROM ai_prompt_observations
+      WHERE tracker_id = ? AND datetime(observed_at) > datetime(?)
+      ORDER BY datetime(observed_at) ASC, id ASC
+      LIMIT 1
+    `).bind(event.tracker_id, event.created_at).first();
+
+    outcomes.push(summarizeAiPromptWorkflowOutcome({
+      event,
+      tracker: {
+        id: event.tracker_id,
+        name: event.tracker_name,
+        prompt: event.prompt_text,
+        platform: event.platform,
+        model_name: event.model_name,
+      },
+      baseline: outcomeObservation(baselineRow),
+      post: outcomeObservation(postRow),
+    }));
+  }
+  return outcomes;
 }
