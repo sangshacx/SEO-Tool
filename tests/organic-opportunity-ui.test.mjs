@@ -210,3 +210,28 @@ test("Opportunity Center exposes Prompt Tracker D1 evidence and routes Prompt lo
   assert.match(opportunityUiSource,/\["dataforseo_ai_history","ai_prompt_tracker_d1"\]|\["dataforseo_ai_history", "ai_prompt_tracker_d1"\]/);
   assert.match(opportunityUiSource,/Open AI Visibility/);
 });
+
+
+test("Opportunity Center keeps GSC and AI Prompt outcome validation in separate observational sections", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/完成后的 GSC 表现变化/);
+  assert.match(markup,/AI OUTCOME VALIDATION · D1/);
+  assert.match(markup,/完成后的 Prompt mention \/ citation 变化/);
+  assert.match(markup,/data-v2-ai-prompt-outcome-recovered/);
+  assert.match(markup,/data-v2-ai-prompt-outcomes-body/);
+  assert.match(opportunityUiSource,/ai_prompt_workflow_outcomes/);
+  assert.match(opportunityUiSource,/ai_prompt_workflow_outcome_summary/);
+  assert.match(opportunityUiSource,/citation_recovered/);
+  assert.match(opportunityUiSource,/waiting_for_post_observation/);
+  assert.match(opportunityUiSource,/模型回答变化不证明/);
+});
+
+test("AI Prompt outcome styling distinguishes recovered, lost and waiting observations", async () => {
+  const css=await readFile(new URL("../public/v2-organic-intelligence.css",import.meta.url),"utf8");
+  assert.match(css,/data-outcome="citation_recovered"/);
+  assert.match(css,/data-outcome="mention_recovered"/);
+  assert.match(css,/data-outcome="citation_lost"/);
+  assert.match(css,/data-outcome="mention_lost"/);
+  assert.match(css,/data-outcome="waiting_for_post_observation"/);
+  assert.match(css,/\.v2-ai-prompt-outcome-prompt/);
+});
