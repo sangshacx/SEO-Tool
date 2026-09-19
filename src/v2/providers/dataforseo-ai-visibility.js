@@ -10,10 +10,13 @@ export const AI_VISIBILITY_HISTORY_ENDPOINT =
   "https://api.dataforseo.com/v3/ai_optimization/llm_mentions/historical/live";
 export const AI_VISIBILITY_NEW_LOST_ENDPOINT =
   "https://api.dataforseo.com/v3/ai_optimization/llm_mentions/timeseries_new_lost/live";
+export const AI_VISIBILITY_SEARCH_MENTIONS_ENDPOINT =
+  "https://api.dataforseo.com/v3/ai_optimization/llm_mentions/search_mentions/live";
 
 export const AI_VISIBILITY_PLATFORMS = Object.freeze(["google", "chat_gpt"]);
 export const AI_VISIBILITY_TOP_PAGE_LIMITS = Object.freeze([10, 25, 50, 100]);
 export const AI_VISIBILITY_HISTORY_MONTHS = Object.freeze([0, 6, 12]);
+export const AI_VISIBILITY_MENTION_LIMITS = Object.freeze([10, 25, 50]);
 
 export class AiVisibilityProviderError extends Error {
   constructor(message, details = {}) {
@@ -603,5 +606,156 @@ export async function fetchAiVisibilityNewLost({
     actualCostUsd: response.actualCostUsd,
     taskCount: Number.isInteger(response.payload?.tasks_count) ? response.payload.tasks_count : 1,
     resultCount: points.length,
+  };
+}
+
+
+function boundedText(value, maxLength) {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!text) return null;
+  return text.length > maxLength ? text.slice(0, maxLength).trimEnd() + "…" : text;
+}
+
+function normalizeMentionSource(source = {}) {
+  const url = typeof source?.url === "string" ? source.url.trim() : "";
+  return {
+    rank: finite(source?.rank),
+    title: boundedText(source?.title, 300),
+    domain: typeof source?.domain === "string" ? source.domain.trim().toLowerCase() : null,
+    url: /^https?:\/\//i.test(url) ? url : null,
+    source_name: boundedText(source?.source_name, 160),
+    snippet: boundedText(source?.snippet, 600),
+    publication_date: typeof source?.publication_date === "string" ? source.publication_date : null,
+  };
+}
+
+function normalizeSearchResult(item = {}) {
+  const url = typeof item?.url === "string" ? item.url.trim() : "";
+  return {
+    rank: finite(item?.rank),
+    title: boundedText(item?.title, 300),
+    domain: typeof item?.domain === "string" ? item.domain.trim().toLowerCase() : null,
+    url: /^https?:\/\//i.test(url) ? url : null,
+    description: boundedText(item?.description, 600),
+  };
+}
+
+function normalizeMentionItem(item = {}, targetDomain) {
+  const sources = (Array.isArray(item?.sources) ? item.sources : [])
+    .slice(0, 12)
+    .map(normalizeMentionSource);
+  const searchResults = (Array.isArray(item?.search_results) ? item.search_results : [])
+    .slice(0, 12)
+    .map(normalizeSearchResult);
+  const targetSourceCount = sources.filter((source) =>
+    source.domain === targetDomain || source.domain?.endsWith("." + targetDomain)
+  ).length;
+  return {
+    platform: item?.platform ?? null,
+    model_name: item?.model_name ?? null,
+    location_code: finite(item?.location_code),
+    language_code: item?.language_code ?? null,
+    question: boundedText(item?.question, 600),
+    answer_excerpt: boundedText(item?.answer, 4000),
+    sources,
+    target_source_count: targetSourceCount,
+    search_results: searchResults,
+    ai_search_volume: finite(item?.ai_search_volume),
+    monthly_searches: (Array.isArray(item?.monthly_searches) ? item.monthly_searches : [])
+      .slice(-24)
+      .map((row) => ({
+        year: finite(row?.year),
+        month: finite(row?.month),
+        search_volume: finite(row?.search_volume),
+      })),
+    first_response_at: item?.first_response_at ?? null,
+    last_response_at: item?.last_response_at ?? null,
+    brand_entities: (Array.isArray(item?.brand_entities) ? item.brand_entities : [])
+      .slice(0, 10)
+      .map((row) => ({
+        rank: finite(row?.rank),
+        title: boundedText(row?.title, 200),
+        category: boundedText(row?.category, 200),
+      })),
+    fan_out_queries: (Array.isArray(item?.fan_out_queries) ? item.fan_out_queries : [])
+      .slice(0, 10)
+      .map((row) => boundedText(typeof row === "string" ? row : row?.query ?? row?.keyword, 300))
+      .filter(Boolean),
+    is_web_search_based: typeof item?.is_web_search_based === "boolean" ? item.is_web_search_based : null,
+  };
+}
+
+export async function fetchAiVisibilityMentionExplorer({
+  login,
+  password,
+  target,
+  platform,
+  locationCode,
+  languageCode,
+  limit = 25,
+}) {
+  const domain = normalizeAiVisibilityDomain(target);
+  if (!domain) {
+    throw new AiVisibilityProviderError("A valid root domain is required.", {
+      code: "INVALID_PROVIDER_TARGET",
+      httpStatus: 400,
+    });
+  }
+  const depth = Number(limit);
+  if (!AI_VISIBILITY_MENTION_LIMITS.includes(depth)) {
+    throw new AiVisibilityProviderError("Choose a supported AI mention depth.", {
+      code: "INVALID_PROVIDER_LIMIT",
+      httpStatus: 400,
+    });
+  }
+  const market = normalizeAiVisibilityMarket({ platform, locationCode, languageCode });
+  const task = {
+    target: [{
+      domain,
+      search_filter: "include",
+      search_scope: ["sources"],
+      include_subdomains: true,
+    }],
+    platform: market.platform,
+    location_code: market.locationCode,
+    language_code: market.languageCode,
+    order_by: ["ai_search_volume,desc"],
+    offset: 0,
+    limit: depth,
+    tag: "seo-pro-v2-ai-citation-explorer",
+  };
+
+  const response = await requestLlmMentions({
+    login,
+    password,
+    endpoint: AI_VISIBILITY_SEARCH_MENTIONS_ENDPOINT,
+    task,
+    errorMessage: "DataForSEO could not complete the AI citation explorer request.",
+  });
+  const result = response.result;
+  const items = (Array.isArray(result?.items) ? result.items : [])
+    .map((item) => normalizeMentionItem(item, domain))
+    .filter((item) => item.question || item.sources.length);
+
+  return {
+    data: {
+      target: domain,
+      platform: market.platform,
+      location_code: market.locationCode,
+      language_code: market.languageCode,
+      depth,
+      total_count: finite(result?.total_count),
+      returned_count: items.length,
+      current_offset: finite(result?.current_offset) ?? 0,
+      search_after_token: result?.search_after_token ?? null,
+      items,
+      generated_at: new Date().toISOString(),
+      disclaimer:
+        "Citation Explorer returns indexed LLM responses where the target domain appears in cited sources. Answer excerpts are truncated for bounded caching and do not represent live model output.",
+    },
+    actualCostUsd: response.actualCostUsd,
+    taskCount: Number.isInteger(response.payload?.tasks_count) ? response.payload.tasks_count : 1,
+    resultCount: items.length,
   };
 }
