@@ -8,6 +8,7 @@ import { dashboardDatabase, memoryCache, seedProfile } from "./dashboard-test-he
 import { replaceGscAnalyticsPartition } from "../src/v2/storage/gsc-search-analytics.js";
 import { upsertSeoActionWorkflow } from "../src/v2/storage/seo-action-workflow.js";
 import { persistAiVisibilityHistorical, persistAiVisibilityNewLost } from "../src/v2/storage/ai-visibility.js";
+import { recordAiPromptObservation, upsertAiPromptTracker } from "../src/v2/storage/ai-prompt-tracker.js";
 
 function request(body){
   return new Request("https://preview.example/api/v2/organic/opportunities",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
@@ -472,4 +473,112 @@ test("Opportunity API keeps positive AI visibility history descriptive and does 
   assert.equal(payload.data.sources.ai_visibility.available,true);
   assert.equal(payload.data.ai_visibility_summary.candidate_count,0);
   assert.equal(payload.data.action_queue.some((item)=>item.action==="ai_visibility_recovery"),false);
+});
+
+
+test("Opportunity API converts a repeated Saved Prompt citation loss into a zero-cost recovery action", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let calls=0;
+  globalThis.fetch=async()=>{calls+=1;throw new Error("provider must not execute");};
+
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const tracker=await upsertAiPromptTracker(d1,{
+    siteDomain:"example.com",
+    name:"Supplier recommendations",
+    platform:"chat_gpt",
+    modelName:"gpt-4.1-mini",
+    prompt:"Which waterproof membrane manufacturers should buyers consider?",
+    webSearch:true,
+    locationCode:2840,
+    languageCode:"en",
+  });
+  await recordAiPromptObservation(d1,{
+    siteDomain:"example.com",
+    trackerId:tracker.id,
+    observedAt:"2026-09-18T08:00:00.000Z",
+    actualCostUsd:0.004,
+    result:{
+      model_name:"gpt-4.1-mini",
+      target_domain_mentioned:true,
+      target_domain_cited:true,
+      annotations:[{domain:"example.com"}],
+    },
+  });
+  await recordAiPromptObservation(d1,{
+    siteDomain:"example.com",
+    trackerId:tracker.id,
+    observedAt:"2026-09-19T08:00:00.000Z",
+    actualCostUsd:0.005,
+    result:{
+      model_name:"gpt-4.1-mini",
+      target_domain_mentioned:true,
+      target_domain_cited:false,
+      annotations:[{domain:"industry.example"}],
+    },
+  });
+
+  const response=await onRequestPost({
+    request:request({target:"example.com",location_code:2840,language_code:"en"}),
+    env:{DB:d1,CACHE:memoryCache()},
+  });
+  const payload=await response.json();
+
+  assert.equal(response.status,200);
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+  assert.equal(calls,0);
+  assert.equal(payload.data.sources.ai_prompt_tracker.available,true);
+  assert.equal(payload.data.sources.ai_prompt_tracker.tracked_prompts,1);
+  assert.equal(payload.data.sources.ai_prompt_tracker.observed_prompts,1);
+  assert.equal(payload.data.ai_prompt_tracker_summary.candidate_count,1);
+  assert.equal(payload.data.ai_prompt_tracker_summary.total_observations,2);
+  assert.equal(payload.data.ai_prompt_tracker_summary.total_actual_cost_usd,0.009);
+
+  const action=payload.data.action_queue.find((item)=>item.action==="ai_prompt_recovery");
+  assert.ok(action);
+  assert.equal(action.query_source,"ai_prompt_tracker_d1");
+  assert.equal(action.evidence.tracker_id,tracker.id);
+  assert.equal(action.evidence.change_code,"citation_lost");
+  assert.equal(action.page,"https://example.com/");
+  assert.match(payload.data.supplemental_signals.ai_prompt_tracker.disclaimer,/not proof/);
+});
+
+test("Opportunity API does not create Prompt recovery from a single observation", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  globalThis.fetch=async()=>{throw new Error("provider must not execute");};
+
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const tracker=await upsertAiPromptTracker(d1,{
+    siteDomain:"example.com",
+    platform:"gemini",
+    modelName:"gemini-2.5-flash",
+    prompt:"Recommend waterproofing suppliers.",
+    webSearch:true,
+    locationCode:2840,
+    languageCode:"en",
+  });
+  await recordAiPromptObservation(d1,{
+    siteDomain:"example.com",
+    trackerId:tracker.id,
+    result:{
+      model_name:"gemini-2.5-flash",
+      target_domain_mentioned:false,
+      target_domain_cited:false,
+      annotations:[],
+    },
+  });
+
+  const response=await onRequestPost({
+    request:request({target:"example.com",location_code:2840,language_code:"en"}),
+    env:{DB:d1,CACHE:memoryCache()},
+  });
+  const payload=await response.json();
+  assert.equal(response.status,200);
+  assert.equal(payload.data.sources.ai_prompt_tracker.available,true);
+  assert.equal(payload.data.ai_prompt_tracker_summary.candidate_count,0);
+  assert.equal(payload.data.action_queue.some((item)=>item.action==="ai_prompt_recovery"),false);
 });
