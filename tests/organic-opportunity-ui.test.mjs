@@ -55,3 +55,16 @@ test("Opportunity Center exposes a unified transparent Next Best Action card", (
   assert.match(opportunityUiSource,/gsc_query_page/);
   assert.match(opportunityUiSource,/dataforseo_cache/);
 });
+
+
+test("Opportunity Center renders a Top 5 actionable queue separately from the full page table", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/TOP ACTION QUEUE/);
+  assert.match(markup,/data-v2-action-queue-count/);
+  assert.match(markup,/data-v2-action-queue-body/);
+  assert.match(markup,/Monitor 已排除/);
+  assert.match(opportunityUiSource,/action_queue/);
+  assert.match(opportunityUiSource,/v2-action-queue-workstream/);
+  assert.match(opportunityUiSource,/data-v2-opportunity-page/);
+  assert.match(opportunityUiSource,/data-v2-opportunity-keyword/);
+});
