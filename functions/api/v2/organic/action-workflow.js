@@ -33,8 +33,8 @@ function validPageForDomain(pageUrl, domain) {
   try {
     const url = new URL(pageUrl);
     if (!["http:", "https:"].includes(url.protocol)) return null;
-    const host = url.hostname.toLowerCase().replace(/^www./, "");
-    const target = String(domain).toLowerCase().replace(/^www./, "");
+    const host = url.hostname.toLowerCase().replace(/^www\\./, "");
+    const target = String(domain).toLowerCase().replace(/^www\\./, "");
     if (!(host === target || host.endsWith("." + target))) return null;
     url.hash = "";
     return url.toString();
@@ -45,7 +45,7 @@ function validPageForDomain(pageUrl, domain) {
 
 async function readBody(request) {
   const contentType = request.headers.get("content-type") ?? "";
-  if (!/^application/json(?:\s*;|$)/i.test(contentType)) {
+  if (!contentType.toLowerCase().startsWith("application/json")) {
     const error = new Error("Content-Type must be application/json.");
     error.code = "UNSUPPORTED_MEDIA_TYPE";
     error.httpStatus = 415;
