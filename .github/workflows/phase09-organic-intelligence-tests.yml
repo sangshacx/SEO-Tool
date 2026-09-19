@@ -8,9 +8,16 @@ on:
       - src/v2/providers/dataforseo-ranked-keywords.js
       - src/v2/organic/organic-keywords-cache.js
       - functions/api/v2/organic/keywords.js
+      - src/v2/intelligence/organic-keyword-actions.js
+      - public/v2-organic-intelligence.js
+      - public/v2-organic-intelligence.css
+      - public/v2-shell.js
       - tests/dataforseo-ranked-keywords.test.mjs
       - tests/organic-keywords-cache.test.mjs
       - tests/organic-keywords-api.test.mjs
+      - tests/organic-keyword-actions.test.mjs
+      - tests/organic-intelligence-ui.test.mjs
+      - tests/organic-shell-integration.test.mjs
       - .github/workflows/phase09-organic-intelligence-tests.yml
 
 permissions:
@@ -26,4 +33,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 09 Organic Intelligence tests
-        run: node --test tests/dataforseo-ranked-keywords.test.mjs tests/organic-keywords-cache.test.mjs tests/organic-keywords-api.test.mjs
+        run: node --test tests/dataforseo-ranked-keywords.test.mjs tests/organic-keywords-cache.test.mjs tests/organic-keywords-api.test.mjs tests/organic-keyword-actions.test.mjs tests/organic-intelligence-ui.test.mjs tests/organic-shell-integration.test.mjs
