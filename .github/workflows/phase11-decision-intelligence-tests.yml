@@ -30,6 +30,7 @@ on:
       - migrations/0014_gsc_connections.sql
       - migrations/0015_gsc_search_analytics.sql
       - migrations/0016_seo_action_workflow.sql
+      - migrations/0017_seo_action_workflow_events.sql
       - .github/workflows/phase11-decision-intelligence-tests.yml
 
 permissions:
