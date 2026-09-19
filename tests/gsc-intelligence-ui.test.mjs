@@ -1,6 +1,9 @@
+import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { gscCoverageLabel, gscPerformancePanelMarkup } from "../public/v2-gsc-intelligence-ui.js";
+
+const gscUiSource=await readFile(new URL("../public/v2-gsc-intelligence-ui.js",import.meta.url),"utf8");
 
 test("GSC Performance UI makes stored coverage explicit", () => {
   assert.equal(gscCoverageLabel({current_days:3,previous_days:2,requested_days:28}),"3 / 28 current days · 2 / 28 comparison days");
@@ -16,4 +19,17 @@ test("GSC Performance is D1-first and sync is explicit", () => {
   assert.match(markup,/Pages/);
   assert.match(markup,/Stored Coverage/);
   assert.match(markup,/GSC Settings/);
+});
+
+
+test("GSC Performance exposes Potential Cannibalization as a cautious review signal", () => {
+  const markup=gscPerformancePanelMarkup();
+  assert.match(markup,/Potential Cannibalization/);
+  assert.match(markup,/data-v2-gsc-performance-view="cannibalization"/);
+  assert.match(gscUiSource,/view=cannibalization|activeView === "cannibalization"/);
+  assert.match(gscUiSource,/Total Imp\./);
+  assert.match(gscUiSource,/Primary Page/);
+  assert.match(gscUiSource,/Competing Page/);
+  assert.match(gscUiSource,/Potential overlap · review signal only/);
+  assert.match(gscUiSource,/data-v2-gsc-research-keyword/);
 });
