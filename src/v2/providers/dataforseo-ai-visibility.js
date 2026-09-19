@@ -6,9 +6,14 @@ export const AI_VISIBILITY_MULTI_TARGET_METRICS_ENDPOINT =
   "https://api.dataforseo.com/v3/ai_optimization/llm_mentions/multi_target_metrics/live";
 export const AI_VISIBILITY_TOP_PAGES_ENDPOINT =
   "https://api.dataforseo.com/v3/ai_optimization/llm_mentions/top_mentioned_pages/live";
+export const AI_VISIBILITY_HISTORY_ENDPOINT =
+  "https://api.dataforseo.com/v3/ai_optimization/llm_mentions/historical/live";
+export const AI_VISIBILITY_NEW_LOST_ENDPOINT =
+  "https://api.dataforseo.com/v3/ai_optimization/llm_mentions/timeseries_new_lost/live";
 
 export const AI_VISIBILITY_PLATFORMS = Object.freeze(["google", "chat_gpt"]);
 export const AI_VISIBILITY_TOP_PAGE_LIMITS = Object.freeze([10, 25, 50, 100]);
+export const AI_VISIBILITY_HISTORY_MONTHS = Object.freeze([0, 6, 12]);
 
 export class AiVisibilityProviderError extends Error {
   constructor(message, details = {}) {
@@ -386,5 +391,217 @@ export async function fetchAiVisibilityTopMentionedPages({
     actualCostUsd: response.actualCostUsd,
     taskCount: Number.isInteger(response.payload?.tasks_count) ? response.payload.tasks_count : 1,
     resultCount: items.length,
+  };
+}
+
+
+const AI_VISIBILITY_HISTORY_START = "2025-08-01";
+
+function monthPercent(current, previous) {
+  const now = finite(current);
+  const before = finite(previous);
+  if (now === null || before === null || before === 0) return null;
+  return Math.round(((now - before) / Math.abs(before)) * 10000) / 100;
+}
+
+export function aiVisibilityHistoryDateRange(months = 12, now = new Date()) {
+  const requested = Number(months);
+  if (!AI_VISIBILITY_HISTORY_MONTHS.includes(requested)) {
+    throw new AiVisibilityProviderError("Choose 6, 12, or all available AI visibility history.", {
+      code: "INVALID_PROVIDER_RANGE",
+      httpStatus: 400,
+    });
+  }
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const start = requested === 0
+    ? new Date(AI_VISIBILITY_HISTORY_START + "T00:00:00Z")
+    : new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - requested + 1, 1));
+  const minimum = new Date(AI_VISIBILITY_HISTORY_START + "T00:00:00Z");
+  const boundedStart = start < minimum ? minimum : start;
+  return {
+    dateFrom: boundedStart.toISOString().slice(0, 10),
+    dateTo: end.toISOString().slice(0, 10),
+  };
+}
+
+function normalizeHistoricalPoints(items) {
+  const points = (Array.isArray(items) ? items : [])
+    .map((item) => {
+      const year = Number(item?.year);
+      const month = Number(item?.month);
+      if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
+      return {
+        period: String(year).padStart(4, "0") + "-" + String(month).padStart(2, "0"),
+        mentions: finite(item?.metrics?.mentions),
+        ai_search_volume: finite(item?.metrics?.ai_search_volume),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.period.localeCompare(b.period));
+
+  return points.map((point, index) => {
+    const previous = points[index - 1] ?? null;
+    return {
+      ...point,
+      change: {
+        mentions_percent: previous ? monthPercent(point.mentions, previous.mentions) : null,
+        ai_search_volume_percent: previous ? monthPercent(point.ai_search_volume, previous.ai_search_volume) : null,
+      },
+    };
+  });
+}
+
+function normalizeNewLostPoints(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => {
+      const date = typeof item?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(item.date)
+        ? item.date
+        : null;
+      if (!date) return null;
+      const newMentions = finite(item?.new_mentions) ?? 0;
+      const lostMentions = finite(item?.lost_mentions) ?? 0;
+      const newVolume = finite(item?.new_ai_search_volume) ?? 0;
+      const lostVolume = finite(item?.lost_ai_search_volume) ?? 0;
+      return {
+        date,
+        new_mentions: newMentions,
+        lost_mentions: lostMentions,
+        net_mentions: newMentions - lostMentions,
+        new_ai_search_volume: newVolume,
+        lost_ai_search_volume: lostVolume,
+        net_ai_search_volume: newVolume - lostVolume,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+export async function fetchAiVisibilityHistorical({
+  login,
+  password,
+  target,
+  platform,
+  locationCode,
+  languageCode,
+  months = 12,
+  now = new Date(),
+}) {
+  const domain = normalizeAiVisibilityDomain(target);
+  if (!domain) {
+    throw new AiVisibilityProviderError("A valid root domain is required.", {
+      code: "INVALID_PROVIDER_TARGET",
+      httpStatus: 400,
+    });
+  }
+  const market = normalizeAiVisibilityMarket({ platform, locationCode, languageCode });
+  const { dateFrom, dateTo } = aiVisibilityHistoryDateRange(months, now);
+  const task = {
+    target: [{
+      domain,
+      search_filter: "include",
+      include_subdomains: false,
+    }],
+    platform: market.platform,
+    location_code: market.locationCode,
+    language_code: market.languageCode,
+    date_from: dateFrom,
+    date_to: dateTo,
+    tag: "seo-pro-v2-ai-visibility-history",
+  };
+
+  const response = await requestLlmMentions({
+    login,
+    password,
+    endpoint: AI_VISIBILITY_HISTORY_ENDPOINT,
+    task,
+    errorMessage: "DataForSEO could not complete the AI visibility historical request.",
+  });
+  const result = response.result;
+  const points = normalizeHistoricalPoints(result?.items);
+
+  return {
+    data: {
+      target: domain,
+      platform: market.platform,
+      location_code: market.locationCode,
+      language_code: market.languageCode,
+      months: Number(months),
+      date_from: dateFrom,
+      date_to: dateTo,
+      points,
+      returned_count: points.length,
+      generated_at: new Date().toISOString(),
+      disclaimer:
+        "AI Visibility Historical is DataForSEO month-level indexed LLM mention history. It describes observed mentions and AI search volume, not visits or causal SEO impact.",
+    },
+    actualCostUsd: response.actualCostUsd,
+    taskCount: Number.isInteger(response.payload?.tasks_count) ? response.payload.tasks_count : 1,
+    resultCount: points.length,
+  };
+}
+
+export async function fetchAiVisibilityNewLost({
+  login,
+  password,
+  target,
+  platform,
+  locationCode,
+  languageCode,
+  months = 12,
+  now = new Date(),
+}) {
+  const domain = normalizeAiVisibilityDomain(target);
+  if (!domain) {
+    throw new AiVisibilityProviderError("A valid root domain is required.", {
+      code: "INVALID_PROVIDER_TARGET",
+      httpStatus: 400,
+    });
+  }
+  const market = normalizeAiVisibilityMarket({ platform, locationCode, languageCode });
+  const { dateFrom, dateTo } = aiVisibilityHistoryDateRange(months, now);
+  const task = {
+    target: [{
+      domain,
+      search_filter: "include",
+      include_subdomains: false,
+    }],
+    platform: market.platform,
+    location_code: market.locationCode,
+    language_code: market.languageCode,
+    date_from: dateFrom,
+    date_to: dateTo,
+    group_range: "month",
+    tag: "seo-pro-v2-ai-visibility-new-lost",
+  };
+
+  const response = await requestLlmMentions({
+    login,
+    password,
+    endpoint: AI_VISIBILITY_NEW_LOST_ENDPOINT,
+    task,
+    errorMessage: "DataForSEO could not complete the AI visibility new/lost request.",
+  });
+  const result = response.result;
+  const points = normalizeNewLostPoints(result?.items);
+
+  return {
+    data: {
+      target: domain,
+      platform: market.platform,
+      location_code: market.locationCode,
+      language_code: market.languageCode,
+      months: Number(months),
+      date_from: result?.date_from ?? dateFrom,
+      date_to: result?.date_to ?? dateTo,
+      group_range: result?.group_range ?? "month",
+      points,
+      returned_count: points.length,
+      generated_at: new Date().toISOString(),
+      disclaimer:
+        "New/Lost LLM Mentions compares DataForSEO's indexed LLM responses between periods. A lost mention is an observed response-level change, not proof of lost referral traffic.",
+    },
+    actualCostUsd: response.actualCostUsd,
+    taskCount: Number.isInteger(response.payload?.tasks_count) ? response.payload.tasks_count : 1,
+    resultCount: points.length,
   };
 }
