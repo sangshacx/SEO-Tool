@@ -53,6 +53,7 @@ export function gscPerformancePanelMarkup() {
         </div>
         <div class="v2-gsc-performance-actions">
           <button type="button" data-v2-gsc-performance-sync>Sync latest finalized day · $0</button>
+          <button type="button" data-v2-gsc-performance-backfill>Backfill 7 missing days · $0</button>
           <button type="button" class="secondary" data-v2-gsc-performance-settings>GSC Settings</button>
         </div>
       </div>
@@ -149,6 +150,7 @@ export function mountGscPerformanceTab({
   if (!section || typeof fetchImpl !== "function") return () => {};
   const tab = section.querySelector('[data-v2-organic-tab="gsc"]');
   const sync = section.querySelector("[data-v2-gsc-performance-sync]");
+  const backfill = section.querySelector("[data-v2-gsc-performance-backfill]");
   const settings = section.querySelector("[data-v2-gsc-performance-settings]");
   const days = section.querySelector("[data-v2-gsc-performance-days]");
   const status = section.querySelector("[data-v2-gsc-performance-status]");
@@ -362,14 +364,21 @@ export function mountGscPerformanceTab({
     }
   };
 
-  const syncLatest = async () => {
+  const runSync = async (backfillDays = 1) => {
     const domain = ownDomain();
     if (!domain || !isOwnSite()) {
       panelStatus("只能同步当前 Site Profile 自己的 GSC 数据。", "warning");
       return;
     }
     sync.disabled = true;
-    panelStatus("正在同步 Google Search Console 最新 finalized 单日数据；Google API 费用 $0…", "info");
+    backfill.disabled = true;
+    const multiDay = backfillDays > 1;
+    panelStatus(
+      multiDay
+        ? "正在回填最近 7 个 finalized 日期中尚未成功同步的日期；每组最多 1,000 行，Google API 费用 $0…"
+        : "正在同步 Google Search Console 最新 finalized 单日数据；Google API 费用 $0…",
+      "info",
+    );
     try {
       const payload = await jsonFetch(fetchImpl, SYNC_ENDPOINT, {
         method: "POST",
@@ -377,23 +386,37 @@ export function mountGscPerformanceTab({
         body: JSON.stringify({
           site_domain: domain,
           dimension_sets: ["query", "page", "query_page"],
-          row_limit_per_set: 2500,
+          row_limit_per_set: multiDay ? 1000 : 2500,
+          backfill_days: backfillDays,
         }),
       });
       loadedKey = null;
       connection = null;
       await load({ force: true });
-      const truncated = payload.data?.truncated_sets ?? [];
-      panelStatus(
-        truncated.length
-          ? "GSC 已同步，但 " + truncated.join(", ") + " 达到 2,500 行上限；这些分区被明确标记为 partial。"
-          : "GSC 最新 finalized 单日数据同步完成，已写入 D1。",
-        truncated.length ? "warning" : "success",
-      );
+      const truncated = payload.data?.truncated_partitions ?? [];
+      const syncedDates = payload.data?.synced_dates ?? [];
+      const skippedDates = payload.data?.skipped_dates ?? [];
+      if (truncated.length) {
+        panelStatus(
+          "GSC 已同步 " + syncedDates.length + " 个日期，跳过 " + skippedDates.length +
+          " 个已完成日期；" + truncated.length + " 个 date/dimension 分区达到行数上限并标记为 partial。",
+          "warning",
+        );
+      } else if (!syncedDates.length && skippedDates.length) {
+        panelStatus("所选日期都已成功同步，本次未访问 Google、未写入 D1。", "success");
+      } else {
+        panelStatus(
+          multiDay
+            ? "GSC 回填完成：同步 " + syncedDates.length + " 个日期，跳过 " + skippedDates.length + " 个已完成日期。"
+            : "GSC 最新 finalized 单日数据同步完成，已写入 D1。",
+          "success",
+        );
+      }
     } catch (error) {
       panelStatus(error.message || "GSC 同步失败", "error");
     } finally {
       sync.disabled = false;
+      backfill.disabled = false;
     }
   };
 
@@ -412,7 +435,8 @@ export function mountGscPerformanceTab({
     pageQueryPanel.hidden = true;
     load({ force: true });
   }, { signal });
-  sync.addEventListener("click", syncLatest, { signal });
+  sync.addEventListener("click", () => runSync(1), { signal });
+  backfill.addEventListener("click", () => runSync(7), { signal });
   settings.addEventListener("click", () => {
     if (locationLike) locationLike.hash = "settings";
   }, { signal });
