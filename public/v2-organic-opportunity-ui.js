@@ -40,6 +40,7 @@ export function organicOpportunityPanelMarkup() {
         <article data-v2-opportunity-source="gsc_pages"><span>GSC Performance</span><b>Optional</b><small>用于真实 Impressions、CTR、Position 与 Clicks 变化</small><button type="button" data-v2-opportunity-go="gsc">Open GSC Performance</button></article>
         <article data-v2-opportunity-source="ai_visibility"><span>AI History</span><b>Optional</b><small>用于 Google AI Overview / ChatGPT 的 stored New/Lost mention recovery 信号</small><button type="button" data-v2-opportunity-ai-visibility>Open AI Visibility</button></article>
         <article data-v2-opportunity-source="ai_prompt_tracker"><span>Prompt Tracker</span><b>Optional</b><small>用于 Saved Prompt 的 repeated mention / citation loss 信号</small><button type="button" data-v2-opportunity-ai-visibility>Open Prompt Tracker</button></article>
+        <article data-v2-opportunity-source="gsc_generative_ai"><span>GSC Generative</span><b>Optional</b><small>Property-global first-party filtered searchAppearance trend；不等于当前市场</small><button type="button" data-v2-opportunity-ai-visibility>Open First-party AI View</button></article>
       </div>
 
       <div class="v2-organic-opportunity-metrics">
@@ -196,6 +197,7 @@ export function mountOrganicOpportunityTab({
     gsc_pages: section.querySelector('[data-v2-opportunity-source="gsc_pages"]'),
     ai_visibility: section.querySelector('[data-v2-opportunity-source="ai_visibility"]'),
     ai_prompt_tracker: section.querySelector('[data-v2-opportunity-source="ai_prompt_tracker"]'),
+    gsc_generative_ai: section.querySelector('[data-v2-opportunity-source="gsc_generative_ai"]'),
   };
   let loadedForKey = null;
 
@@ -205,7 +207,7 @@ export function mountOrganicOpportunityTab({
   };
 
   const renderSources = (data) => {
-    for (const source of ["organic_keywords","top_pages","gsc_pages","ai_visibility","ai_prompt_tracker"]) {
+    for (const source of ["organic_keywords","top_pages","gsc_pages","ai_visibility","ai_prompt_tracker","gsc_generative_ai"]) {
       const card = sourceCards[source];
       const status = card?.querySelector("b");
       const evidence = data?.sources?.[source];
@@ -223,6 +225,10 @@ export function mountOrganicOpportunityTab({
         status.textContent = evidence?.available
           ? "Ready · D1 · " + (evidence.observed_prompts ?? 0) + "/" + (evidence.tracked_prompts ?? 0) + " observed"
           : "Optional · no Prompt observations";
+      } else if (source === "gsc_generative_ai") {
+        status.textContent = evidence?.available
+          ? "Ready · D1 · " + (evidence.appearance ?? "selected") + " · property-global"
+          : "Optional · no selected/synced first-party data";
       } else {
         status.textContent = evidence?.available
           ? "Ready · depth " + (evidence.depth ?? "—")
@@ -274,7 +280,7 @@ export function mountOrganicOpportunityTab({
     nextBestPage.title = next.page;
     nextBestQuery.textContent = next.query || "No single query selected";
     nextBestQuery.title = next.query || "";
-    const aiWorkspace = ["dataforseo_ai_history", "ai_prompt_tracker_d1"].includes(next.query_source);
+    const aiWorkspace = ["dataforseo_ai_history", "ai_prompt_tracker_d1", "gsc_generative_ai_d1"].includes(next.query_source);
     nextBestSource.textContent = next.query_source === "gsc_query_page"
       ? "GSC Query+Page"
       : next.query_source === "dataforseo_cache"
@@ -283,7 +289,9 @@ export function mountOrganicOpportunityTab({
           ? "AI History · D1"
           : next.query_source === "ai_prompt_tracker_d1"
             ? "Prompt Tracker · D1"
-            : "Page-level evidence";
+            : next.query_source === "gsc_generative_ai_d1"
+              ? "GSC Generative · D1"
+              : "Page-level evidence";
     nextBestOpenPage.dataset.v2OpportunityPage = next.page;
     nextBestOpenPage.hidden = aiWorkspace;
     nextBestResearch.dataset.v2OpportunityKeyword = aiWorkspace ? "" : next.query || "";
@@ -398,7 +406,9 @@ export function mountOrganicOpportunityTab({
           ?"AI History · D1"
           :item.query_source==="ai_prompt_tracker_d1"
             ?"Prompt Tracker · D1"
-            :"DataForSEO cache";
+            :item.query_source==="gsc_generative_ai_d1"
+              ?"GSC Generative · D1"
+              :"DataForSEO cache";
       const score=document.createElement("td");score.textContent=num(item.priority_score);
       const confidence=document.createElement("td");confidence.textContent=item.confidence||"—";
       const workflow=document.createElement("td");workflow.className="v2-workflow-cell";workflow.append(workflowBadge(item),workflowControls(item));
@@ -410,7 +420,7 @@ export function mountOrganicOpportunityTab({
         overlap.dataset.v2OpportunityGscOverlap=item.query||"";
         overlap.textContent="Open GSC Overlap";
         actions.append(overlap);
-      }else if(["ai_visibility_recovery","ai_prompt_recovery"].includes(item.action)||["dataforseo_ai_history","ai_prompt_tracker_d1"].includes(item.query_source)){
+      }else if(["ai_visibility_recovery","ai_prompt_recovery","gsc_generative_recovery"].includes(item.action)||["dataforseo_ai_history","ai_prompt_tracker_d1","gsc_generative_ai_d1"].includes(item.query_source)){
         const ai=document.createElement("button");
         ai.type="button";
         ai.dataset.v2OpportunityAiVisibility="true";
@@ -420,7 +430,7 @@ export function mountOrganicOpportunityTab({
         const pageButton=document.createElement("button");pageButton.type="button";pageButton.dataset.v2OpportunityPage=item.page;pageButton.textContent="Page";
         actions.append(pageButton);
       }
-      if(item.query&&!["dataforseo_ai_history","ai_prompt_tracker_d1"].includes(item.query_source)){
+      if(item.query&&!["dataforseo_ai_history","ai_prompt_tracker_d1","gsc_generative_ai_d1"].includes(item.query_source)){
         const research=document.createElement("button");research.type="button";research.dataset.v2OpportunityKeyword=item.query;research.textContent="Research";actions.append(research);
       }
       next.append(actions);
@@ -676,6 +686,7 @@ export function mountOrganicOpportunityTab({
       data?.sources?.gsc_pages ? "GSC reality ready" : "GSC optional · no stored page data",
       data?.sources?.ai_visibility ? "AI History ready · D1" : "AI History optional · no stored data",
       data?.sources?.ai_prompt_tracker ? "Prompt Tracker ready · D1" : "Prompt Tracker optional · no observations",
+      data?.sources?.gsc_generative_ai ? "GSC Generative ready · D1 · property-global" : "GSC Generative optional · no first-party history",
       data?.ai_prompt_workflow_outcome_summary
         ? "AI Outcomes "+(data.ai_prompt_workflow_outcome_summary.ready??0)+" ready · "+(data.ai_prompt_workflow_outcome_summary.recovered??0)+" recovered"
         : null,
