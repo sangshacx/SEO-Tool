@@ -10,7 +10,7 @@ import { mergeCannibalizationActions } from "../../../../src/v2/intelligence/can
 import { buildAiVisibilityRecoveryAction, mergeAiVisibilityActions } from "../../../../src/v2/intelligence/ai-visibility-actions.js";
 import { readAiVisibilityHistorical, readAiVisibilityNewLost } from "../../../../src/v2/storage/ai-visibility.js";
 import { buildAiPromptRecoveryAction, mergeAiPromptRecoveryActions } from "../../../../src/v2/intelligence/ai-prompt-actions.js";
-import { listAiPromptTrackers } from "../../../../src/v2/storage/ai-prompt-tracker.js";
+import { listAiPromptTrackers, readAiPromptWorkflowOutcomes } from "../../../../src/v2/storage/ai-prompt-tracker.js";
 import { getSeoActionWorkflowStats, listSeoActionWorkflow, listSeoActionWorkflowEvents, readSeoActionOutcomes } from "../../../../src/v2/storage/seo-action-workflow.js";
 
 const JSON_HEADERS = {
@@ -248,13 +248,15 @@ export async function onRequestPost({ request, env }) {
   let workflowEvents = [];
   let workflowStats = null;
   let workflowOutcomes = [];
+  let aiPromptWorkflowOutcomes = [];
   let workflowSource = "d1";
   try {
-    [workflowRows, workflowEvents, workflowStats, workflowOutcomes] = await Promise.all([
+    [workflowRows, workflowEvents, workflowStats, workflowOutcomes, aiPromptWorkflowOutcomes] = await Promise.all([
       listSeoActionWorkflow(env.DB, domain),
       listSeoActionWorkflowEvents(env.DB, domain, { limit: 30 }),
       getSeoActionWorkflowStats(env.DB, domain),
       readSeoActionOutcomes(env.DB, domain, { limit: 10, windowDays: 7 }),
+      readAiPromptWorkflowOutcomes(env.DB, { siteDomain: domain, limit: 10 }),
     ]);
   } catch (error) {
     workflowSource = "unavailable";
@@ -301,6 +303,20 @@ export async function onRequestPost({ request, env }) {
   data.workflow_stats = workflowStats;
   data.workflow_activity = workflowEvents;
   data.workflow_outcomes = workflowOutcomes;
+  data.ai_prompt_workflow_outcomes = aiPromptWorkflowOutcomes;
+  data.ai_prompt_workflow_outcome_summary = {
+    total: aiPromptWorkflowOutcomes.length,
+    ready: aiPromptWorkflowOutcomes.filter((item) => item.status === "ready").length,
+    waiting: aiPromptWorkflowOutcomes.filter((item) => item.status === "waiting_for_post_observation").length,
+    recovered: aiPromptWorkflowOutcomes.filter((item) =>
+      ["citation_recovered", "mention_recovered"].includes(item?.observed?.code)
+    ).length,
+    regressed: aiPromptWorkflowOutcomes.filter((item) =>
+      ["citation_lost", "mention_lost"].includes(item?.observed?.code)
+    ).length,
+    source: "d1",
+    actual_cost_usd: 0,
+  };
   const missing = [];
   if (!keywords) missing.push("organic_keywords");
   if (!pages) missing.push("top_pages");
