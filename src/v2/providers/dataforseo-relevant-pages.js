@@ -179,8 +179,8 @@ export async function fetchRelevantPages({
     data: normalizeResult(result, { target: domain, limit: Number(limit) }),
     actualCostUsd,
     taskCount: Number.isInteger(payload?.tasks_count) ? payload.tasks_count : 1,
-    resultCount: Number.isInteger(providerTask?.result_count)
-      ? providerTask.result_count
+    resultCount: Number.isInteger(result?.items_count)
+      ? result.items_count
       : Array.isArray(result?.items) ? result.items.length : 0,
   };
 }
