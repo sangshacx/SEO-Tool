@@ -8,7 +8,7 @@ import { dashboardDatabase, memoryCache, seedProfile } from "./dashboard-test-he
 import { replaceGscAnalyticsPartition } from "../src/v2/storage/gsc-search-analytics.js";
 import { upsertSeoActionWorkflow } from "../src/v2/storage/seo-action-workflow.js";
 import { persistAiVisibilityHistorical, persistAiVisibilityNewLost } from "../src/v2/storage/ai-visibility.js";
-import { recordAiPromptObservation, upsertAiPromptTracker } from "../src/v2/storage/ai-prompt-tracker.js";
+import { linkAiPromptWorkflow, recordAiPromptObservation, upsertAiPromptTracker } from "../src/v2/storage/ai-prompt-tracker.js";
 
 function request(body){
   return new Request("https://preview.example/api/v2/organic/opportunities",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
@@ -581,4 +581,91 @@ test("Opportunity API does not create Prompt recovery from a single observation"
   assert.equal(payload.data.sources.ai_prompt_tracker.available,true);
   assert.equal(payload.data.ai_prompt_tracker_summary.candidate_count,0);
   assert.equal(payload.data.action_queue.some((item)=>item.action==="ai_prompt_recovery"),false);
+});
+
+
+test("Opportunity API returns AI-native Prompt outcomes separately from GSC outcomes at zero read cost", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let calls=0;
+  globalThis.fetch=async()=>{calls+=1;throw new Error("provider must not execute");};
+
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const prompt="Which waterproof membrane manufacturers should buyers consider?";
+  const tracker=await upsertAiPromptTracker(d1,{
+    siteDomain:"example.com",
+    name:"Supplier recovery outcome",
+    platform:"chat_gpt",
+    modelName:"gpt-4.1-mini",
+    prompt,
+    webSearch:true,
+    locationCode:2840,
+    languageCode:"en",
+  });
+
+  await recordAiPromptObservation(d1,{
+    siteDomain:"example.com",
+    trackerId:tracker.id,
+    observedAt:"2026-09-18T08:00:00.000Z",
+    actualCostUsd:0.004,
+    result:{
+      model_name:"gpt-4.1-mini",
+      target_domain_mentioned:true,
+      target_domain_cited:false,
+      annotations:[{domain:"industry.example"}],
+    },
+  });
+
+  const workflow=await upsertSeoActionWorkflow(d1,{
+    site_domain:"example.com",
+    page_url:"https://example.com/",
+    action_code:"ai_prompt_recovery",
+    query:prompt,
+    status:"done",
+    note:"Improved citation-worthy source evidence.",
+    snooze_until:null,
+    priority_score:80,
+  });
+  await linkAiPromptWorkflow(d1,{
+    siteDomain:"example.com",
+    workflowId:workflow.id,
+    trackerId:tracker.id,
+  });
+  await d1.prepare(
+    "UPDATE seo_action_workflow_events SET created_at = '2026-09-19 08:00:00' WHERE workflow_id = ? AND to_status = 'done'"
+  ).bind(workflow.id).run();
+
+  await recordAiPromptObservation(d1,{
+    siteDomain:"example.com",
+    trackerId:tracker.id,
+    observedAt:"2026-09-20T08:00:00.000Z",
+    actualCostUsd:0.005,
+    result:{
+      model_name:"gpt-4.1-mini",
+      target_domain_mentioned:true,
+      target_domain_cited:true,
+      annotations:[{domain:"example.com"}],
+    },
+  });
+
+  const response=await onRequestPost({
+    request:request({target:"example.com",location_code:2840,language_code:"en"}),
+    env:{DB:d1,CACHE:memoryCache()},
+  });
+  const payload=await response.json();
+
+  assert.equal(response.status,200);
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+  assert.equal(calls,0);
+  assert.equal(payload.data.workflow_outcomes.some((item)=>item.action_code==="ai_prompt_recovery"),false);
+  assert.equal(payload.data.ai_prompt_workflow_outcomes.length,1);
+  assert.equal(payload.data.ai_prompt_workflow_outcomes[0].tracker_id,tracker.id);
+  assert.equal(payload.data.ai_prompt_workflow_outcomes[0].observed.code,"citation_recovered");
+  assert.equal(payload.data.ai_prompt_workflow_outcome_summary.total,1);
+  assert.equal(payload.data.ai_prompt_workflow_outcome_summary.ready,1);
+  assert.equal(payload.data.ai_prompt_workflow_outcome_summary.recovered,1);
+  assert.equal(payload.data.ai_prompt_workflow_outcome_summary.regressed,0);
+  assert.equal(payload.data.ai_prompt_workflow_outcome_summary.actual_cost_usd,0);
 });
