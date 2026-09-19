@@ -63,7 +63,7 @@ jobs:
         run: |
           npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
           --json \
-          --command "SELECT name FROM sqlite_schema
+          --command "SELECT name FROM sqlite_master
           WHERE type = 'table'
           AND name IN ('keywords', 'keyword_metrics', 'api_usage', 'app_settings', 'serp_weakness_snapshots', 'serp_competitor_snapshots', 'serp_competitor_pages', 'saved_keywords', 'saved_keyword_tags', 'saved_keyword_tag_assignments', 'topic_clusters', 'topic_cluster_members', 'keyword_idea_runs', 'keyword_idea_members', 'backlink_snapshots', 'backlink_opportunities', 'site_profiles', 'site_dashboard_snapshots', 'dashboard_refresh_leases', 'gsc_connections', 'gsc_site_mappings', 'gsc_search_analytics_daily', 'gsc_sync_runs', 'seo_action_workflow', 'seo_action_workflow_events', 'ai_visibility_history', 'ai_visibility_new_lost', 'ai_prompt_trackers', 'ai_prompt_observations', 'ai_prompt_workflow_links'
           ORDER BY name;" |
