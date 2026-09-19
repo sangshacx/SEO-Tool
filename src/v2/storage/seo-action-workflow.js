@@ -1,3 +1,5 @@
+import { summarizeSeoActionOutcome } from "../intelligence/seo-action-outcomes.js";
+
 function rowToWorkflow(row) {
   return {
     id: Number(row.id),
@@ -268,4 +270,134 @@ export async function getSeoActionWorkflowStats(db, siteDomain) {
       completed: Number(month?.completed_30d ?? 0),
     },
   };
+}
+
+
+function dateOffset(dateText, days) {
+  const date = new Date(String(dateText) + "T00:00:00Z");
+  if (Number.isNaN(date.getTime())) return null;
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+async function gscOutcomeWindow(db, {
+  siteProfileId,
+  dimensionSet,
+  pageUrl,
+  query,
+  startDate,
+  endDate,
+}) {
+  const queryFilter = dimensionSet === "query_page" ? " AND query_text = ?" : "";
+  const values = [
+    siteProfileId,
+    dimensionSet,
+    pageUrl,
+    startDate,
+    endDate,
+    ...(dimensionSet === "query_page" ? [query ?? ""] : []),
+  ];
+  const row = await db.prepare(
+    "SELECT COUNT(DISTINCT date) AS days, " +
+    "COALESCE(SUM(clicks), 0) AS clicks, " +
+    "COALESCE(SUM(impressions), 0) AS impressions, " +
+    "CASE WHEN SUM(impressions) > 0 THEN SUM(position * impressions) / SUM(impressions) ELSE NULL END AS position " +
+    "FROM gsc_search_analytics_daily " +
+    "WHERE site_profile_id = ? AND dimension_set = ? AND page_url = ? " +
+    "AND date BETWEEN ? AND ?" + queryFilter,
+  ).bind(...values).first();
+  return {
+    days: Number(row?.days ?? 0),
+    clicks: Number(row?.clicks ?? 0),
+    impressions: Number(row?.impressions ?? 0),
+    position: row?.position == null ? null : Number(row.position),
+  };
+}
+
+export async function readSeoActionOutcomes(db, siteDomain, {
+  limit = 10,
+  windowDays = 7,
+} = {}) {
+  const site = await resolveSiteProfile(db, siteDomain);
+  const boundedLimit = Math.min(25, Math.max(1, Number(limit) || 10));
+  const days = Math.min(14, Math.max(3, Number(windowDays) || 7));
+
+  const done = await db.prepare(`
+    SELECT
+      e.id AS event_id,
+      e.workflow_id,
+      e.page_url,
+      e.action_code,
+      e.query_text,
+      e.priority_score,
+      e.created_at
+    FROM seo_action_workflow_events e
+    JOIN (
+      SELECT workflow_id, MAX(id) AS event_id
+      FROM seo_action_workflow_events
+      WHERE to_status = 'done'
+      GROUP BY workflow_id
+    ) latest
+      ON latest.event_id = e.id
+    WHERE e.site_profile_id = ?
+    ORDER BY e.id DESC
+    LIMIT ?
+  `).bind(site.id, boundedLimit).all();
+
+  const outcomes = [];
+  for (const event of done?.results ?? []) {
+    const completionDate = String(event.created_at ?? "").slice(0, 10);
+    const preEnd = dateOffset(completionDate, -1);
+    const preStart = dateOffset(completionDate, -days);
+    const postStart = dateOffset(completionDate, 1);
+    const postEnd = dateOffset(completionDate, days);
+    if (!preStart || !preEnd || !postStart || !postEnd) continue;
+
+    let scope = event.query_text ? "query_page" : "page";
+    let pre = await gscOutcomeWindow(db, {
+      siteProfileId: site.id,
+      dimensionSet: scope === "query_page" ? "query_page" : "page",
+      pageUrl: event.page_url,
+      query: event.query_text,
+      startDate: preStart,
+      endDate: preEnd,
+    });
+    let post = await gscOutcomeWindow(db, {
+      siteProfileId: site.id,
+      dimensionSet: scope === "query_page" ? "query_page" : "page",
+      pageUrl: event.page_url,
+      query: event.query_text,
+      startDate: postStart,
+      endDate: postEnd,
+    });
+
+    if (scope === "query_page" && pre.days === 0 && post.days === 0) {
+      scope = "page_fallback";
+      pre = await gscOutcomeWindow(db, {
+        siteProfileId: site.id,
+        dimensionSet: "page",
+        pageUrl: event.page_url,
+        query: "",
+        startDate: preStart,
+        endDate: preEnd,
+      });
+      post = await gscOutcomeWindow(db, {
+        siteProfileId: site.id,
+        dimensionSet: "page",
+        pageUrl: event.page_url,
+        query: "",
+        startDate: postStart,
+        endDate: postEnd,
+      });
+    }
+
+    outcomes.push(summarizeSeoActionOutcome({
+      event,
+      pre,
+      post,
+      windowDays: days,
+      scope,
+    }));
+  }
+  return outcomes;
 }
