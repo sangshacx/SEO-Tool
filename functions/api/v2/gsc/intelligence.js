@@ -1,9 +1,9 @@
 import { enrichGscIntelligenceRows, summarizeGscStoredMetrics } from "../../../../src/v2/gsc/intelligence.js";
-import { readGscIntelligence } from "../../../../src/v2/storage/gsc-search-analytics.js";
+import { readGscCannibalizationCandidates, readGscIntelligence } from "../../../../src/v2/storage/gsc-search-analytics.js";
 import { normalizeRegistrableDomain } from "../../../../src/v2/storage/registrable-domain.js";
 import { gscJson, gscMappedError, requireGscAccess } from "../../../../src/v2/gsc/http.js";
 
-const VIEWS = new Set(["queries", "pages", "query_page"]);
+const VIEWS = new Set(["queries", "pages", "query_page", "cannibalization"]);
 
 export async function onRequestGet({ request, env }) {
   const denied = requireGscAccess(request);
@@ -21,7 +21,7 @@ export async function onRequestGet({ request, env }) {
     }
     const view = url.searchParams.get("view") || "queries";
     if (!VIEWS.has(view)) {
-      const error = new Error("Choose queries, pages, or query_page.");
+      const error = new Error("Choose queries, pages, query_page, or cannibalization.");
       error.code = "GSC_INTELLIGENCE_VIEW_INVALID";
       error.httpStatus = 400;
       throw error;
@@ -30,12 +30,16 @@ export async function onRequestGet({ request, env }) {
     const limit = Number(url.searchParams.get("limit") || 100);
     const pageUrl = url.searchParams.get("page_url") || null;
 
-    const stored = await readGscIntelligence(env.DB, { siteDomain, view, days, limit, pageUrl });
+    const stored = view === "cannibalization"
+      ? await readGscCannibalizationCandidates(env.DB, { siteDomain, days, limit })
+      : await readGscIntelligence(env.DB, { siteDomain, view, days, limit, pageUrl });
     const summary = summarizeGscStoredMetrics(stored.metrics, stored.coverage);
-    const rows = enrichGscIntelligenceRows(stored.rows, {
-      view,
-      comparisonAvailable: summary.comparison_available,
-    });
+    const rows = view === "cannibalization"
+      ? stored.rows
+      : enrichGscIntelligenceRows(stored.rows, {
+          view,
+          comparisonAvailable: summary.comparison_available,
+        });
 
     return gscJson({
       ok: true,
@@ -47,8 +51,9 @@ export async function onRequestGet({ request, env }) {
         coverage: stored.coverage,
         summary,
         rows,
-        disclaimer:
-          "Metrics are recomputed from stored finalized Search Console rows. Query/page dimensions can be incomplete because Google may omit lower-volume rows, and configured sync caps may intentionally truncate a partition.",
+        disclaimer: view === "cannibalization"
+          ? "Potential Cannibalization is a review signal from stored GSC Query+Page overlap. Multiple ranking URLs are not automatically a problem; verify search intent, page purpose, canonicals, internal links, and content overlap before changing pages."
+          : "Metrics are recomputed from stored finalized Search Console rows. Query/page dimensions can be incomplete because Google may omit lower-volume rows, and configured sync caps may intentionally truncate a partition.",
       },
       meta: { actual_cost_usd: 0, provider_requests: 0, source: "d1" },
     });
