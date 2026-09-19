@@ -944,3 +944,45 @@ test("Dashboard routes Tracked Prompt loss to AI Visibility and labels the D1 so
     cleanup();
   });
 });
+
+
+test("Dashboard labels GSC Generative D1 decisions and routes them to AI Visibility", async () => {
+  await withFakeDocument(async () => {
+    const {root,decision,decisionSource,decisionResearch}=dashboardHarness();
+    const fetchImpl=async()=>({
+      ok:true,
+      status:200,
+      json:async()=>({
+        ok:true,
+        data:{
+          ready:true,
+          workflow_stats:{current:{in_progress:0,snoozed:0},last_7_days:{completed:0}},
+          workflow_outcomes:[],
+          gsc_generative_ai_summary:{candidate_count:1,scope:"property_global",source:"d1"},
+          next_best_action:{
+            page:"https://example.com/",
+            action:"gsc_generative_recovery",
+            action_label:"Review lost first-party AI visibility",
+            priority_score:86,
+            query:"GSC Generative · AI_OVERVIEW",
+            query_source:"gsc_generative_ai_d1",
+            workflow:{status:"new"},
+            why_now:"Property-global filtered visibility disappeared.",
+          },
+        },
+      }),
+    });
+    const context={subscribe(handler){handler(dashboardScope());return()=>{};}};
+    const locationLike={hash:""};
+    const cleanup=mountDashboardDecision({root,context,fetchImpl,locationLike});
+    await new Promise((resolve)=>setTimeout(resolve,0));
+
+    assert.equal(decisionSource.textContent,"GSC Generative · D1");
+    assert.equal(decisionResearch.textContent,"Open AI Visibility");
+    assert.equal(decisionResearch.dataset.v2DashboardResearchQuery,"");
+    assert.equal(decisionResearch.dataset.v2DashboardResearchRoute,"ai-visibility");
+    decision.dispatchEvent({type:"click",target:decisionResearch});
+    assert.equal(locationLike.hash,"ai-visibility");
+    cleanup();
+  });
+});
