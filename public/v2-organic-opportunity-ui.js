@@ -47,6 +47,14 @@ export function organicOpportunityPanelMarkup() {
         <article><span>Scale / Protect</span><b data-v2-opportunity-count="growth">—</b></article>
       </div>
 
+      <div class="v2-workflow-stats" data-v2-workflow-stats>
+        <article><span>Completed · 7d</span><b data-v2-workflow-stat="completed_7d">—</b><small>已标记 Done 的执行动作</small></article>
+        <article><span>Started · 7d</span><b data-v2-workflow-stat="started_7d">—</b><small>进入 In Progress 的动作</small></article>
+        <article><span>In Progress</span><b data-v2-workflow-stat="in_progress">—</b><small>当前正在处理</small></article>
+        <article><span>Snoozed</span><b data-v2-workflow-stat="snoozed">—</b><small>当前暂停中的动作</small></article>
+        <article><span>Completed · 30d</span><b data-v2-workflow-stat="completed_30d">—</b><small>近 30 天完成动作</small></article>
+      </div>
+
       <div class="v2-organic-opportunity-note">
         Priority Score = DataForSEO Base Score + GSC Reality Adjustment，最高 100。没有 GSC 时保持原基础分；有 GSC 时才追加最多 +20。
       </div>
@@ -182,6 +190,21 @@ export function mountOrganicOpportunityTab({
       const node = section.querySelector('[data-v2-opportunity-count="' + key + '"]');
       if (node) node.textContent = num(value);
     });
+  };
+
+  const renderWorkflowStats = (data) => {
+    const stats=data?.workflow_stats;
+    const values={
+      completed_7d:stats?.last_7_days?.completed,
+      started_7d:stats?.last_7_days?.started,
+      in_progress:stats?.current?.in_progress,
+      snoozed:stats?.current?.snoozed,
+      completed_30d:stats?.last_30_days?.completed,
+    };
+    for(const [key,value] of Object.entries(values)){
+      const node=section.querySelector('[data-v2-workflow-stat="'+key+'"]');
+      if(node)node.textContent=value===null||value===undefined?"—":num(value);
+    }
   };
 
   const renderNextBestAction = (data) => {
@@ -393,6 +416,7 @@ export function mountOrganicOpportunityTab({
   const render = (data) => {
     renderSources(data);
     renderCounts(data);
+    renderWorkflowStats(data);
     renderNextBestAction(data);
     renderActionQueue(data);
     renderWorkflowActivity(data);
