@@ -429,7 +429,7 @@ export function renderDashboard(root, payload, scope = {}, trendRange = 90) {
 
 export function createDashboardOverview() {
   const section = document.createElement("section"); section.className = "v2-dashboard panel"; section.dataset.v2View = "overview"; section.dataset.v2Dashboard = "";
-  section.innerHTML = '<div class="v2-dashboard-header"><div><div class="label">缓存数据总览</div><h1 id="v2DashboardSite">网站总览</h1><p class="lead" data-v2-dashboard-updated>正在准备总览…</p></div><div class="v2-dashboard-actions"><button type="button" data-v2-dashboard-refresh>更新总览数据</button><button type="button" data-v2-dashboard-retry hidden>重试读取总览</button></div></div><p class="v2-dashboard-status" data-v2-dashboard-status role="status"></p><p class="v2-dashboard-warning" data-v2-dashboard-warning role="alert" hidden></p><section class="v2-dashboard-decision" data-v2-dashboard-decision><div class="v2-dashboard-decision-head"><div><span>DECISION INTELLIGENCE · $0</span><h2>Next Best Action</h2></div><b data-v2-dashboard-decision-state>CHECKING</b></div><div class="v2-dashboard-decision-grid"><article><span>Action</span><b data-v2-dashboard-decision-action>—</b></article><article><span>Priority</span><b data-v2-dashboard-decision-score>—</b></article><article><span>Page</span><b data-v2-dashboard-decision-page>—</b></article><article><span>Recommended Query</span><b data-v2-dashboard-decision-query>—</b></article><article><span>Source</span><b data-v2-dashboard-decision-source>—</b></article></div><p data-v2-dashboard-decision-why>正在读取本地 Opportunity evidence…</p><div class="v2-dashboard-decision-actions"><button type="button" data-v2-dashboard-open-opportunity>Open Opportunity Center</button><button type="button" data-v2-dashboard-research-query disabled>Research Recommended Query</button></div></section><div data-v2-dashboard-body></div>';
+  section.innerHTML = '<div class="v2-dashboard-header"><div><div class="label">缓存数据总览</div><h1 id="v2DashboardSite">网站总览</h1><p class="lead" data-v2-dashboard-updated>正在准备总览…</p></div><div class="v2-dashboard-actions"><button type="button" data-v2-dashboard-refresh>更新总览数据</button><button type="button" data-v2-dashboard-retry hidden>重试读取总览</button></div></div><p class="v2-dashboard-status" data-v2-dashboard-status role="status"></p><p class="v2-dashboard-warning" data-v2-dashboard-warning role="alert" hidden></p><section class="v2-dashboard-decision" data-v2-dashboard-decision><div class="v2-dashboard-decision-head"><div><span>DECISION INTELLIGENCE · $0</span><h2>Next Best Action</h2></div><b data-v2-dashboard-decision-state>CHECKING</b></div><div class="v2-dashboard-decision-grid"><article><span>Action</span><b data-v2-dashboard-decision-action>—</b></article><article><span>Priority</span><b data-v2-dashboard-decision-score>—</b></article><article><span>Page</span><b data-v2-dashboard-decision-page>—</b></article><article><span>Recommended Query</span><b data-v2-dashboard-decision-query>—</b></article><article><span>Source</span><b data-v2-dashboard-decision-source>—</b></article><article><span>Workflow</span><b data-v2-dashboard-decision-workflow>—</b></article></div><p data-v2-dashboard-decision-why>正在读取本地 Opportunity evidence…</p><div class="v2-dashboard-decision-actions"><button type="button" data-v2-dashboard-open-opportunity>Open Opportunity Center</button><button type="button" data-v2-dashboard-research-query disabled>Research Recommended Query</button></div></section><div data-v2-dashboard-body></div>';
   return section;
 }
 
@@ -448,6 +448,7 @@ export function mountDashboardDecision({
   const page = panel.querySelector("[data-v2-dashboard-decision-page]");
   const query = panel.querySelector("[data-v2-dashboard-decision-query]");
   const source = panel.querySelector("[data-v2-dashboard-decision-source]");
+  const workflow = panel.querySelector("[data-v2-dashboard-decision-workflow]");
   const why = panel.querySelector("[data-v2-dashboard-decision-why]");
   const openOpportunity = panel.querySelector("[data-v2-dashboard-open-opportunity]");
   const research = panel.querySelector("[data-v2-dashboard-research-query]");
@@ -462,6 +463,8 @@ export function mountDashboardDecision({
     text(page, "—");
     text(query, "—");
     text(source, "—");
+    text(workflow, "—");
+    workflow.dataset.status = "";
     text(why, message);
     research.disabled = true;
     research.dataset.v2DashboardResearchQuery = "";
@@ -470,9 +473,12 @@ export function mountDashboardDecision({
   const render = (data) => {
     const next = data?.next_best_action;
     if (!next?.page) {
+      const hidden=Number(data?.workflow_summary?.suppressed??0);
       clear(
         data?.ready
-          ? "当前本地证据没有形成明确的 Next Best Action。"
+          ? hidden>0
+            ? "当前没有激活的 Next Best Action；"+hidden+" 项已被 Done / Snoozed 工作流状态隐藏。"
+            : "当前本地证据没有形成明确的 Next Best Action。"
           : "先在 Site Explorer 加载 Organic Keywords / Top Pages；如果已连接 GSC，也可同步真实搜索表现。"
       );
       return;
@@ -487,6 +493,9 @@ export function mountDashboardDecision({
     text(query, next.query || "No single query selected");
     query.title = next.query || "";
     text(source, next.query_source === "gsc_query_page" ? "GSC Query+Page" : next.query_source === "dataforseo_cache" ? "DataForSEO cache" : "Page evidence");
+    const workflowStatus=next.workflow?.status||"new";
+    text(workflow, workflowStatus==="in_progress"?"In Progress":workflowStatus==="done"?"Done":workflowStatus==="snoozed"?"Snoozed":"New");
+    workflow.dataset.status=workflowStatus;
     text(why, next.why_now || "Top-ranked local decision evidence.");
     research.disabled = !next.query;
     research.dataset.v2DashboardResearchQuery = next.query || "";
