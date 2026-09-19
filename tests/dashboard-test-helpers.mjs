@@ -16,6 +16,7 @@ const MIGRATIONS = [
   "0018_ai_visibility_history.sql",
   "0019_ai_prompt_tracker.sql",
   "0020_ai_prompt_workflow_links.sql",
+  "0021_gsc_search_appearance_capabilities.sql",
 ];
 
 export function d1For(database, { before, after } = {}) {
