@@ -6,6 +6,7 @@ import { buildOrganicKeywordsCacheKey } from "../src/v2/organic/organic-keywords
 import { buildOrganicPagesCacheKey } from "../src/v2/organic/organic-pages-cache.js";
 import { dashboardDatabase, memoryCache, seedProfile } from "./dashboard-test-helpers.mjs";
 import { replaceGscAnalyticsPartition } from "../src/v2/storage/gsc-search-analytics.js";
+import { upsertSeoActionWorkflow } from "../src/v2/storage/seo-action-workflow.js";
 
 function request(body){
   return new Request("https://preview.example/api/v2/organic/opportunities",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
@@ -202,4 +203,59 @@ test("Opportunity API joins stored GSC Query+Page rows with same-page DataForSEO
   assert.equal(page.gsc_query_opportunities[0].provider_match,true);
   assert.equal(page.gsc_query_opportunities[0].search_volume,500);
   assert.equal(page.gsc_query_opportunities[0].keyword_difficulty,28);
+});
+
+
+test("Opportunity API returns recent D1 workflow activity without any provider request", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let calls=0;
+  globalThis.fetch=async()=>{calls+=1;throw new Error("provider must not execute");};
+
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const base={
+    site_domain:"example.com",
+    page_url:"https://example.com/history/",
+    action_code:"recover",
+    query:"lost ranking query",
+    note:"",
+    snooze_until:null,
+    priority_score:72,
+  };
+  await upsertSeoActionWorkflow(d1,{...base,status:"in_progress"});
+  await upsertSeoActionWorkflow(d1,{...base,status:"done",priority_score:78});
+
+  const pagesKey=buildOrganicPagesCacheKey({
+    target:"example.com",locationCode:2840,languageCode:"en",depth:500,
+  });
+  const cache=memoryCache({
+    [pagesKey]:{
+      data:{items:[{
+        url:"https://example.com/page/",
+        organic_traffic:40,
+        organic_keywords:10,
+        positions:{top_10:2},
+        changes:{up:0,down:3,lost:0},
+      }]},
+      cached_at:"2026-09-19T01:05:00.000Z",
+    },
+  });
+
+  const response=await onRequestPost({
+    request:request({target:"example.com",location_code:2840,language_code:"en"}),
+    env:{DB:d1,CACHE:cache},
+  });
+  const payload=await response.json();
+  assert.equal(response.status,200);
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+  assert.equal(calls,0);
+  assert.equal(payload.data.workflow_summary.activity_count,2);
+  assert.equal(payload.data.workflow_activity.length,2);
+  assert.equal(payload.data.workflow_activity[0].from_status,"in_progress");
+  assert.equal(payload.data.workflow_activity[0].to_status,"done");
+  assert.equal(payload.data.workflow_activity[0].priority_score,78);
+  assert.equal(payload.data.workflow_activity[1].from_status,null);
+  assert.equal(payload.data.workflow_activity[1].to_status,"in_progress");
 });
