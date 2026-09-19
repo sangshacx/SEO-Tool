@@ -1,4 +1,4 @@
-export const ORGANIC_OPPORTUNITY_VERSION = "organic-opportunity-v0.1";
+export const ORGANIC_OPPORTUNITY_VERSION = "organic-opportunity-v0.2";
 
 function finite(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -53,6 +53,40 @@ function trafficPoints(traffic) {
   return 0;
 }
 
+function percentChange(current, previous) {
+  const now = finite(current);
+  const before = finite(previous);
+  if (now === null || before === null || before === 0) return null;
+  return Math.round(((now - before) / Math.abs(before)) * 10000) / 100;
+}
+
+function gscRealityPoints(row = {}) {
+  if (!row) return 0;
+  const impressions = finite(row.impressions) ?? 0;
+  const position = finite(row.position);
+  const clicks = finite(row.clicks) ?? 0;
+  const ctr = impressions > 0 ? clicks / impressions : finite(row.ctr) ?? 0;
+  const clicksChange = row.change?.clicks_percent ?? percentChange(clicks, row.previous_clicks);
+
+  let points = impressions >= 1000 ? 8 : impressions >= 300 ? 6 : impressions >= 100 ? 4 : impressions >= 30 ? 2 : 0;
+  if (position !== null && position >= 4 && position <= 15) points += 6;
+  else if (position !== null && position > 15 && position <= 30) points += 3;
+  if (position !== null && position <= 10 && impressions >= 100 && ctr < 0.03) points += 4;
+  if (clicksChange !== null && clicksChange <= -20 && impressions >= 50) points += 7;
+  else if (clicksChange !== null && clicksChange >= 20 && impressions >= 50) points += 2;
+  return Math.min(20, Math.round(points * 100) / 100);
+}
+
+function buildGscPageEvidence(rows = []) {
+  const map = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const url = canonicalUrl(row?.primary_key ?? row?.page_url ?? row?.url);
+    if (!url) continue;
+    map.set(url, { ...row, url });
+  }
+  return map;
+}
+
 function businessIntent(row) {
   return ["commercial", "transactional"].includes(String(row?.intent?.primary ?? "").toLowerCase());
 }
@@ -98,22 +132,42 @@ function buildKeywordEvidence(keywordRows = []) {
   return grouped;
 }
 
-function actionFor({ lost, down, up, quickWinCount, top10, keywords, traffic }) {
+function actionFor({ lost, down, up, quickWinCount, top10, keywords, traffic, gsc }) {
   if (lost > 0) return { code: "reclaim", label: "Reclaim", reason: "The page lost ranked keywords in the latest provider comparison." };
   if (down >= Math.max(3, Math.ceil(keywords * 0.2))) return { code: "recover", label: "Recover", reason: "Declining rankings are material relative to the page's keyword footprint." };
-  if (quickWinCount > 0) return { code: "optimize", label: "Optimize", reason: "The page has cached keywords already ranking in positions 4–20." };
-  if (up >= Math.max(3, down + 2)) return { code: "scale", label: "Scale", reason: "The page is gaining rankings and can be reviewed for adjacent expansion." };
-  if (keywords > 0 && top10 / keywords >= 0.5 && traffic > 0) return { code: "protect", label: "Protect", reason: "The page already has strong Top 10 coverage and existing organic traffic." };
+
+  const gscImpressions = finite(gsc?.impressions) ?? 0;
+  const gscClicks = finite(gsc?.clicks) ?? 0;
+  const gscPosition = finite(gsc?.position);
+  const gscCtr = gscImpressions > 0 ? gscClicks / gscImpressions : finite(gsc?.ctr) ?? 0;
+  const gscClicksChange = gsc?.change?.clicks_percent ?? percentChange(gscClicks, gsc?.previous_clicks);
+  if (gscClicksChange !== null && gscClicksChange <= -20 && gscImpressions >= 50) {
+    return { code: "recover", label: "Recover", reason: "Stored GSC clicks are down at least 20% while the page still has meaningful impressions." };
+  }
+  if (quickWinCount > 0 || (gscPosition !== null && gscPosition >= 4 && gscPosition <= 15 && gscImpressions >= 50)) {
+    return { code: "optimize", label: "Optimize", reason: quickWinCount > 0 ? "The page has cached keywords already ranking in positions 4–20." : "Real GSC impressions show the page is already within striking distance at positions 4–15." };
+  }
+  if (gscPosition !== null && gscPosition <= 10 && gscImpressions >= 100 && gscCtr < 0.03) {
+    return { code: "ctr_opportunity", label: "Improve CTR", reason: "Stored GSC data shows Top-10 visibility and meaningful impressions but CTR below 3%." };
+  }
+  if (up >= Math.max(3, down + 2) || (gscClicksChange !== null && gscClicksChange >= 20 && gscImpressions >= 50)) {
+    return { code: "scale", label: "Scale", reason: "The page is gaining provider rankings or real GSC clicks and can be reviewed for adjacent expansion." };
+  }
+  if ((keywords > 0 && top10 / keywords >= 0.5 && traffic > 0) || (gscPosition !== null && gscPosition <= 3 && gscClicks > 0)) {
+    return { code: "protect", label: "Protect", reason: "The page already has strong first-page evidence and real organic value." };
+  }
   return { code: "monitor", label: "Monitor", reason: "No strong cached risk or upside signal is present." };
 }
 
 export function buildOrganicOpportunities({
   keywordRows = [],
   pageRows = [],
+  gscPageRows = [],
   target,
   sources = {},
 } = {}) {
   const keywordEvidence = buildKeywordEvidence(keywordRows);
+  const gscPageEvidence = buildGscPageEvidence(gscPageRows);
   const pageMap = new Map();
 
   for (const page of Array.isArray(pageRows) ? pageRows : []) {
@@ -122,6 +176,9 @@ export function buildOrganicOpportunities({
     pageMap.set(url, { ...page, url });
   }
   for (const [url] of keywordEvidence) {
+    if (!pageMap.has(url)) pageMap.set(url, { url, relative_url: null });
+  }
+  for (const [url] of gscPageEvidence) {
     if (!pageMap.has(url)) pageMap.set(url, { url, relative_url: null });
   }
 
@@ -142,11 +199,14 @@ export function buildOrganicOpportunities({
     const pageKeywords = finite(page.organic_keywords);
     const keywords = pageKeywords ?? keyword.sampled_keywords;
     const traffic = finite(page.organic_traffic) ?? keyword.sampled_traffic;
+    const gsc = gscPageEvidence.get(url) ?? null;
     const risk = Math.min(35, Math.round((lost * 10 + down * 2) * 100) / 100);
     const quickWin = Math.min(35, Math.round(keyword.quick_win_points_raw * 100) / 100);
     const trafficScore = trafficPoints(traffic);
     const business = Math.min(10, keyword.commercial_quick_wins * 2.5);
-    const score = Math.min(100, Math.round((risk + quickWin + trafficScore + business) * 100) / 100);
+    const baseScore = Math.min(100, Math.round((risk + quickWin + trafficScore + business) * 100) / 100);
+    const gscReality = gscRealityPoints(gsc);
+    const score = Math.min(100, Math.round((baseScore + gscReality) * 100) / 100);
     const action = actionFor({
       lost,
       down,
@@ -155,9 +215,17 @@ export function buildOrganicOpportunities({
       top10: finite(positions.top_10) ?? 0,
       keywords,
       traffic,
+      gsc,
     });
-    const evidenceCount = Number(Boolean(sources.organic_keywords)) + Number(Boolean(sources.top_pages));
-    const confidence = evidenceCount === 2 ? "high" : keyword.sampled_keywords >= 3 || pageKeywords !== null ? "medium" : "low";
+    const evidenceCount =
+      Number(Boolean(sources.organic_keywords)) +
+      Number(Boolean(sources.top_pages)) +
+      Number(Boolean(sources.gsc_pages && gsc));
+    const confidence = evidenceCount >= 2
+      ? "high"
+      : evidenceCount === 1 && (gsc || keyword.sampled_keywords >= 3 || pageKeywords !== null)
+        ? "medium"
+        : "low";
 
     opportunities.push({
       url,
@@ -170,6 +238,8 @@ export function buildOrganicOpportunities({
         quick_win_points: quickWin,
         traffic_points: trafficScore,
         business_intent_points: business,
+        gsc_reality_points: gscReality,
+        base_score: baseScore,
       },
       metrics: {
         organic_traffic: finite(page.organic_traffic) ?? Math.round(keyword.sampled_traffic * 100) / 100,
@@ -181,11 +251,17 @@ export function buildOrganicOpportunities({
         gaining_keywords: up,
         quick_win_keywords: keyword.quick_win_keywords.length,
         commercial_quick_wins: keyword.commercial_quick_wins,
+        gsc_clicks: finite(gsc?.clicks),
+        gsc_impressions: finite(gsc?.impressions),
+        gsc_ctr: gsc ? ((finite(gsc.impressions) ?? 0) > 0 ? (finite(gsc.clicks) ?? 0) / finite(gsc.impressions) : finite(gsc.ctr)) : null,
+        gsc_position: finite(gsc?.position),
+        gsc_clicks_change_percent: gsc?.change?.clicks_percent ?? (gsc ? percentChange(gsc.clicks, gsc.previous_clicks) : null),
       },
       quick_win_keywords: keyword.quick_win_keywords,
       evidence: {
         top_pages: Boolean(sources.top_pages && page.url),
         organic_keywords: Boolean(sources.organic_keywords && keyword.sampled_keywords),
+        gsc_pages: Boolean(sources.gsc_pages && gsc),
       },
     });
   }
@@ -201,15 +277,16 @@ export function buildOrganicOpportunities({
 
   return {
     target,
-    ready: Boolean(sources.organic_keywords || sources.top_pages),
+    ready: Boolean(sources.organic_keywords || sources.top_pages || sources.gsc_pages),
     sources,
     formula: {
       version: ORGANIC_OPPORTUNITY_VERSION,
-      priority_score: "risk_points + quick_win_points + traffic_points + business_intent_points, capped at 100",
+      priority_score: "base_score + gsc_reality_points, capped at 100; without GSC, score remains the v0.1 base score",
       risk_points: "min(35, lost_keywords*10 + declining_keywords*2)",
       quick_win_points: "sum(position 4-20 keyword demand points × rank weight × KD modifier), capped at 35",
       traffic_points: "0-20 from current estimated page traffic bands",
       business_intent_points: "2.5 per commercial/transactional quick win, capped at 10",
+      gsc_reality_points: "0-20 from real stored impressions, striking-distance position, low CTR, and click change",
     },
     summary: {
       total_pages: opportunities.length,
@@ -218,6 +295,6 @@ export function buildOrganicOpportunities({
     },
     opportunities,
     generated_at: new Date().toISOString(),
-    disclaimer: "Opportunity priority is a transparent rule-based workflow score from cached SEO evidence. It is not a ranking probability or revenue forecast.",
+    disclaimer: "Opportunity priority is a transparent rule-based workflow score from cached DataForSEO evidence plus stored GSC evidence when available. It is not a ranking probability or revenue forecast.",
   };
 }
