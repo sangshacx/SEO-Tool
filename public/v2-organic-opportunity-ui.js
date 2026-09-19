@@ -72,7 +72,7 @@ export function organicOpportunityPanelMarkup() {
       <section class="v2-action-queue" data-v2-action-queue>
         <div class="v2-action-queue-head">
           <div><span>TOP ACTION QUEUE</span><b>接下来优先处理的页面</b></div>
-          <small><strong data-v2-action-queue-count>0</strong> actionable pages · Monitor 已排除</small>
+          <small><strong data-v2-action-queue-count>0</strong> shown / <strong data-v2-action-queue-candidates>0</strong> active candidates · <strong data-v2-action-queue-hidden>0</strong> hidden · Monitor 已排除</small>
         </div>
         <div class="v2-organic-table-shell">
           <table class="v2-organic-table v2-action-queue-table">
@@ -128,6 +128,8 @@ export function mountOrganicOpportunityTab({
   const nextBestResearch = section.querySelector("[data-v2-next-best-research]");
   const actionQueueBody = section.querySelector("[data-v2-action-queue-body]");
   const actionQueueCount = section.querySelector("[data-v2-action-queue-count]");
+  const actionQueueCandidates = section.querySelector("[data-v2-action-queue-candidates]");
+  const actionQueueHidden = section.querySelector("[data-v2-action-queue-hidden]");
   const sourceCards = {
     organic_keywords: section.querySelector('[data-v2-opportunity-source="organic_keywords"]'),
     top_pages: section.querySelector('[data-v2-opportunity-source="top_pages"]'),
@@ -236,6 +238,8 @@ export function mountOrganicOpportunityTab({
   const renderActionQueue = (data) => {
     const queue = Array.isArray(data?.action_queue) ? data.action_queue : [];
     actionQueueCount.textContent = String(queue.length);
+    actionQueueCandidates.textContent = String(data?.workflow_summary?.active_candidates ?? queue.length);
+    actionQueueHidden.textContent = String(data?.workflow_summary?.suppressed ?? 0);
     actionQueueBody.replaceChildren();
     if (!queue.length) {
       const row=document.createElement("tr"),cell=document.createElement("td");
