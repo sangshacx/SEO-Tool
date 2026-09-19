@@ -2,6 +2,7 @@ const ENDPOINTS = Object.freeze({
   overview: "/api/v2/ai/visibility",
   compare: "/api/v2/ai/compare",
   pages: "/api/v2/ai/pages",
+  history: "/api/v2/ai/history",
 });
 
 function cleanDomain(value) {
@@ -174,6 +175,51 @@ function renderPages(body, rows = []) {
   });
 }
 
+function renderHistory(body, historical = [], newLost = []) {
+  body.replaceChildren();
+  const historyMap = new Map((Array.isArray(historical) ? historical : []).map((row) => [String(row.period).slice(0, 7), row]));
+  const changeMap = new Map((Array.isArray(newLost) ? newLost : []).map((row) => [String(row.date).slice(0, 7), row]));
+  const periods = [...new Set([...historyMap.keys(), ...changeMap.keys()])].sort().reverse();
+  if (!periods.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 7;
+    cell.className = "v2-ai-empty";
+    cell.textContent = "D1 还没有 AI Visibility 历史。可分别回填 Historical 和 New/Lost。";
+    row.append(cell);
+    body.append(row);
+    return;
+  }
+  periods.forEach((period) => {
+    const history = historyMap.get(period) ?? {};
+    const change = changeMap.get(period) ?? {};
+    const row = document.createElement("tr");
+    [
+      period,
+      numberLabel(history.mentions),
+      numberLabel(history.ai_search_volume),
+      numberLabel(change.new_mentions),
+      numberLabel(change.lost_mentions),
+      numberLabel(change.net_mentions),
+      numberLabel(change.net_ai_search_volume),
+    ].forEach((value) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    });
+    body.append(row);
+  });
+}
+
+async function getJson(fetchImpl, endpoint, params) {
+  const query = new URLSearchParams(params);
+  const response = await fetchImpl(endpoint + "?" + query.toString(), {
+    headers: { accept: "application/json" },
+  });
+  const payload = await response.json().catch(() => ({}));
+  return { response, payload };
+}
+
 async function post(fetchImpl, endpoint, body) {
   const response = await fetchImpl(endpoint, {
     method: "POST",
@@ -267,6 +313,31 @@ export function createAiVisibilityWorkspace() {
 
     <section class="v2-ai-panel">
       <div class="v2-ai-panel-head">
+        <div><span>HISTORY · D1</span><h3>AI Visibility History & New/Lost</h3></div>
+        <div class="v2-ai-actions">
+          <select data-v2-ai-history-months aria-label="AI Visibility 历史范围">
+            <option value="6">6 months</option>
+            <option value="12" selected>12 months</option>
+            <option value="0">All available</option>
+          </select>
+          <button type="button" class="secondary-action" data-v2-ai-read-history>读取 D1 · $0</button>
+          <button type="button" data-v2-ai-refresh-history>回填 Historical</button>
+          <button type="button" data-v2-ai-refresh-new-lost>回填 New/Lost</button>
+        </div>
+      </div>
+      <div class="v2-ai-history-note">
+        D1 读取始终 $0。Historical 与 New/Lost 是两个独立的 DataForSEO 付费请求，只会在勾选上方 Cost Guard 后执行。
+      </div>
+      <div class="v2-ai-tablewrap">
+        <table>
+          <thead><tr><th>Month</th><th>Mentions</th><th>AI Search Volume</th><th>New</th><th>Lost</th><th>Net Mentions</th><th>Net AI SV</th></tr></thead>
+          <tbody data-v2-ai-history-body></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="v2-ai-panel">
+      <div class="v2-ai-panel-head">
         <div><span>CITATION INTELLIGENCE</span><h3>Top Mentioned Pages</h3></div>
         <div class="v2-ai-actions">
           <select data-v2-ai-page-limit aria-label="Top Mentioned Pages 数量">
@@ -307,6 +378,8 @@ export function mountAiVisibility({
   const pageLimit = section.querySelector("[data-v2-ai-page-limit]");
   const compareBody = section.querySelector("[data-v2-ai-compare-body]");
   const pagesBody = section.querySelector("[data-v2-ai-pages-body]");
+  const historyBody = section.querySelector("[data-v2-ai-history-body]");
+  const historyMonths = section.querySelector("[data-v2-ai-history-months]");
   let scope = context.get?.() ?? {};
   let requestId = 0;
   let destroyed = false;
@@ -427,6 +500,59 @@ export function mountAiVisibility({
     }
   };
 
+  const loadStoredHistory = async () => {
+    const check = availability();
+    if (!check.available) return setStatus(check.message, "warning");
+    busy(true);
+    setStatus("正在从 D1 读取 AI Visibility 历史，本次费用 $0…", "loading");
+    try {
+      const { response, payload } = await getJson(fetchImpl, ENDPOINTS.history, {
+        target: scope.domain ?? "",
+        location_code: String(scope.location_code ?? ""),
+        language_code: scope.language_code ?? "",
+        platform: platform.value,
+      });
+      if (destroyed) return;
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "AI Visibility 历史读取失败。");
+      renderHistory(historyBody, payload.data?.historical, payload.data?.new_lost);
+      setStatus(
+        payload.data?.ready
+          ? "已从 D1 读取 AI Visibility 历史，本次费用 $0。"
+          : "D1 暂无 AI Visibility 历史；需要时可手动回填。",
+        payload.data?.ready ? "success" : "warning",
+      );
+    } catch (error) {
+      if (!destroyed) setStatus(error?.message || "AI Visibility 历史读取失败。", "error");
+    } finally {
+      if (!destroyed) busy(false);
+    }
+  };
+
+  const refreshHistorySeries = async (series) => {
+    if (!ensureLive()) return;
+    busy(true);
+    setStatus(
+      series === "new_lost" ? "正在付费回填 AI New/Lost…" : "正在付费回填 AI Historical…",
+      "loading",
+    );
+    try {
+      const { response, payload } = await post(fetchImpl, ENDPOINTS.history, buildAiVisibilityBody(scope, platform.value, {
+        months: Number(historyMonths.value),
+        series,
+        allow_live_request: true,
+        force_refresh: true,
+      }));
+      if (destroyed) return;
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "AI Visibility 历史回填失败。");
+      paid.checked = false;
+      await loadStoredHistory();
+    } catch (error) {
+      if (!destroyed) setStatus(error?.message || "AI Visibility 历史回填失败。", "error");
+    } finally {
+      if (!destroyed) busy(false);
+    }
+  };
+
   const listeners = [
     [section.querySelector("[data-v2-ai-read-overview]"), "click", () => loadOverview()],
     [section.querySelector("[data-v2-ai-refresh-overview]"), "click", () => loadOverview({ live: true })],
@@ -434,11 +560,15 @@ export function mountAiVisibility({
     [section.querySelector("[data-v2-ai-refresh-compare]"), "click", () => loadComparison({ live: true })],
     [section.querySelector("[data-v2-ai-read-pages]"), "click", () => loadPages()],
     [section.querySelector("[data-v2-ai-refresh-pages]"), "click", () => loadPages({ live: true })],
+    [section.querySelector("[data-v2-ai-read-history]"), "click", () => loadStoredHistory()],
+    [section.querySelector("[data-v2-ai-refresh-history]"), "click", () => refreshHistorySeries("historical")],
+    [section.querySelector("[data-v2-ai-refresh-new-lost]"), "click", () => refreshHistorySeries("new_lost")],
     [platform, "change", () => {
       renderComparison(compareBody, []);
       renderPages(pagesBody, []);
       syncScope();
       loadOverview();
+      loadStoredHistory();
     }],
   ];
   listeners.forEach(([node, type, handler]) => node?.addEventListener(type, handler));
@@ -447,11 +577,13 @@ export function mountAiVisibility({
     scope = next;
     syncScope();
     loadOverview();
+    loadStoredHistory();
   });
 
   emptyList(section.querySelector("[data-v2-ai-sources]"), "先读取当前网站的 AI Visibility 缓存。");
   renderComparison(compareBody, []);
   renderPages(pagesBody, []);
+  renderHistory(historyBody, [], []);
 
   return () => {
     destroyed = true;
