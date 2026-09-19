@@ -519,7 +519,7 @@ export function mountDashboardDecision({
     page.title = next.page;
     text(query, next.query || "No single query selected");
     query.title = next.query || "";
-    const aiWorkspace = ["dataforseo_ai_history", "ai_prompt_tracker_d1"].includes(next.query_source);
+    const aiWorkspace = ["dataforseo_ai_history", "ai_prompt_tracker_d1", "gsc_generative_ai_d1"].includes(next.query_source);
     text(source, next.query_source === "gsc_query_page"
       ? "GSC Query+Page"
       : next.query_source === "dataforseo_cache"
@@ -528,7 +528,9 @@ export function mountDashboardDecision({
           ? "AI History · D1"
           : next.query_source === "ai_prompt_tracker_d1"
             ? "Prompt Tracker · D1"
-            : "Page evidence");
+            : next.query_source === "gsc_generative_ai_d1"
+              ? "GSC Generative · D1"
+              : "Page evidence");
     const workflowStatus=next.workflow?.status||"new";
     text(workflow, workflowStatus==="in_progress"?"In Progress":workflowStatus==="done"?"Done":workflowStatus==="snoozed"?"Snoozed":"New");
     workflow.dataset.status=workflowStatus;
