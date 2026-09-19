@@ -119,6 +119,20 @@ export function organicOpportunityPanelMarkup() {
         <p class="v2-workflow-outcomes-note">Outcome 只表示完成前后观察到的 GSC 变化，不证明这些变化由该 SEO 动作造成。</p>
       </section>
 
+      <section class="v2-workflow-outcomes v2-ai-prompt-outcomes" data-v2-ai-prompt-outcomes>
+        <div class="v2-workflow-outcomes-head">
+          <div><span>AI OUTCOME VALIDATION · D1</span><b>完成后的 Prompt mention / citation 变化</b></div>
+          <small><strong data-v2-ai-prompt-outcome-recovered>0</strong> recovered / <strong data-v2-ai-prompt-outcome-ready>0</strong> ready / <strong data-v2-ai-prompt-outcome-total>0</strong> completed · $0 read</small>
+        </div>
+        <div class="v2-organic-table-shell">
+          <table class="v2-organic-table v2-workflow-outcomes-table v2-ai-prompt-outcomes-table">
+            <thead><tr><th>Completed</th><th>Observed Change</th><th>Tracker</th><th>Platform / Model</th><th>Prompt</th><th>Baseline</th><th>Next Observation</th><th>Citations</th><th>Cost</th></tr></thead>
+            <tbody data-v2-ai-prompt-outcomes-body><tr><td colspan="9" class="v2-organic-empty">Done 的 Prompt Recovery 会等待下一次真实 Prompt Test observation，再验证 mention / citation 是否恢复。</td></tr></tbody>
+          </table>
+        </div>
+        <p class="v2-workflow-outcomes-note">AI Outcome 只比较 workflow 完成前后的 Saved Prompt observations；模型回答变化不证明由该 SEO 动作造成。</p>
+      </section>
+
       <div class="v2-organic-table-shell">
         <table class="v2-organic-table v2-organic-opportunity-table">
           <thead><tr><th>Priority</th><th>Page</th><th>Action</th><th>Traffic</th><th>Quick Wins</th><th>Down / Lost</th><th>Commercial QW</th><th>GSC Reality</th><th>Score Breakdown</th><th>Confidence</th><th>Workflow</th><th>Next</th></tr></thead>
@@ -172,6 +186,10 @@ export function mountOrganicOpportunityTab({
   const workflowOutcomesBody = section.querySelector("[data-v2-workflow-outcomes-body]");
   const workflowOutcomeReady = section.querySelector("[data-v2-workflow-outcome-ready]");
   const workflowOutcomeTotal = section.querySelector("[data-v2-workflow-outcome-total]");
+  const aiPromptOutcomesBody = section.querySelector("[data-v2-ai-prompt-outcomes-body]");
+  const aiPromptOutcomeRecovered = section.querySelector("[data-v2-ai-prompt-outcome-recovered]");
+  const aiPromptOutcomeReady = section.querySelector("[data-v2-ai-prompt-outcome-ready]");
+  const aiPromptOutcomeTotal = section.querySelector("[data-v2-ai-prompt-outcome-total]");
   const sourceCards = {
     organic_keywords: section.querySelector('[data-v2-opportunity-source="organic_keywords"]'),
     top_pages: section.querySelector('[data-v2-opportunity-source="top_pages"]'),
@@ -507,6 +525,71 @@ export function mountOrganicOpportunityTab({
     });
   };
 
+  const renderAiPromptOutcomes = (data) => {
+    const outcomes=Array.isArray(data?.ai_prompt_workflow_outcomes)?data.ai_prompt_workflow_outcomes:[];
+    const summary=data?.ai_prompt_workflow_outcome_summary??{};
+    aiPromptOutcomeRecovered.textContent=String(summary.recovered??outcomes.filter((item)=>["citation_recovered","mention_recovered"].includes(item?.observed?.code)).length);
+    aiPromptOutcomeReady.textContent=String(summary.ready??outcomes.filter((item)=>item.status==="ready").length);
+    aiPromptOutcomeTotal.textContent=String(summary.total??outcomes.length);
+    aiPromptOutcomesBody.replaceChildren();
+
+    if(!outcomes.length){
+      const row=document.createElement("tr"),cell=document.createElement("td");
+      cell.colSpan=9;cell.className="v2-organic-empty";
+      cell.textContent="还没有完成并绑定 Saved Prompt 的 AI Recovery workflow。";
+      row.append(cell);aiPromptOutcomesBody.append(row);return;
+    }
+
+    const signal=(observation)=>{
+      if(!observation)return "—";
+      return "Mention "+(observation.target_domain_mentioned===true?"Yes":observation.target_domain_mentioned===false?"No":"—")+
+        " · Citation "+(observation.target_domain_cited===true?"Yes":observation.target_domain_cited===false?"No":"—");
+    };
+
+    outcomes.forEach((item)=>{
+      const row=document.createElement("tr");
+
+      const completed=document.createElement("td");
+      const completedDate=new Date(item.completed_at);
+      completed.textContent=Number.isNaN(completedDate.getTime())?(item.completed_at||"—"):completedDate.toLocaleDateString();
+      completed.title=item.completed_at||"";
+
+      const observed=document.createElement("td"),badge=document.createElement("span");
+      badge.className="v2-outcome-badge";
+      badge.dataset.outcome=item?.observed?.code||item.status||"waiting";
+      badge.textContent=item?.observed?.label||"Waiting";
+      observed.append(badge);
+
+      const tracker=document.createElement("td");
+      tracker.textContent=(item.tracker_name||"Prompt")+" · #"+(item.tracker_id||"—");
+
+      const platform=document.createElement("td");
+      platform.textContent=[item.platform,item.model_name].filter(Boolean).join(" · ")||"—";
+
+      const prompt=document.createElement("td");
+      prompt.className="v2-ai-prompt-outcome-prompt";
+      prompt.textContent=item.prompt||"—";
+      prompt.title=item.prompt||"";
+
+      const baseline=document.createElement("td");
+      baseline.textContent=signal(item.baseline);
+      baseline.title=item.baseline?.observed_at||"";
+
+      const after=document.createElement("td");
+      after.textContent=signal(item.after);
+      after.title=item.after?.observed_at||"";
+
+      const citations=document.createElement("td");
+      citations.textContent=(item.baseline?.citation_count??0)+" → "+(item.after?.citation_count??"—");
+
+      const cost=document.createElement("td");
+      cost.textContent=item.after?.actual_cost_usd==null?"—":"$"+Number(item.after.actual_cost_usd).toFixed(6).replace(/0+$/,"").replace(/\.$/,"");
+
+      row.append(completed,observed,tracker,platform,prompt,baseline,after,citations,cost);
+      aiPromptOutcomesBody.append(row);
+    });
+  };
+
   const renderRows = (data) => {
     const rows = Array.isArray(data?.opportunities) ? data.opportunities : [];
     body.replaceChildren();
@@ -583,6 +666,7 @@ export function mountOrganicOpportunityTab({
     renderActionQueue(data);
     renderWorkflowActivity(data);
     renderWorkflowOutcomes(data);
+    renderAiPromptOutcomes(data);
     renderRows(data);
     const missing=data?.missing_sources??[];
     meta.textContent=[
@@ -592,6 +676,9 @@ export function mountOrganicOpportunityTab({
       data?.sources?.gsc_pages ? "GSC reality ready" : "GSC optional · no stored page data",
       data?.sources?.ai_visibility ? "AI History ready · D1" : "AI History optional · no stored data",
       data?.sources?.ai_prompt_tracker ? "Prompt Tracker ready · D1" : "Prompt Tracker optional · no observations",
+      data?.ai_prompt_workflow_outcome_summary
+        ? "AI Outcomes "+(data.ai_prompt_workflow_outcome_summary.ready??0)+" ready · "+(data.ai_prompt_workflow_outcome_summary.recovered??0)+" recovered"
+        : null,
       data?.workflow_summary ? "Workflow active "+(data.workflow_summary.active??0)+" · hidden "+(data.workflow_summary.suppressed??0) : null,
       data?.disclaimer,
     ].filter(Boolean).join(" · ");
