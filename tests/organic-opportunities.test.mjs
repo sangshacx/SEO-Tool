@@ -70,7 +70,7 @@ test("GSC page reality is an additive adjustment and never changes the no-GSC ba
       change:{clicks_percent:-50},
     }],
   });
-  assert.equal(base.formula.version,"organic-opportunity-v0.3");
+  assert.equal(base.formula.version,"organic-opportunity-v0.4");
   assert.equal(base.opportunities[0].components.gsc_reality_points,0);
   assert.equal(base.opportunities[0].priority_score,base.opportunities[0].components.base_score);
   assert.ok(combined.opportunities[0].components.gsc_reality_points>0);
@@ -243,4 +243,68 @@ test("specific GSC low-CTR Top-10 evidence outranks generic Optimize when no rec
   assert.equal(page.next_best_action.query,"ctr target");
   assert.equal(page.next_best_action.query_source,"gsc_query_page");
   assert.match(page.next_best_action.why_now,/CTR below 3%/);
+});
+
+
+test("Action Queue excludes monitor-only pages and keeps the original opportunity scores unchanged", () => {
+  const data=buildOrganicOpportunities({
+    target:"example.com",
+    sources:{top_pages:{available:true}},
+    pageRows:[
+      {
+        url:"https://example.com/monitor/",
+        organic_traffic:0,
+        organic_keywords:0,
+        positions:{top_10:0},
+        changes:{up:0,down:0,lost:0},
+      },
+      {
+        url:"https://example.com/recover/",
+        organic_traffic:60,
+        organic_keywords:10,
+        positions:{top_10:2},
+        changes:{up:0,down:4,lost:0},
+      },
+    ],
+  });
+
+  const monitor=data.opportunities.find((row)=>row.url==="https://example.com/monitor/");
+  const recover=data.opportunities.find((row)=>row.url==="https://example.com/recover/");
+  assert.equal(monitor.action.code,"monitor");
+  assert.equal(recover.action.code,"recover");
+  assert.equal(data.action_queue.length,1);
+  assert.equal(data.action_queue[0].page,"https://example.com/recover/");
+  assert.equal(data.action_queue[0].action,"recover");
+  assert.equal(data.action_queue[0].workstream,"recovery");
+  assert.equal(data.action_queue[0].priority_score,recover.priority_score);
+});
+
+test("Next Best Action uses the first actionable queue item rather than a higher-scoring monitor row", () => {
+  const data=buildOrganicOpportunities({
+    target:"example.com",
+    sources:{top_pages:{available:true}},
+    pageRows:[
+      {
+        url:"https://example.com/monitor/",
+        organic_traffic:1200,
+        organic_keywords:1,
+        positions:{top_10:0},
+        changes:{up:0,down:0,lost:0},
+      },
+      {
+        url:"https://example.com/recover/",
+        organic_traffic:0,
+        organic_keywords:10,
+        positions:{top_10:0},
+        changes:{up:0,down:3,lost:0},
+      },
+    ],
+  });
+
+  assert.equal(data.opportunities[0].url,"https://example.com/monitor/");
+  assert.equal(data.opportunities[0].action.code,"monitor");
+  assert.equal(data.action_queue[0].page,"https://example.com/recover/");
+  assert.equal(data.next_best_action.page,"https://example.com/recover/");
+  assert.equal(data.next_best_action.action,"recover");
+  assert.equal(data.next_best_action.rank,1);
 });
