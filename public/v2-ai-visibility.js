@@ -4,6 +4,8 @@ const ENDPOINTS = Object.freeze({
   pages: "/api/v2/ai/pages",
   history: "/api/v2/ai/history",
   mentions: "/api/v2/ai/mentions",
+  promptModels: "/api/v2/ai/prompt-models",
+  promptTest: "/api/v2/ai/prompt-test",
 });
 
 function cleanDomain(value) {
@@ -70,6 +72,25 @@ export function aiPlatformAvailability(scope, platform) {
     available,
     message: available ? "" : "ChatGPT LLM Mentions 当前仅支持 United States / English。切换顶部市场后再读取。",
   };
+}
+
+export function pickDefaultPromptModel(models = [], platform = "chat_gpt") {
+  const items = Array.isArray(models) ? models.filter((item) => item?.model_name) : [];
+  if (!items.length) return null;
+  const preferred = {
+    chat_gpt: ["mini", "nano"],
+    claude: ["haiku", "sonnet"],
+    gemini: ["flash", "lite"],
+    perplexity: ["sonar"],
+  }[platform] ?? [];
+  for (const token of preferred) {
+    const match = items.find((item) =>
+      String(item.model_name).toLowerCase().includes(token) &&
+      item.reasoning !== true
+    );
+    if (match) return match;
+  }
+  return items.find((item) => item.reasoning !== true) ?? items[0];
 }
 
 function numberLabel(value) {
@@ -326,6 +347,83 @@ function renderCitationExplorer(node, rows = []) {
   });
 }
 
+function boolLabel(value) {
+  if (value === true) return "YES";
+  if (value === false) return "NO";
+  return "—";
+}
+
+function usdLabel(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? "$" + number.toFixed(6).replace(/0+$/, "").replace(/\.$/, "") : "—";
+}
+
+function renderPromptTestResult(section, data = null, meta = {}) {
+  const result = section.querySelector("[data-v2-ai-prompt-result]");
+  const answer = section.querySelector("[data-v2-ai-prompt-answer]");
+  const citations = section.querySelector("[data-v2-ai-prompt-citations]");
+  const fanOut = section.querySelector("[data-v2-ai-prompt-fanout]");
+  if (!result || !answer || !citations || !fanOut) return;
+
+  if (!data) {
+    result.hidden = true;
+    answer.textContent = "";
+    citations.replaceChildren();
+    fanOut.replaceChildren();
+    return;
+  }
+
+  result.hidden = false;
+  setText(section.querySelector("[data-v2-ai-prompt-result-model]"), data.model_name);
+  setText(section.querySelector("[data-v2-ai-prompt-result-mentioned]"), boolLabel(data.target_domain_mentioned));
+  setText(section.querySelector("[data-v2-ai-prompt-result-cited]"), boolLabel(data.target_domain_cited));
+  setText(section.querySelector("[data-v2-ai-prompt-result-cost]"), meta?.cached ? "$0" : usdLabel(meta?.actual_cost_usd));
+  setText(section.querySelector("[data-v2-ai-prompt-result-tokens]"),
+    [numberLabel(data.input_tokens), numberLabel(data.output_tokens)].join(" / ")
+  );
+  setText(section.querySelector("[data-v2-ai-prompt-result-web]"), data.web_search === true ? "Used" : data.web_search === false ? "Not used" : "—");
+
+  answer.textContent = data.answer || "No answer text returned.";
+
+  citations.replaceChildren();
+  const rows = Array.isArray(data.annotations) ? data.annotations : [];
+  if (!rows.length) {
+    const empty = document.createElement("li");
+    empty.className = "v2-ai-empty";
+    empty.textContent = "No citation annotations returned.";
+    citations.append(empty);
+  } else {
+    rows.forEach((row) => {
+      const item = document.createElement("li");
+      const link = document.createElement(row?.url ? "a" : "span");
+      if (row?.url) {
+        link.href = row.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+      }
+      link.textContent = row?.title || row?.domain || row?.url || "Citation";
+      const domain = document.createElement("small");
+      domain.textContent = row?.domain || "";
+      item.append(link, domain);
+      if (row?.text) {
+        const excerpt = document.createElement("p");
+        excerpt.textContent = row.text;
+        item.append(excerpt);
+      }
+      citations.append(item);
+    });
+  }
+
+  fanOut.replaceChildren();
+  const queries = Array.isArray(data.fan_out_queries) ? data.fan_out_queries : [];
+  queries.forEach((value) => {
+    const chip = document.createElement("span");
+    chip.textContent = value;
+    fanOut.append(chip);
+  });
+  fanOut.hidden = queries.length === 0;
+}
+
 async function getJson(fetchImpl, endpoint, params) {
   const query = new URLSearchParams(params);
   const response = await fetchImpl(endpoint + "?" + query.toString(), {
@@ -451,6 +549,69 @@ export function createAiVisibilityWorkspace() {
       </div>
     </section>
 
+    <section class="v2-ai-panel v2-ai-prompt-tracker">
+      <div class="v2-ai-panel-head">
+        <div>
+          <span>CUSTOM PROMPT TRACKER</span>
+          <h3>Single Prompt Test</h3>
+        </div>
+        <div class="v2-ai-prompt-free-label">Models list · $0</div>
+      </div>
+      <div class="v2-ai-prompt-form">
+        <label>AI 平台
+          <select data-v2-ai-prompt-platform>
+            <option value="chat_gpt">ChatGPT</option>
+            <option value="claude">Claude</option>
+            <option value="gemini">Gemini</option>
+            <option value="perplexity">Perplexity</option>
+          </select>
+        </label>
+        <label>模型
+          <select data-v2-ai-prompt-model>
+            <option value="">正在读取免费模型列表…</option>
+          </select>
+        </label>
+        <label class="v2-ai-prompt-web">
+          <span>Web Search</span>
+          <span class="v2-ai-prompt-toggle"><input type="checkbox" data-v2-ai-prompt-web-search checked> 启用网页搜索 / citations</span>
+          <small data-v2-ai-prompt-web-note>模型支持时启用。</small>
+        </label>
+        <label class="v2-ai-prompt-input">Prompt
+          <textarea maxlength="500" data-v2-ai-prompt-text placeholder="例如：Which companies are reliable manufacturers of waterproof membranes for commercial roofing projects?"></textarea>
+          <small><span data-v2-ai-prompt-count>0</span>/500 · Prompt 使用你输入的语言；当前市场用于可支持模型的 web-search 国家定位。</small>
+        </label>
+        <div class="v2-ai-prompt-buttons">
+          <button type="button" class="secondary-action" data-v2-ai-prompt-read-cache>读取相同 Prompt 缓存 · $0</button>
+          <button type="button" data-v2-ai-prompt-run>运行 Prompt Test · 付费</button>
+        </div>
+      </div>
+      <div class="v2-ai-prompt-guidance">
+        第一版只运行单个 Prompt，不自动批量或定时执行。模型列表免费；真实 Prompt Test 使用 LLM Responses Live，成本取决于模型与 token 使用。
+      </div>
+      <div class="v2-ai-prompt-result" data-v2-ai-prompt-result hidden>
+        <div class="v2-ai-prompt-metrics">
+          <article><span>Model</span><b data-v2-ai-prompt-result-model>—</b></article>
+          <article><span>Domain Mentioned</span><b data-v2-ai-prompt-result-mentioned>—</b></article>
+          <article><span>Domain Cited</span><b data-v2-ai-prompt-result-cited>—</b></article>
+          <article><span>Actual Cost</span><b data-v2-ai-prompt-result-cost>—</b></article>
+          <article><span>Input / Output Tokens</span><b data-v2-ai-prompt-result-tokens>—</b></article>
+          <article><span>Web Search</span><b data-v2-ai-prompt-result-web>—</b></article>
+        </div>
+        <div class="v2-ai-prompt-output">
+          <div>
+            <span class="v2-ai-subhead">AI answer</span>
+            <pre data-v2-ai-prompt-answer></pre>
+          </div>
+          <div>
+            <span class="v2-ai-subhead">Citations</span>
+            <ul data-v2-ai-prompt-citations></ul>
+          </div>
+        </div>
+        <div class="v2-ai-prompt-fanout" data-v2-ai-prompt-fanout hidden></div>
+        <p class="v2-ai-prompt-disclaimer">这是单次模型观察，回答可能随时间、模型和检索结果变化；不会保存或展示 reasoning 内容。</p>
+      </div>
+    </section>
+
     <section class="v2-ai-panel">
       <div class="v2-ai-panel-head">
         <div>
@@ -519,6 +680,12 @@ export function mountAiVisibility({
   const historyMonths = section.querySelector("[data-v2-ai-history-months]");
   const mentionLimit = section.querySelector("[data-v2-ai-mention-limit]");
   const mentionsList = section.querySelector("[data-v2-ai-mentions-list]");
+  const promptPlatform = section.querySelector("[data-v2-ai-prompt-platform]");
+  const promptModel = section.querySelector("[data-v2-ai-prompt-model]");
+  const promptText = section.querySelector("[data-v2-ai-prompt-text]");
+  const promptCount = section.querySelector("[data-v2-ai-prompt-count]");
+  const promptWebSearch = section.querySelector("[data-v2-ai-prompt-web-search]");
+  const promptWebNote = section.querySelector("[data-v2-ai-prompt-web-note]");
   let scope = context.get?.() ?? {};
   let requestId = 0;
   let destroyed = false;
@@ -723,6 +890,105 @@ export function mountAiVisibility({
     }
   };
 
+  const syncPromptModelCapability = () => {
+    const option = promptModel?.selectedOptions?.[0] ?? null;
+    const supported = option?.dataset?.webSearchSupported === "true";
+    if (promptPlatform.value === "perplexity") {
+      promptWebSearch.checked = true;
+      promptWebSearch.disabled = true;
+      promptWebNote.textContent = "Perplexity Sonar 使用 web search；此开关固定开启。";
+      return;
+    }
+    promptWebSearch.disabled = !supported;
+    if (!supported) promptWebSearch.checked = false;
+    promptWebNote.textContent = supported
+      ? "当前模型支持 web search，可返回 citations。"
+      : "当前模型不支持 web search；已自动关闭。";
+  };
+
+  const loadPromptModels = async () => {
+    promptModel.disabled = true;
+    promptModel.replaceChildren();
+    const loading = document.createElement("option");
+    loading.value = "";
+    loading.textContent = "正在读取免费模型列表…";
+    promptModel.append(loading);
+    try {
+      const { response, payload } = await getJson(fetchImpl, ENDPOINTS.promptModels, {
+        platform: promptPlatform.value,
+      });
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "模型列表读取失败。");
+      const models = Array.isArray(payload.data?.models) ? payload.data.models : [];
+      promptModel.replaceChildren();
+      models.forEach((model) => {
+        const option = document.createElement("option");
+        option.value = model.model_name;
+        option.textContent = model.model_name + [
+          model.reasoning ? "reasoning" : null,
+          model.web_search_supported ? "web" : null,
+        ].filter(Boolean).map((value) => " · " + value).join("");
+        option.dataset.reasoning = String(model.reasoning === true);
+        option.dataset.webSearchSupported = String(model.web_search_supported === true);
+        promptModel.append(option);
+      });
+      const preferred = pickDefaultPromptModel(models, promptPlatform.value);
+      if (preferred) promptModel.value = preferred.model_name;
+      promptModel.disabled = models.length === 0;
+      syncPromptModelCapability();
+      if (!models.length) setStatus("当前平台没有返回可用模型。", "warning");
+    } catch (error) {
+      promptModel.replaceChildren();
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = "模型列表不可用";
+      promptModel.append(option);
+      promptModel.disabled = true;
+      setStatus(error?.message || "模型列表读取失败。", "error");
+    }
+  };
+
+  const loadPromptTest = async ({ live = false } = {}) => {
+    const prompt = String(promptText.value || "").trim();
+    if (!prompt) return setStatus("先输入一个 Prompt。", "warning");
+    if (!promptModel.value) return setStatus("先选择一个可用模型。", "warning");
+    if (live && !paid.checked) {
+      setStatus("Prompt Test 未执行：先勾选上方“允许本次付费刷新”。", "warning");
+      return;
+    }
+
+    busy(true);
+    setStatus(live ? "正在运行付费 Prompt Test；LLM Live 最长可能需要约 120 秒…" : "正在读取相同 Prompt 的缓存…", "loading");
+    try {
+      const { response, payload } = await post(fetchImpl, ENDPOINTS.promptTest, {
+        target: scope.domain ?? "",
+        location_code: scope.location_code,
+        language_code: scope.language_code,
+        platform: promptPlatform.value,
+        model_name: promptModel.value,
+        prompt,
+        web_search: promptWebSearch.checked,
+        ...(live ? { allow_live_request: true, force_refresh: true } : {}),
+      });
+      if (response.status === 409 && payload?.error?.code === "LIVE_REQUEST_CONFIRMATION_REQUIRED") {
+        setStatus("当前没有相同 Prompt / 模型 / 市场的缓存。需要测试时勾选 Cost Guard 后运行。", "warning");
+        return;
+      }
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Prompt Test 失败。");
+      renderPromptTestResult(section, payload.data, payload.meta);
+      if (live) paid.checked = false;
+      setStatus(
+        payload.meta?.cached
+          ? "已读取相同 Prompt 的 7 天缓存，本次费用 $0。"
+          : "Prompt Test 已完成并写入 7 天缓存；实际费用已显示。",
+        "success",
+      );
+    } catch (error) {
+      setStatus(error?.message || "Prompt Test 失败。", "error");
+    } finally {
+      busy(false);
+    }
+  };
+
   const listeners = [
     [section.querySelector("[data-v2-ai-read-overview]"), "click", () => loadOverview()],
     [section.querySelector("[data-v2-ai-refresh-overview]"), "click", () => loadOverview({ live: true })],
@@ -735,10 +1001,23 @@ export function mountAiVisibility({
     [section.querySelector("[data-v2-ai-refresh-new-lost]"), "click", () => refreshHistorySeries("new_lost")],
     [section.querySelector("[data-v2-ai-read-mentions]"), "click", () => loadMentions()],
     [section.querySelector("[data-v2-ai-refresh-mentions]"), "click", () => loadMentions({ live: true })],
+    [section.querySelector("[data-v2-ai-prompt-read-cache]"), "click", () => loadPromptTest()],
+    [section.querySelector("[data-v2-ai-prompt-run]"), "click", () => loadPromptTest({ live: true })],
+    [promptPlatform, "change", () => {
+      renderPromptTestResult(section, null);
+      loadPromptModels();
+    }],
+    [promptModel, "change", () => syncPromptModelCapability()],
+    [promptText, "input", () => {
+      promptCount.textContent = String(promptText.value.length);
+      renderPromptTestResult(section, null);
+    }],
     [platform, "change", () => {
       renderComparison(compareBody, []);
       renderPages(pagesBody, []);
       renderCitationExplorer(mentionsList, []);
+  renderPromptTestResult(section, null);
+  loadPromptModels();
       syncScope();
       loadOverview();
       loadStoredHistory();
