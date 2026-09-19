@@ -7,6 +7,7 @@ export const GSC_DIMENSION_SETS = Object.freeze({
 });
 export const DEFAULT_GSC_DIMENSION_SETS = Object.freeze(["query", "page", "query_page"]);
 export const GSC_SYNC_ROW_LIMITS = Object.freeze([1000, 2500, 5000]);
+export const GSC_BACKFILL_DAYS = Object.freeze([1, 3, 7]);
 
 function isoDate(value) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value + "T00:00:00Z"))) return null;
@@ -43,9 +44,33 @@ export function normalizeGscSyncRequest(input = {}, now = new Date()) {
     throw error;
   }
 
+  const backfillDays = Number(input.backfill_days ?? 1);
+  if (!GSC_BACKFILL_DAYS.includes(backfillDays)) {
+    const error = new TypeError("Choose a GSC backfill window of 1, 3, or 7 days.");
+    error.code = "GSC_INVALID_BACKFILL_DAYS";
+    throw error;
+  }
+  if (backfillDays > 1 && rowLimit > 1000) {
+    const error = new TypeError("Multi-day GSC backfill is capped at 1,000 rows per dimension set.");
+    error.code = "GSC_BACKFILL_ROW_LIMIT";
+    throw error;
+  }
+
   return {
     target_date: targetDate,
     dimension_sets: sets,
     row_limit_per_set: rowLimit,
+    backfill_days: backfillDays,
   };
+}
+
+export function gscSyncDates(targetDate, backfillDays = 1) {
+  const days = Number(backfillDays);
+  if (!GSC_BACKFILL_DAYS.includes(days)) throw new TypeError("Unsupported GSC backfill window.");
+  const end = new Date(targetDate + "T00:00:00Z");
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(end);
+    date.setUTCDate(date.getUTCDate() - index);
+    return date.toISOString().slice(0, 10);
+  }).sort();
 }
