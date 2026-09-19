@@ -519,22 +519,24 @@ export function mountDashboardDecision({
     page.title = next.page;
     text(query, next.query || "No single query selected");
     query.title = next.query || "";
-    const aiHistory = next.query_source === "dataforseo_ai_history";
+    const aiWorkspace = ["dataforseo_ai_history", "ai_prompt_tracker_d1"].includes(next.query_source);
     text(source, next.query_source === "gsc_query_page"
       ? "GSC Query+Page"
       : next.query_source === "dataforseo_cache"
         ? "DataForSEO cache"
-        : aiHistory
+        : next.query_source === "dataforseo_ai_history"
           ? "AI History · D1"
-          : "Page evidence");
+          : next.query_source === "ai_prompt_tracker_d1"
+            ? "Prompt Tracker · D1"
+            : "Page evidence");
     const workflowStatus=next.workflow?.status||"new";
     text(workflow, workflowStatus==="in_progress"?"In Progress":workflowStatus==="done"?"Done":workflowStatus==="snoozed"?"Snoozed":"New");
     workflow.dataset.status=workflowStatus;
     text(why, next.why_now || "Top-ranked local decision evidence.");
-    research.disabled = aiHistory ? false : !next.query;
-    research.dataset.v2DashboardResearchQuery = aiHistory ? "" : next.query || "";
-    research.dataset.v2DashboardResearchRoute = aiHistory ? "ai-visibility" : "";
-    text(research, aiHistory ? "Open AI Visibility" : "Research Recommended Query");
+    research.disabled = aiWorkspace ? false : !next.query;
+    research.dataset.v2DashboardResearchQuery = aiWorkspace ? "" : next.query || "";
+    research.dataset.v2DashboardResearchRoute = aiWorkspace ? "ai-visibility" : "";
+    text(research, aiWorkspace ? "Open AI Visibility" : "Research Recommended Query");
   };
 
   const load = async (scope) => {
