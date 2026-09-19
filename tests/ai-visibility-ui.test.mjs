@@ -195,3 +195,43 @@ test("Saved Prompt tables and history have dedicated compact workspace styling",
   assert.match(css,/\.v2-ai-tracker-actions/);
   assert.match(css,/tr\[data-current="true"\]/);
 });
+
+
+test("Saved Prompt trend UI shows descriptive D1 rates, latest change and cumulative spend without a synthetic score", () => {
+  assert.match(ui,/data-v2-ai-tracker-summary-active/);
+  assert.match(ui,/data-v2-ai-tracker-summary-runs/);
+  assert.match(ui,/data-v2-ai-tracker-summary-mention-rate/);
+  assert.match(ui,/data-v2-ai-tracker-summary-citation-rate/);
+  assert.match(ui,/data-v2-ai-tracker-summary-spend/);
+  assert.match(ui,/Mention Rate/);
+  assert.match(ui,/Citation Rate/);
+  assert.match(ui,/Latest Change/);
+  assert.match(ui,/Total Spend/);
+  assert.match(ui,/trend\.change/);
+  assert.match(ui,/data\.kind|dataset\.kind/);
+  assert.doesNotMatch(ui,/AI Prompt Score|Prompt Score/);
+});
+
+test("Prompt observation refresh runs only after real Prompt Test observations, not Citation Explorer refreshes", () => {
+  const promptStart=ui.indexOf("const loadPromptTest");
+  const promptEnd=ui.indexOf("const listeners",promptStart);
+  const promptBlock=ui.slice(promptStart,promptEnd);
+  const citationStart=ui.indexOf("const loadMentions");
+  const citationEnd=ui.indexOf("const clearCurrentTracker",citationStart);
+  const citationBlock=ui.slice(citationStart,citationEnd);
+  assert.match(promptBlock,/observation_recorded/);
+  assert.match(promptBlock,/loadSavedTrackers/);
+  assert.doesNotMatch(citationBlock,/observation_recorded/);
+});
+
+test("LLM Mentions platform changes do not reinitialize independent Custom Prompt Tracker controls", () => {
+  const marker='[platform, "change", () => {';
+  const start=ui.indexOf(marker);
+  const end=ui.indexOf("}],",start);
+  const block=ui.slice(start,end);
+  assert.match(block,/renderCitationExplorer/);
+  assert.match(block,/loadOverview/);
+  assert.match(block,/loadStoredHistory/);
+  assert.doesNotMatch(block,/loadPromptModels/);
+  assert.doesNotMatch(block,/renderPromptTestResult/);
+});
