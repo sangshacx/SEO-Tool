@@ -28,7 +28,7 @@ export function organicOpportunityPanelMarkup() {
       <div class="v2-organic-opportunity-head">
         <div>
           <b>Opportunity Center</b>
-          <span>把已经缓存的 Organic Keywords + Top Pages 转换成下一步页面行动。这个决策层固定 $0，不会发起 DataForSEO 请求。</span>
+          <span>把 DataForSEO 缓存与已同步的 GSC D1 证据转换成下一步页面行动。这个决策层固定 $0，不会发起 DataForSEO 或 Google 请求。</span>
         </div>
         <button type="button" data-v2-organic-opportunities-run>Recalculate · $0</button>
       </div>
@@ -36,6 +36,7 @@ export function organicOpportunityPanelMarkup() {
       <div class="v2-organic-opportunity-sources">
         <article data-v2-opportunity-source="organic_keywords"><span>Organic Keywords</span><b>Not loaded</b><small>用于 4–20 位 Quick Wins、KD、Volume、Intent</small><button type="button" data-v2-opportunity-go="keywords">Open Organic Keywords</button></article>
         <article data-v2-opportunity-source="top_pages"><span>Top Pages</span><b>Not loaded</b><small>用于页面 Traffic、Top 10、Up/Down/Lost 风险</small><button type="button" data-v2-opportunity-go="pages">Open Top Pages</button></article>
+        <article data-v2-opportunity-source="gsc_pages"><span>GSC Performance</span><b>Optional</b><small>用于真实 Impressions、CTR、Position 与 Clicks 变化</small><button type="button" data-v2-opportunity-go="gsc">Open GSC Performance</button></article>
       </div>
 
       <div class="v2-organic-opportunity-metrics">
@@ -46,13 +47,13 @@ export function organicOpportunityPanelMarkup() {
       </div>
 
       <div class="v2-organic-opportunity-note">
-        Priority Score = Risk + Quick Win + Traffic + Business Intent，最高 100。每个分项都在表格中显示；它不是排名概率或收益预测。
+        Priority Score = DataForSEO Base Score + GSC Reality Adjustment，最高 100。没有 GSC 时保持原基础分；有 GSC 时才追加最多 +20。
       </div>
 
       <div class="v2-organic-table-shell">
         <table class="v2-organic-table v2-organic-opportunity-table">
-          <thead><tr><th>Priority</th><th>Page</th><th>Action</th><th>Traffic</th><th>Quick Wins</th><th>Down / Lost</th><th>Commercial QW</th><th>Score Breakdown</th><th>Confidence</th><th>Next</th></tr></thead>
-          <tbody data-v2-organic-opportunities-body><tr><td colspan="10" class="v2-organic-empty">点击 Recalculate，从现有缓存生成机会。</td></tr></tbody>
+          <thead><tr><th>Priority</th><th>Page</th><th>Action</th><th>Traffic</th><th>Quick Wins</th><th>Down / Lost</th><th>Commercial QW</th><th>GSC Reality</th><th>Score Breakdown</th><th>Confidence</th><th>Next</th></tr></thead>
+          <tbody data-v2-organic-opportunities-body><tr><td colspan="11" class="v2-organic-empty">点击 Recalculate，从现有缓存和 D1 证据生成机会。</td></tr></tbody>
         </table>
       </div>
       <div class="v2-organic-summary" data-v2-organic-opportunities-meta>Cache-only decision layer · $0</div>
@@ -64,7 +65,7 @@ export function summarizeOpportunityCounts(data = {}) {
   const counts = data?.summary?.action_counts ?? {};
   return {
     total: data?.summary?.total_pages ?? 0,
-    optimize: counts.optimize ?? 0,
+    optimize: (counts.optimize ?? 0) + (counts.ctr_opportunity ?? 0),
     recover: (counts.recover ?? 0) + (counts.reclaim ?? 0),
     growth: (counts.scale ?? 0) + (counts.protect ?? 0),
   };
@@ -96,15 +97,21 @@ export function mountOrganicOpportunityTab({
   };
 
   const renderSources = (data) => {
-    for (const source of ["organic_keywords","top_pages"]) {
+    for (const source of ["organic_keywords","top_pages","gsc_pages"]) {
       const card = sourceCards[source];
       const status = card?.querySelector("b");
       const evidence = data?.sources?.[source];
       if (!card || !status) continue;
       card.dataset.available = evidence?.available ? "true" : "false";
-      status.textContent = evidence?.available
-        ? "Ready · depth " + (evidence.depth ?? "—")
-        : "Missing cache";
+      if (source === "gsc_pages") {
+        status.textContent = evidence?.available
+          ? "Ready · " + (evidence.latest_date ?? "stored") + " · " + (evidence.coverage?.current_days ?? 0) + "/" + (evidence.coverage?.requested_days ?? 28) + " days"
+          : "Optional · no D1 data";
+      } else {
+        status.textContent = evidence?.available
+          ? "Ready · depth " + (evidence.depth ?? "—")
+          : "Missing cache";
+      }
     }
   };
 
@@ -121,7 +128,7 @@ export function mountOrganicOpportunityTab({
     body.replaceChildren();
     if (!rows.length) {
       const row=document.createElement("tr"),cell=document.createElement("td");
-      cell.colSpan=10;cell.className="v2-organic-empty";
+      cell.colSpan=11;cell.className="v2-organic-empty";
       cell.textContent=(data?.missing_sources?.length ?? 0)
         ? "证据不足：先加载上方标记为 Missing cache 的模块；Opportunity Center 本身不会产生 API 费用。"
         : "当前缓存没有生成可展示的页面机会。";
@@ -145,8 +152,13 @@ export function mountOrganicOpportunityTab({
       }
       const risk=document.createElement("td");risk.textContent=num(item.metrics?.declining_keywords)+" / "+num(item.metrics?.lost_keywords);
       const commercial=document.createElement("td");commercial.textContent=num(item.metrics?.commercial_quick_wins);
+      const gsc=document.createElement("td");gsc.className="v2-opportunity-gsc";
+      gsc.textContent=item.evidence?.gsc_pages
+        ? "Clicks "+num(item.metrics?.gsc_clicks)+" · Imp "+num(item.metrics?.gsc_impressions)+" · Pos "+num(item.metrics?.gsc_position)
+        : "—";
+      if(item.evidence?.gsc_pages)gsc.title="CTR "+(finite(item.metrics?.gsc_ctr)===null?"—":(item.metrics.gsc_ctr*100).toFixed(2)+"%")+" · Clicks change "+num(item.metrics?.gsc_clicks_change_percent)+"%";
       const breakdown=document.createElement("td");breakdown.className="v2-opportunity-breakdown";
-      breakdown.textContent="Risk "+num(item.components?.risk_points)+" · QW "+num(item.components?.quick_win_points)+" · Traffic "+num(item.components?.traffic_points)+" · Intent "+num(item.components?.business_intent_points);
+      breakdown.textContent="Base "+num(item.components?.base_score)+" · Risk "+num(item.components?.risk_points)+" · QW "+num(item.components?.quick_win_points)+" · Traffic "+num(item.components?.traffic_points)+" · Intent "+num(item.components?.business_intent_points)+" · GSC +"+num(item.components?.gsc_reality_points);
       const confidence=document.createElement("td");confidence.textContent=item.confidence||"—";
 
       const next=document.createElement("td"),actions=document.createElement("div");actions.className="v2-organic-competitor-actions";
@@ -156,7 +168,7 @@ export function mountOrganicOpportunityTab({
         const research=document.createElement("button");research.type="button";research.dataset.v2OpportunityKeyword=item.quick_win_keywords[0].keyword;research.textContent="Research QW";actions.append(research);
       }
       next.append(actions);
-      row.append(priority,page,actionCell,traffic,quickWins,risk,commercial,breakdown,confidence,next);body.append(row);
+      row.append(priority,page,actionCell,traffic,quickWins,risk,commercial,gsc,breakdown,confidence,next);body.append(row);
     });
   };
 
@@ -168,7 +180,8 @@ export function mountOrganicOpportunityTab({
     meta.textContent=[
       "Opportunity Engine "+(data?.formula?.version??"v0.1"),
       "Cache only · $0",
-      missing.length ? "Missing: "+missing.join(", ") : "Organic Keywords + Top Pages ready",
+      missing.length ? "Missing primary: "+missing.join(", ") : "DataForSEO evidence ready",
+      data?.sources?.gsc_pages ? "GSC reality ready" : "GSC optional · no stored page data",
       data?.disclaimer,
     ].filter(Boolean).join(" · ");
   };
