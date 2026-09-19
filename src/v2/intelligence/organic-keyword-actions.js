@@ -1,6 +1,7 @@
 export const ORGANIC_KEYWORD_ACTION_VERSION = "organic-keyword-action-v0.1";
 
 function finite(value) {
+  if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
