@@ -1,4 +1,4 @@
-export const ORGANIC_OPPORTUNITY_VERSION = "organic-opportunity-v0.3";
+export const ORGANIC_OPPORTUNITY_VERSION = "organic-opportunity-v0.4";
 
 function finite(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -265,6 +265,34 @@ function nextBestActionFor({ url, action, gscQueries = [], quickWinKeywords = []
   };
 }
 
+function workstreamFor(actionCode) {
+  if (["reclaim", "recover"].includes(actionCode)) return "recovery";
+  if (actionCode === "ctr_opportunity") return "ctr";
+  if (actionCode === "optimize") return "growth";
+  if (actionCode === "scale") return "expansion";
+  if (actionCode === "protect") return "defense";
+  return "monitor";
+}
+
+function buildActionQueue(opportunities = [], limit = 5) {
+  return opportunities
+    .filter((item) => item?.action?.code && item.action.code !== "monitor")
+    .slice(0, Math.max(0, Number(limit) || 0))
+    .map((item, index) => ({
+      rank: index + 1,
+      workstream: workstreamFor(item.action.code),
+      page: item.url,
+      action: item.action.code,
+      action_label: item.action.label,
+      priority_score: item.priority_score,
+      confidence: item.confidence,
+      query: item.next_best_action?.query ?? null,
+      query_source: item.next_best_action?.query_source ?? null,
+      why_now: item.next_best_action?.why_now ?? item.action.reason ?? "",
+      evidence: item.next_best_action?.evidence ?? null,
+    }));
+}
+
 export function buildOrganicOpportunities({
   keywordRows = [],
   pageRows = [],
@@ -412,6 +440,8 @@ export function buildOrganicOpportunities({
 
   const counts = {};
   for (const item of opportunities) counts[item.action.code] = (counts[item.action.code] ?? 0) + 1;
+  const actionQueue = buildActionQueue(opportunities, 5);
+  const fallbackNextBestAction = opportunities[0]?.next_best_action ?? null;
 
   return {
     target,
@@ -431,7 +461,8 @@ export function buildOrganicOpportunities({
       action_counts: counts,
       top_priority_score: opportunities[0]?.priority_score ?? null,
     },
-    next_best_action: opportunities[0]?.next_best_action ?? null,
+    next_best_action: actionQueue[0] ?? fallbackNextBestAction,
+    action_queue: actionQueue,
     opportunities,
     generated_at: new Date().toISOString(),
     disclaimer: "Opportunity priority is a transparent rule-based workflow score from cached DataForSEO evidence plus stored GSC evidence when available. It is not a ranking probability or revenue forecast.",
