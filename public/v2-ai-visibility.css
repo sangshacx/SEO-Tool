@@ -320,3 +320,160 @@
   font-size:11px;
   line-height:1.55;
 }
+
+.v2-ai-citation-note{
+  padding:11px 18px 0;
+  color:#7890ae;
+  font-size:11px;
+  line-height:1.55;
+}
+.v2-ai-citation-list{
+  display:grid;
+  gap:10px;
+  padding:16px 18px 18px;
+}
+.v2-ai-citation-empty{
+  padding:18px;
+  border:1px dashed #29425f;
+  border-radius:9px;
+  background:#091624;
+}
+.v2-ai-citation-card{
+  display:grid;
+  gap:11px;
+  padding:14px;
+  border:1px solid #1d3857;
+  border-radius:10px;
+  background:#091725;
+}
+.v2-ai-citation-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:16px;
+}
+.v2-ai-citation-head>div:first-child{
+  min-width:0;
+}
+.v2-ai-citation-head span{
+  color:#6f8cad;
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.v2-ai-citation-head h4{
+  margin:5px 0 0;
+  color:#e5effd;
+  font-size:14px;
+  line-height:1.45;
+}
+.v2-ai-citation-demand{
+  flex:none;
+  min-width:118px;
+  padding:8px 10px;
+  border:1px solid #284566;
+  border-radius:8px;
+  background:#102039;
+  text-align:right;
+}
+.v2-ai-citation-demand span{
+  display:block;
+  color:#728ba9;
+  font-size:8px;
+}
+.v2-ai-citation-demand b{
+  display:block;
+  margin-top:2px;
+  color:#dbe9fb;
+  font-size:17px;
+}
+.v2-ai-citation-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.v2-ai-citation-meta span{
+  padding:4px 7px;
+  border:1px solid #223b59;
+  border-radius:999px;
+  background:#0d1d30;
+  color:#8199b8;
+  font-size:9px;
+}
+.v2-ai-citation-answer{
+  max-height:170px;
+  overflow:auto;
+  margin:0;
+  padding:11px 12px;
+  border-left:2px solid #31577f;
+  background:#0d1b2c;
+  color:#aebfd5;
+  font-size:11px;
+  line-height:1.6;
+  white-space:pre-wrap;
+}
+.v2-ai-citation-sources>b{
+  color:#94acce;
+  font-size:10px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.v2-ai-citation-sources ul{
+  display:grid;
+  gap:6px;
+  margin:7px 0 0;
+  padding:0;
+  list-style:none;
+}
+.v2-ai-citation-sources li{
+  padding:9px 10px;
+  border:1px solid #1a314b;
+  border-radius:8px;
+  background:#08131f;
+}
+.v2-ai-citation-sources li>div{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+}
+.v2-ai-citation-sources a,
+.v2-ai-citation-sources li>div>span{
+  color:#94bfff;
+  font-size:11px;
+  font-weight:700;
+  text-decoration:none;
+}
+.v2-ai-citation-sources a:hover{text-decoration:underline}
+.v2-ai-citation-sources small{
+  flex:none;
+  color:#6f86a4;
+  font-size:9px;
+}
+.v2-ai-citation-sources p{
+  margin:5px 0 0;
+  color:#778da8;
+  font-size:10px;
+  line-height:1.45;
+}
+.v2-ai-citation-extras{
+  display:grid;
+  gap:4px;
+  padding-top:2px;
+}
+.v2-ai-citation-extras p{
+  margin:0;
+  color:#768eac;
+  font-size:10px;
+}
+@media(max-width:680px){
+  .v2-ai-citation-head{flex-direction:column}
+  .v2-ai-citation-demand{
+    width:100%;
+    text-align:left;
+  }
+  .v2-ai-citation-sources li>div{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+}
