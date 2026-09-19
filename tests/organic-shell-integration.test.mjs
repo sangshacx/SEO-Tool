@@ -36,3 +36,13 @@ test("Organic Intelligence exposes Latest Position Changes with explicit cost gu
   assert.match(organic, /latest_provider_update|Provider update/);
   assert.match(organic, /LIVE_REQUEST_CONFIRMATION_REQUIRED/);
 });
+
+
+test("Organic Intelligence exposes competitor discovery and handoffs to Site Explorer and Keyword Gap", () => {
+  assert.match(organic, /\/api\/v2\/organic\/competitors/);
+  assert.match(organic, /data-v2-organic-tab="competitors"/);
+  assert.match(organic, /Keyword Similarity = Shared Keywords/);
+  assert.match(organic, /data-v2-analyze-competitor/);
+  assert.match(organic, /data-v2-competitor-gap/);
+  assert.match(organic, /gapCompetitorDomain/);
+});
