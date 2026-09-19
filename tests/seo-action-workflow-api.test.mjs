@@ -156,3 +156,31 @@ test("workflow API accepts AI visibility recovery actions on the managed-site ho
   assert.equal(payload.meta.actual_cost_usd,0);
   assert.equal(payload.meta.provider_requests,0);
 });
+
+
+test("workflow API accepts Tracked Prompt recovery actions and keeps the full prompt as the workflow key", async () => {
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const prompt="Which waterproof membrane manufacturers should buyers consider?";
+
+  const response=await onRequestPost({
+    request:post({
+      site_domain:"example.com",
+      page_url:"https://example.com/",
+      action_code:"ai_prompt_recovery",
+      query:prompt,
+      status:"in_progress",
+      priority_score:80,
+      note:"Review the previous cited observation before changing content.",
+    }),
+    env:{DB:d1},
+  });
+  const payload=await response.json();
+
+  assert.equal(response.status,200);
+  assert.equal(payload.data.action_code,"ai_prompt_recovery");
+  assert.equal(payload.data.query,prompt);
+  assert.equal(payload.data.status,"in_progress");
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+});
