@@ -3,6 +3,7 @@ const ENDPOINTS = Object.freeze({
   compare: "/api/v2/ai/compare",
   pages: "/api/v2/ai/pages",
   history: "/api/v2/ai/history",
+  mentions: "/api/v2/ai/mentions",
 });
 
 function cleanDomain(value) {
@@ -211,6 +212,120 @@ function renderHistory(body, historical = [], newLost = []) {
   });
 }
 
+function citationDateLabel(value) {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleDateString("zh-CN");
+}
+
+function renderCitationExplorer(node, rows = []) {
+  node.replaceChildren();
+  const items = Array.isArray(rows) ? rows : [];
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "v2-ai-citation-empty v2-ai-empty";
+    empty.textContent = "暂无 Citation Explorer 缓存。读取缓存不会产生费用；只有明确点击付费刷新才会调用 DataForSEO。";
+    node.append(empty);
+    return;
+  }
+
+  items.forEach((item, index) => {
+    const card = document.createElement("article");
+    card.className = "v2-ai-citation-card";
+
+    const head = document.createElement("div");
+    head.className = "v2-ai-citation-head";
+    const titleWrap = document.createElement("div");
+    const eyebrow = document.createElement("span");
+    eyebrow.textContent = "#" + (index + 1) + " · " + (item?.model_name || item?.platform || "AI response");
+    const title = document.createElement("h4");
+    title.textContent = item?.question || "AI question unavailable";
+    titleWrap.append(eyebrow, title);
+
+    const demand = document.createElement("div");
+    demand.className = "v2-ai-citation-demand";
+    const demandLabel = document.createElement("span");
+    demandLabel.textContent = "AI Search Volume";
+    const demandValue = document.createElement("b");
+    demandValue.textContent = numberLabel(item?.ai_search_volume);
+    demand.append(demandLabel, demandValue);
+    head.append(titleWrap, demand);
+
+    const meta = document.createElement("div");
+    meta.className = "v2-ai-citation-meta";
+    [
+      "Target citations " + numberLabel(item?.target_source_count),
+      "First " + citationDateLabel(item?.first_response_at),
+      "Last " + citationDateLabel(item?.last_response_at),
+      item?.is_web_search_based === true ? "Web-search based" : null,
+    ].filter(Boolean).forEach((value) => {
+      const chip = document.createElement("span");
+      chip.textContent = value;
+      meta.append(chip);
+    });
+
+    const answer = document.createElement("p");
+    answer.className = "v2-ai-citation-answer";
+    answer.textContent = item?.answer_excerpt || "No bounded answer excerpt was returned.";
+
+    const sourceWrap = document.createElement("div");
+    sourceWrap.className = "v2-ai-citation-sources";
+    const sourceTitle = document.createElement("b");
+    sourceTitle.textContent = "Cited sources";
+    const sourceList = document.createElement("ul");
+    const sources = Array.isArray(item?.sources) ? item.sources.slice(0, 8) : [];
+    if (!sources.length) {
+      const sourceItem = document.createElement("li");
+      sourceItem.className = "v2-ai-empty";
+      sourceItem.textContent = "No source rows returned.";
+      sourceList.append(sourceItem);
+    } else {
+      sources.forEach((source) => {
+        const sourceItem = document.createElement("li");
+        const sourceTop = document.createElement("div");
+        const sourceLink = document.createElement(source?.url ? "a" : "span");
+        if (source?.url) {
+          sourceLink.href = source.url;
+          sourceLink.target = "_blank";
+          sourceLink.rel = "noopener noreferrer";
+        }
+        sourceLink.textContent = source?.title || source?.domain || "Source";
+        const sourceDomain = document.createElement("small");
+        sourceDomain.textContent = [source?.domain, source?.rank != null ? "rank " + source.rank : null].filter(Boolean).join(" · ");
+        sourceTop.append(sourceLink, sourceDomain);
+        const snippet = document.createElement("p");
+        snippet.textContent = source?.snippet || "";
+        sourceItem.append(sourceTop);
+        if (source?.snippet) sourceItem.append(snippet);
+        sourceList.append(sourceItem);
+      });
+    }
+    sourceWrap.append(sourceTitle, sourceList);
+
+    const extras = document.createElement("div");
+    extras.className = "v2-ai-citation-extras";
+    const brands = (Array.isArray(item?.brand_entities) ? item.brand_entities : [])
+      .map((row) => row?.title)
+      .filter(Boolean)
+      .slice(0, 6);
+    const fanOut = (Array.isArray(item?.fan_out_queries) ? item.fan_out_queries : []).slice(0, 6);
+    if (brands.length) {
+      const brandsText = document.createElement("p");
+      brandsText.textContent = "Brand entities: " + brands.join(" · ");
+      extras.append(brandsText);
+    }
+    if (fanOut.length) {
+      const fanText = document.createElement("p");
+      fanText.textContent = "Fan-out queries: " + fanOut.join(" · ");
+      extras.append(fanText);
+    }
+
+    card.append(head, meta, answer, sourceWrap);
+    if (extras.childNodes.length) card.append(extras);
+    node.append(card);
+  });
+}
+
 async function getJson(fetchImpl, endpoint, params) {
   const query = new URLSearchParams(params);
   const response = await fetchImpl(endpoint + "?" + query.toString(), {
@@ -338,6 +453,28 @@ export function createAiVisibilityWorkspace() {
 
     <section class="v2-ai-panel">
       <div class="v2-ai-panel-head">
+        <div>
+          <span>CITATION EXPLORER</span>
+          <h3>Questions, Answers & Cited Sources</h3>
+        </div>
+        <div class="v2-ai-actions">
+          <select data-v2-ai-mention-limit aria-label="Citation Explorer 数量">
+            <option value="10">Top 10</option>
+            <option value="25" selected>Top 25</option>
+            <option value="50">Top 50</option>
+          </select>
+          <button type="button" class="secondary-action" data-v2-ai-read-mentions>读取 Citation 缓存</button>
+          <button type="button" data-v2-ai-refresh-mentions>付费刷新</button>
+        </div>
+      </div>
+      <div class="v2-ai-citation-note">
+        这里只显示“当前网站被 AI 回答引用为 source”的问题与引用上下文。Answer 只缓存截断摘要，不把超长原始回答写入长期存储。
+      </div>
+      <div class="v2-ai-citation-list" data-v2-ai-mentions-list></div>
+    </section>
+
+    <section class="v2-ai-panel">
+      <div class="v2-ai-panel-head">
         <div><span>CITATION INTELLIGENCE</span><h3>Top Mentioned Pages</h3></div>
         <div class="v2-ai-actions">
           <select data-v2-ai-page-limit aria-label="Top Mentioned Pages 数量">
@@ -380,6 +517,8 @@ export function mountAiVisibility({
   const pagesBody = section.querySelector("[data-v2-ai-pages-body]");
   const historyBody = section.querySelector("[data-v2-ai-history-body]");
   const historyMonths = section.querySelector("[data-v2-ai-history-months]");
+  const mentionLimit = section.querySelector("[data-v2-ai-mention-limit]");
+  const mentionsList = section.querySelector("[data-v2-ai-mentions-list]");
   let scope = context.get?.() ?? {};
   let requestId = 0;
   let destroyed = false;
@@ -553,6 +692,37 @@ export function mountAiVisibility({
     }
   };
 
+  const loadMentions = async ({ live = false } = {}) => {
+    if (live && !ensureLive()) return;
+    const check = availability();
+    if (!check.available) return setStatus(check.message, "warning");
+    busy(true);
+    setStatus(live ? "正在刷新 Citation Explorer…" : "正在读取 Citation Explorer 缓存…", "loading");
+    try {
+      const { response, payload } = await post(fetchImpl, ENDPOINTS.mentions, buildAiVisibilityBody(scope, platform.value, {
+        limit: Number(mentionLimit.value),
+        ...(live ? { allow_live_request: true, force_refresh: true } : {}),
+      }));
+      if (response.status === 409 && payload?.error?.code === "LIVE_REQUEST_CONFIRMATION_REQUIRED") {
+        setStatus("当前深度没有 Citation Explorer 缓存。需要数据时勾选付费确认后再刷新。", "warning");
+        return;
+      }
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Citation Explorer 读取失败。");
+      renderCitationExplorer(mentionsList, payload.data?.items);
+      if (live) paid.checked = false;
+      setStatus(
+        payload.meta?.cached
+          ? "已读取 Citation Explorer 缓存，本次费用 $0。"
+          : "Citation Explorer 已刷新并写入 14 天缓存。",
+        "success",
+      );
+    } catch (error) {
+      setStatus(error?.message || "Citation Explorer 读取失败。", "error");
+    } finally {
+      busy(false);
+    }
+  };
+
   const listeners = [
     [section.querySelector("[data-v2-ai-read-overview]"), "click", () => loadOverview()],
     [section.querySelector("[data-v2-ai-refresh-overview]"), "click", () => loadOverview({ live: true })],
@@ -563,9 +733,12 @@ export function mountAiVisibility({
     [section.querySelector("[data-v2-ai-read-history]"), "click", () => loadStoredHistory()],
     [section.querySelector("[data-v2-ai-refresh-history]"), "click", () => refreshHistorySeries("historical")],
     [section.querySelector("[data-v2-ai-refresh-new-lost]"), "click", () => refreshHistorySeries("new_lost")],
+    [section.querySelector("[data-v2-ai-read-mentions]"), "click", () => loadMentions()],
+    [section.querySelector("[data-v2-ai-refresh-mentions]"), "click", () => loadMentions({ live: true })],
     [platform, "change", () => {
       renderComparison(compareBody, []);
       renderPages(pagesBody, []);
+      renderCitationExplorer(mentionsList, []);
       syncScope();
       loadOverview();
       loadStoredHistory();
@@ -584,6 +757,7 @@ export function mountAiVisibility({
   renderComparison(compareBody, []);
   renderPages(pagesBody, []);
   renderHistory(historyBody, [], []);
+  renderCitationExplorer(mentionsList, []);
 
   return () => {
     destroyed = true;
