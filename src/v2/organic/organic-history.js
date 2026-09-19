@@ -25,7 +25,7 @@ export function summarizeOrganicHistory(points = []) {
       traffic_value: finite(last.traffic_value ?? last.traffic_value_usd),
       top_10: finite(last.positions?.top_10),
     } : null,
-    change: first && last ? {
+    change: rows.length >= 2 && first && last ? {
       organic_keywords_percent: percentChange(last.organic_keywords, first.organic_keywords),
       organic_traffic_percent: percentChange(last.organic_traffic, first.organic_traffic),
       traffic_value_percent: percentChange(last.traffic_value ?? last.traffic_value_usd, first.traffic_value ?? first.traffic_value_usd),
