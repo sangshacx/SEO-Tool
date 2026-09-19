@@ -50,6 +50,24 @@ export function organicOpportunityPanelMarkup() {
         Priority Score = DataForSEO Base Score + GSC Reality Adjustment，最高 100。没有 GSC 时保持原基础分；有 GSC 时才追加最多 +20。
       </div>
 
+      <div class="v2-next-best-action" data-v2-next-best-action hidden>
+        <div class="v2-next-best-action-copy">
+          <span>#1 NEXT BEST ACTION</span>
+          <b data-v2-next-best-action-label>—</b>
+          <p data-v2-next-best-action-why>—</p>
+        </div>
+        <div class="v2-next-best-action-facts">
+          <article><span>Priority</span><b data-v2-next-best-action-score>—</b></article>
+          <article><span>Page</span><b data-v2-next-best-action-page>—</b></article>
+          <article><span>Recommended Query</span><b data-v2-next-best-action-query>—</b></article>
+          <article><span>Query Source</span><b data-v2-next-best-action-source>—</b></article>
+        </div>
+        <div class="v2-next-best-action-buttons">
+          <button type="button" data-v2-next-best-open-page>Open Page Keywords</button>
+          <button type="button" data-v2-next-best-research>Research Recommended Query</button>
+        </div>
+      </div>
+
       <div class="v2-organic-table-shell">
         <table class="v2-organic-table v2-organic-opportunity-table">
           <thead><tr><th>Priority</th><th>Page</th><th>Action</th><th>Traffic</th><th>Quick Wins</th><th>Down / Lost</th><th>Commercial QW</th><th>GSC Reality</th><th>Score Breakdown</th><th>Confidence</th><th>Next</th></tr></thead>
@@ -85,6 +103,15 @@ export function mountOrganicOpportunityTab({
   const body = section.querySelector("[data-v2-organic-opportunities-body]");
   const meta = section.querySelector("[data-v2-organic-opportunities-meta]");
   const opportunityTab = section.querySelector('[data-v2-organic-tab="opportunities"]');
+  const nextBestCard = section.querySelector("[data-v2-next-best-action]");
+  const nextBestActionLabel = section.querySelector("[data-v2-next-best-action-label]");
+  const nextBestWhy = section.querySelector("[data-v2-next-best-action-why]");
+  const nextBestScore = section.querySelector("[data-v2-next-best-action-score]");
+  const nextBestPage = section.querySelector("[data-v2-next-best-action-page]");
+  const nextBestQuery = section.querySelector("[data-v2-next-best-action-query]");
+  const nextBestSource = section.querySelector("[data-v2-next-best-action-source]");
+  const nextBestOpenPage = section.querySelector("[data-v2-next-best-open-page]");
+  const nextBestResearch = section.querySelector("[data-v2-next-best-research]");
   const sourceCards = {
     organic_keywords: section.querySelector('[data-v2-opportunity-source="organic_keywords"]'),
     top_pages: section.querySelector('[data-v2-opportunity-source="top_pages"]'),
@@ -122,6 +149,33 @@ export function mountOrganicOpportunityTab({
       const node = section.querySelector('[data-v2-opportunity-count="' + key + '"]');
       if (node) node.textContent = num(value);
     });
+  };
+
+  const renderNextBestAction = (data) => {
+    const next = data?.next_best_action;
+    if (!next?.page) {
+      nextBestCard.hidden = true;
+      nextBestOpenPage.dataset.v2OpportunityPage = "";
+      nextBestResearch.dataset.v2OpportunityKeyword = "";
+      return;
+    }
+    nextBestCard.hidden = false;
+    nextBestActionLabel.textContent = next.action_label || next.action || "Review";
+    nextBestActionLabel.dataset.action = next.action || "monitor";
+    nextBestWhy.textContent = next.why_now || "Top-ranked transparent opportunity from current local evidence.";
+    nextBestScore.textContent = num(next.priority_score);
+    nextBestPage.textContent = next.page;
+    nextBestPage.title = next.page;
+    nextBestQuery.textContent = next.query || "No single query selected";
+    nextBestQuery.title = next.query || "";
+    nextBestSource.textContent = next.query_source === "gsc_query_page"
+      ? "GSC Query+Page"
+      : next.query_source === "dataforseo_cache"
+        ? "DataForSEO cache"
+        : "Page-level evidence";
+    nextBestOpenPage.dataset.v2OpportunityPage = next.page;
+    nextBestResearch.dataset.v2OpportunityKeyword = next.query || "";
+    nextBestResearch.disabled = !next.query;
   };
 
   const renderRows = (data) => {
@@ -181,7 +235,7 @@ export function mountOrganicOpportunityTab({
       const next=document.createElement("td"),actions=document.createElement("div");actions.className="v2-organic-competitor-actions";
       const pageKeywords=document.createElement("button");pageKeywords.type="button";pageKeywords.dataset.v2OpportunityPage=item.url;pageKeywords.textContent="Page Keywords";
       actions.append(pageKeywords);
-      const researchKeyword=item.quick_win_keywords?.[0]?.keyword||item.gsc_query_opportunities?.[0]?.keyword;
+      const researchKeyword=item.next_best_action?.query||item.gsc_query_opportunities?.[0]?.keyword||item.quick_win_keywords?.[0]?.keyword;
       if(researchKeyword){
         const research=document.createElement("button");research.type="button";research.dataset.v2OpportunityKeyword=researchKeyword;research.textContent="Research QW";actions.append(research);
       }
@@ -193,6 +247,7 @@ export function mountOrganicOpportunityTab({
   const render = (data) => {
     renderSources(data);
     renderCounts(data);
+    renderNextBestAction(data);
     renderRows(data);
     const missing=data?.missing_sources??[];
     meta.textContent=[
@@ -234,16 +289,29 @@ export function mountOrganicOpportunityTab({
     if(loadedForKey!==scopeKey())load();
   },{signal});
   section.querySelectorAll("[data-v2-opportunity-go]").forEach((button)=>button.addEventListener("click",()=>activateTab?.(section,button.dataset.v2OpportunityGo),{signal}));
+  const openPageKeywords = (pageUrl) => {
+    const value=String(pageUrl||"").trim();
+    if(!value)return;
+    target.value=value;
+    target.dispatchEvent(new Event("input",{bubbles:true}));
+    activateTab?.(section,"keywords");
+  };
+  const researchKeyword = (keyword) => {
+    const value=String(keyword||"").trim();
+    if(!value)return;
+    const input=section.closest(".v2-app-shell")?.querySelector("#keyword")||document.querySelector("#keyword");
+    if(input){input.value=value;input.dispatchEvent(new Event("input",{bubbles:true}));}
+    if(globalThis.location)globalThis.location.hash="keywords";
+  };
+
   body.addEventListener("click",(event)=>{
     const pageButton=event.target.closest("[data-v2-opportunity-page]");
-    if(pageButton){target.value=pageButton.dataset.v2OpportunityPage;target.dispatchEvent(new Event("input",{bubbles:true}));activateTab?.(section,"keywords");return;}
+    if(pageButton){openPageKeywords(pageButton.dataset.v2OpportunityPage);return;}
     const keywordButton=event.target.closest("[data-v2-opportunity-keyword]");
-    if(keywordButton){
-      const input=section.closest(".v2-app-shell")?.querySelector("#keyword")||document.querySelector("#keyword");
-      if(input){input.value=keywordButton.dataset.v2OpportunityKeyword;input.dispatchEvent(new Event("input",{bubbles:true}));}
-      if(globalThis.location)globalThis.location.hash="keywords";
-    }
+    if(keywordButton)researchKeyword(keywordButton.dataset.v2OpportunityKeyword);
   },{signal});
+  nextBestOpenPage.addEventListener("click",()=>openPageKeywords(nextBestOpenPage.dataset.v2OpportunityPage),{signal});
+  nextBestResearch.addEventListener("click",()=>researchKeyword(nextBestResearch.dataset.v2OpportunityKeyword),{signal});
 
   const reset=()=>{loadedForKey=null;};
   target.addEventListener("input",reset,{signal});
