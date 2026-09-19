@@ -192,7 +192,7 @@ function buildKeywordEvidence(keywordRows = []) {
   return grouped;
 }
 
-function actionFor({ lost, down, up, quickWinCount, top10, keywords, traffic, gsc, gscQueryOpportunityCount, gscQueryRecoveryCount }) {
+function actionFor({ lost, down, up, quickWinCount, top10, keywords, traffic, gsc, gscQueryOpportunityCount, gscQueryRecoveryCount, gscQueryCtrOpportunityCount }) {
   if (lost > 0) return { code: "reclaim", label: "Reclaim", reason: "The page lost ranked keywords in the latest provider comparison." };
   if (down >= Math.max(3, Math.ceil(keywords * 0.2))) return { code: "recover", label: "Recover", reason: "Declining rankings are material relative to the page's keyword footprint." };
 
@@ -207,11 +207,14 @@ function actionFor({ lost, down, up, quickWinCount, top10, keywords, traffic, gs
   if (gscQueryRecoveryCount > 0) {
     return { code: "recover", label: "Recover", reason: "At least one high-impression Query+Page combination has a meaningful stored GSC click decline." };
   }
+  if (
+    (gscPosition !== null && gscPosition <= 10 && gscImpressions >= 100 && gscCtr < 0.03) ||
+    gscQueryCtrOpportunityCount > 0
+  ) {
+    return { code: "ctr_opportunity", label: "Improve CTR", reason: gscQueryCtrOpportunityCount > 0 ? "At least one high-impression Top-10 Query+Page combination has stored GSC CTR below 3%." : "Stored GSC data shows Top-10 visibility and meaningful impressions but CTR below 3%." };
+  }
   if (quickWinCount > 0 || gscQueryOpportunityCount > 0 || (gscPosition !== null && gscPosition >= 4 && gscPosition <= 15 && gscImpressions >= 50)) {
     return { code: "optimize", label: "Optimize", reason: quickWinCount > 0 ? "The page has cached keywords already ranking in positions 4–20." : "Real GSC impressions show the page is already within striking distance at positions 4–15." };
-  }
-  if (gscPosition !== null && gscPosition <= 10 && gscImpressions >= 100 && gscCtr < 0.03) {
-    return { code: "ctr_opportunity", label: "Improve CTR", reason: "Stored GSC data shows Top-10 visibility and meaningful impressions but CTR below 3%." };
   }
   if (up >= Math.max(3, down + 2) || (gscClicksChange !== null && gscClicksChange >= 20 && gscImpressions >= 50)) {
     return { code: "scale", label: "Scale", reason: "The page is gaining provider rankings or real GSC clicks and can be reviewed for adjacent expansion." };
@@ -320,6 +323,12 @@ export function buildOrganicOpportunities({
     const gscReality = Math.max(gscPageReality, gscQueryReality);
     const score = Math.min(100, Math.round((baseScore + gscReality) * 100) / 100);
     const gscQueryRecoveryCount = gscQueries.filter((row) => (finite(row.clicks_change_percent) ?? 0) <= -20 && (finite(row.impressions) ?? 0) >= 50).length;
+    const gscQueryCtrOpportunityCount = gscQueries.filter((row) => {
+      const impressions = finite(row.impressions) ?? 0;
+      const position = finite(row.position);
+      const ctr = finite(row.ctr);
+      return position !== null && position <= 10 && impressions >= 100 && ctr !== null && ctr < 0.03;
+    }).length;
     const action = actionFor({
       lost,
       down,
@@ -331,6 +340,7 @@ export function buildOrganicOpportunities({
       gsc,
       gscQueryOpportunityCount: gscQueries.length,
       gscQueryRecoveryCount,
+      gscQueryCtrOpportunityCount,
     });
     const evidenceCount =
       Number(Boolean(sources.organic_keywords)) +
@@ -382,6 +392,7 @@ export function buildOrganicOpportunities({
         gsc_clicks_change_percent: gsc?.change?.clicks_percent ?? (gsc ? percentChange(gsc.clicks, gsc.previous_clicks) : null),
         gsc_query_opportunities: gscQueries.length,
         gsc_query_recoveries: gscQueryRecoveryCount,
+        gsc_query_ctr_opportunities: gscQueryCtrOpportunityCount,
       },
       quick_win_keywords: keyword.quick_win_keywords,
       gsc_query_opportunities: gscQueries,
