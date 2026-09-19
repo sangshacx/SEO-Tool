@@ -272,3 +272,24 @@ test("AI Visibility styles the first-party GSC panel as a distinct source surfac
   assert.match(css,/\.v2-ai-gsc-generative \.v2-ai-metrics/);
   assert.match(css,/\.v2-ai-gsc-generative a/);
 });
+
+
+test("First-party GSC Generative AI panel shows descriptive 7d changes and recent daily history without a score", () => {
+  assert.match(ui,/7d vs previous 7d/);
+  assert.match(ui,/Impressions Δ/);
+  assert.match(ui,/Clicks Δ/);
+  assert.match(ui,/Comparable Coverage/);
+  assert.match(ui,/data-v2-ai-gsc-daily/);
+  assert.match(ui,/summary\?\.daily/);
+  assert.match(ui,/trend\?\.change\?\.label/);
+  assert.match(ui,/trend\.current\.coverage_days/);
+  assert.doesNotMatch(ui,/Generative AI Score|GSC AI Score/);
+});
+
+test("First-party GSC Generative AI trend styling distinguishes positive, negative and coverage-neutral changes", () => {
+  assert.match(css,/\.v2-ai-gsc-trendstrip/);
+  assert.match(css,/data-kind="positive"/);
+  assert.match(css,/data-kind="negative"/);
+  assert.match(css,/data-kind="neutral"/);
+  assert.match(css,/\.v2-ai-gsc-grids/);
+});
