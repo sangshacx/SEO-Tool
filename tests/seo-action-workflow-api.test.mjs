@@ -128,3 +128,31 @@ test("workflow API accepts Potential Cannibalization architecture reviews", asyn
   assert.equal(payload.meta.actual_cost_usd,0);
   assert.equal(payload.meta.provider_requests,0);
 });
+
+
+test("workflow API accepts AI visibility recovery actions on the managed-site homepage", async () => {
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+
+  const response=await onRequestPost({
+    request:post({
+      site_domain:"example.com",
+      page_url:"https://example.com/",
+      action_code:"ai_visibility_recovery",
+      query:"AI visibility · google",
+      status:"in_progress",
+      priority_score:78,
+      note:"Review lost mention and citation context before changing content.",
+    }),
+    env:{DB:d1},
+  });
+  const payload=await response.json();
+
+  assert.equal(response.status,200);
+  assert.equal(payload.data.action_code,"ai_visibility_recovery");
+  assert.equal(payload.data.page_url,"https://example.com/");
+  assert.equal(payload.data.status,"in_progress");
+  assert.equal(payload.data.query,"AI visibility · google");
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+});
