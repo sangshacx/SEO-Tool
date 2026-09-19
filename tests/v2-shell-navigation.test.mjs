@@ -162,7 +162,7 @@ test("registered hash routing follows forward and back history events", () => {
   windowLike.location.hash = "#website";
   listeners.get("hashchange")();
   assert.deepEqual(views.map((view) => view.hidden), [true, false]);
-  assert.equal(title.textContent, "网站数据");
+  assert.equal(title.textContent, "Site Explorer");
 
   windowLike.location.hash = "#overview";
   listeners.get("hashchange")();
