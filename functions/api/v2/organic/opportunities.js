@@ -6,7 +6,7 @@ import { normalizeRelevantPagesDomain } from "../../../../src/v2/providers/dataf
 import { readGscIntelligence } from "../../../../src/v2/storage/gsc-search-analytics.js";
 import { enrichGscIntelligenceRows } from "../../../../src/v2/gsc/intelligence.js";
 import { applyDecisionWorkflow } from "../../../../src/v2/intelligence/decision-workflow.js";
-import { listSeoActionWorkflow } from "../../../../src/v2/storage/seo-action-workflow.js";
+import { listSeoActionWorkflow, listSeoActionWorkflowEvents } from "../../../../src/v2/storage/seo-action-workflow.js";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=UTF-8",
@@ -144,9 +144,13 @@ export async function onRequestPost({ request, env }) {
   });
 
   let workflowRows = [];
+  let workflowEvents = [];
   let workflowSource = "d1";
   try {
-    workflowRows = await listSeoActionWorkflow(env.DB, domain);
+    [workflowRows, workflowEvents] = await Promise.all([
+      listSeoActionWorkflow(env.DB, domain),
+      listSeoActionWorkflowEvents(env.DB, domain, { limit: 30 }),
+    ]);
   } catch (error) {
     workflowSource = "unavailable";
     console.error(JSON.stringify({
@@ -159,7 +163,9 @@ export async function onRequestPost({ request, env }) {
   data.workflow_summary = {
     ...(data.workflow_summary ?? {}),
     source: workflowSource,
+    activity_count: workflowEvents.length,
   };
+  data.workflow_activity = workflowEvents;
   const missing = [];
   if (!keywords) missing.push("organic_keywords");
   if (!pages) missing.push("top_pages");
