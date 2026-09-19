@@ -26,6 +26,10 @@ on:
       - functions/api/v2/ai/prompt-models.js
       - functions/api/v2/ai/prompt-test.js
       - functions/api/v2/ai/prompt-tracker.js
+      - functions/api/v2/gsc/generative-ai-sync.js
+      - src/v2/storage/gsc-generative-ai.js
+      - migrations/0021_gsc_search_appearance_capabilities.sql
+      - migrations/0022_gsc_generative_ai_daily.sql
       - functions/api/v2/organic/opportunities.js
       - functions/api/v2/organic/action-workflow.js
       - public/v2-ai-visibility.js
