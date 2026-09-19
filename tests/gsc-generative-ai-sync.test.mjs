@@ -217,3 +217,39 @@ test("GSC Generative AI repeated sync is a zero-request no-op and GET reads D1 o
   assert.equal(getPayload.meta.provider_requests,0);
   assert.equal(calls,0);
 });
+
+
+test("GSC Generative AI summary exposes daily property history and descriptive trend from stored first-party rows",async()=>{
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const site=await d1.prepare("SELECT id FROM site_profiles WHERE domain = ?").bind("example.com").first();
+  const {replaceGscGenerativeAiPartition,readGscGenerativeAiSummary}=await import("../src/v2/storage/gsc-generative-ai.js");
+
+  const days=[
+    ["2026-09-03",10,1],["2026-09-04",10,1],["2026-09-05",10,1],["2026-09-06",10,1],
+    ["2026-09-10",20,2],["2026-09-11",20,2],["2026-09-12",20,2],["2026-09-16",20,2],
+  ];
+  for(const [date,impressions,clicks] of days){
+    await replaceGscGenerativeAiPartition(d1,{
+      siteProfileId:site.id,
+      property:"sc-domain:example.com",
+      appearance:"AI_OVERVIEW",
+      date,
+      dimensionSet:"property",
+      rows:[{clicks,impressions,ctr:clicks/impressions,position:1}],
+    });
+  }
+
+  const summary=await readGscGenerativeAiSummary(d1,{
+    siteDomain:"example.com",
+    appearance:"AI_OVERVIEW",
+    days:28,
+  });
+  assert.equal(summary.daily.length,8);
+  assert.equal(summary.trend.status,"ready");
+  assert.equal(summary.trend.change.code,"impressions_up");
+  assert.equal(summary.trend.deltas.impressions,40);
+  assert.equal(summary.trend.current.coverage_days,4);
+  assert.equal(summary.trend.previous.coverage_days,4);
+  assert.equal(Object.hasOwn(summary.trend,"score"),false);
+});
