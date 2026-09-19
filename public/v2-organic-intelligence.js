@@ -91,7 +91,7 @@ export function createOrganicIntelligenceWorkspace(documentLike = document) {
   const section = documentLike.createElement("section");
   section.className = "v2-organic-workspace";
   section.dataset.v2View = "website";
-  section.innerHTML = \`
+  section.innerHTML = `
     <div class="v2-organic-hero">
       <div>
         <div class="v2-organic-eyebrow">SITE EXPLORER · ORGANIC INTELLIGENCE</div>
@@ -139,7 +139,7 @@ export function createOrganicIntelligenceWorkspace(documentLike = document) {
       </div>
       <div class="v2-organic-pager"><span data-v2-organic-count>0 rows</span><div><button type="button" data-v2-organic-prev>Previous</button><span data-v2-organic-page>Page 1</span><button type="button" data-v2-organic-next>Next</button></div></div>
     </div>
-  \`;
+  `;
   return section;
 }
 
