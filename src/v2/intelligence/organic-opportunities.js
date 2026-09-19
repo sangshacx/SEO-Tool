@@ -142,7 +142,7 @@ export function buildOrganicOpportunities({
     const pageKeywords = finite(page.organic_keywords);
     const keywords = pageKeywords ?? keyword.sampled_keywords;
     const traffic = finite(page.organic_traffic) ?? keyword.sampled_traffic;
-    const risk = Math.min(35, Math.round((lost * 7 + down * 1.5) * 100) / 100);
+    const risk = Math.min(35, Math.round((lost * 10 + down * 2) * 100) / 100);
     const quickWin = Math.min(35, Math.round(keyword.quick_win_points_raw * 100) / 100);
     const trafficScore = trafficPoints(traffic);
     const business = Math.min(10, keyword.commercial_quick_wins * 2.5);
@@ -206,7 +206,7 @@ export function buildOrganicOpportunities({
     formula: {
       version: ORGANIC_OPPORTUNITY_VERSION,
       priority_score: "risk_points + quick_win_points + traffic_points + business_intent_points, capped at 100",
-      risk_points: "min(35, lost_keywords*7 + declining_keywords*1.5)",
+      risk_points: "min(35, lost_keywords*10 + declining_keywords*2)",
       quick_win_points: "sum(position 4-20 keyword demand points × rank weight × KD modifier), capped at 35",
       traffic_points: "0-20 from current estimated page traffic bands",
       business_intent_points: "2.5 per commercial/transactional quick win, capped at 10",
