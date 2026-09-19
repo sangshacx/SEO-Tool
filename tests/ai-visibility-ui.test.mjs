@@ -164,3 +164,34 @@ test("Custom Prompt Tracker styling includes responsive model, answer, citation 
   assert.match(css,/\.v2-ai-prompt-fanout/);
   assert.match(css,/\.v2-ai-prompt-guidance/);
 });
+
+
+test("Custom Prompt Tracker UI persists prompt definitions separately from paid observations", () => {
+  assert.match(ui,/\/api\/v2\/ai\/prompt-tracker/);
+  assert.match(ui,/Save Tracker · \$0/);
+  assert.match(ui,/SAVED PROMPTS · D1/);
+  assert.match(ui,/Refresh Saved · \$0/);
+  assert.match(ui,/Observation History/);
+  assert.match(ui,/tracker_id: currentTrackerId/);
+  assert.match(ui,/observation_recorded/);
+  assert.match(ui,/clearCurrentTracker/);
+  assert.match(ui,/TRACKER|Tracker #/);
+  assert.match(ui,/Pause/);
+  assert.match(ui,/Resume/);
+});
+
+test("Saved Prompt UI marks manual configuration edits dirty so observations cannot attach to stale tracker ids", () => {
+  assert.match(ui,/\[promptPlatform, "change", \(\) => \{/);
+  assert.match(ui,/\[promptModel, "change", \(\) => \{/);
+  assert.match(ui,/\[promptWebSearch, "change", \(\) => clearCurrentTracker\(\)\]/);
+  assert.match(ui,/\[promptText, "input", \(\) => \{/);
+  assert.match(ui,/currentTrackerId = null/);
+});
+
+test("Saved Prompt tables and history have dedicated compact workspace styling", () => {
+  assert.match(css,/\.v2-ai-current-tracker/);
+  assert.match(css,/\.v2-ai-tracker-head/);
+  assert.match(css,/\.v2-ai-tracker-tablewrap/);
+  assert.match(css,/\.v2-ai-tracker-actions/);
+  assert.match(css,/tr\[data-current="true"\]/);
+});
