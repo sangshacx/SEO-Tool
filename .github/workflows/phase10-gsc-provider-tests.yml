@@ -36,6 +36,11 @@ on:
       - functions/api/v2/gsc/intelligence.js
       - tests/gsc-intelligence.test.mjs
       - tests/gsc-intelligence-api.test.mjs
+      - public/v2-gsc-intelligence-ui.js
+      - public/v2-organic-intelligence.js
+      - public/v2-organic-intelligence.css
+      - tests/gsc-intelligence-ui.test.mjs
+      - tests/organic-shell-integration.test.mjs
       - tests/google-search-console-provider.test.mjs
       - .github/workflows/phase10-gsc-provider-tests.yml
 
@@ -52,4 +57,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 10 GSC provider tests
-        run: node --test tests/google-search-console-provider.test.mjs tests/secret-crypto.test.mjs tests/google-oauth.test.mjs tests/gsc-oauth-state.test.mjs tests/gsc-connections-storage.test.mjs tests/gsc-connect-api.test.mjs tests/gsc-settings-ui.test.mjs tests/v2-shell-navigation.test.mjs tests/v2-shell-ui.test.mjs tests/gsc-sync-plan.test.mjs tests/gsc-search-analytics-storage.test.mjs tests/gsc-sync-api.test.mjs tests/gsc-intelligence.test.mjs tests/gsc-intelligence-api.test.mjs
+        run: node --test tests/google-search-console-provider.test.mjs tests/secret-crypto.test.mjs tests/google-oauth.test.mjs tests/gsc-oauth-state.test.mjs tests/gsc-connections-storage.test.mjs tests/gsc-connect-api.test.mjs tests/gsc-settings-ui.test.mjs tests/v2-shell-navigation.test.mjs tests/v2-shell-ui.test.mjs tests/gsc-sync-plan.test.mjs tests/gsc-search-analytics-storage.test.mjs tests/gsc-sync-api.test.mjs tests/gsc-intelligence.test.mjs tests/gsc-intelligence-api.test.mjs tests/gsc-intelligence-ui.test.mjs tests/organic-shell-integration.test.mjs
