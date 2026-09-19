@@ -17,3 +17,12 @@ test("Opportunity Center summary groups recovery and growth actions without hidi
   const counts=summarizeOpportunityCounts({summary:{total_pages:8,action_counts:{optimize:3,recover:1,reclaim:1,scale:2,protect:1}}});
   assert.deepEqual(counts,{total:8,optimize:3,recover:2,growth:3});
 });
+
+
+test("Opportunity Center surfaces optional GSC evidence and its score adjustment", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/data-v2-opportunity-source="gsc_pages"/);
+  assert.match(markup,/Open GSC Performance/);
+  assert.match(markup,/GSC Reality/);
+  assert.match(markup,/没有 GSC 时保持原基础分/);
+});
