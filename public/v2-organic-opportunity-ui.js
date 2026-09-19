@@ -214,7 +214,7 @@ export function mountOrganicOpportunityTab({
       button.textContent=label;
       button.dataset.v2WorkflowStatus=nextStatus;
       button.dataset.v2WorkflowPage=item.page||item.url||"";
-      button.dataset.v2WorkflowAction=item.action||item.action?.code||item.next_best_action?.action||"";
+      button.dataset.v2WorkflowAction=typeof item.action==="string"?item.action:(item.action?.code||item.next_best_action?.action||"");
       button.dataset.v2WorkflowQuery=item.query||item.next_best_action?.query||"";
       button.dataset.v2WorkflowScore=String(item.priority_score??item.next_best_action?.priority_score??"");
       wrap.append(button);
