@@ -64,7 +64,7 @@ export function buildGscGenerativeAiRecoveryAction({
     query_source:"gsc_generative_ai_d1",
     why_now:
       reason+
-      " Review the first-party trend and affected pages before changing content; this observation does not establish causality.",
+      " This is property-global first-party evidence, not the currently selected market. Review the trend and affected pages before changing content; this observation does not establish causality.",
     evidence:{
       appearance,
       latest_date:summary?.latest_date??trend?.latest_date??null,
@@ -79,6 +79,7 @@ export function buildGscGenerativeAiRecoveryAction({
       comparison_days:finite(trend?.comparison_days)??7,
       change_code:code,
       top_page:summary?.pages?.[0]?.key??null,
+      scope:"property_global",
     },
   };
 }
