@@ -1,3 +1,5 @@
+import { summarizeGscGenerativeAiTrend } from "../intelligence/gsc-generative-ai-trends.js";
+
 const INSERT_CHUNK_SIZE=250;
 
 function metricRow(row={}){
@@ -177,7 +179,8 @@ export async function readGscGenerativeAiSummary(db,{
       window:null,
       coverage_days:0,
       metrics:{clicks:0,impressions:0,ctr:0,position:null},
-      pages:[],countries:[],devices:[],
+      pages:[],countries:[],devices:[],daily:[],
+      trend:summarizeGscGenerativeAiTrend([]),
     };
   }
   const windowDays=[7,28,90].includes(Number(days))?Number(days):28;
@@ -189,7 +192,8 @@ export async function readGscGenerativeAiSummary(db,{
   if(!latest?.latest_date){
     return {
       site_profile_id:Number(site.id),appearance:selected,latest_date:null,window:null,coverage_days:0,
-      metrics:{clicks:0,impressions:0,ctr:0,position:null},pages:[],countries:[],devices:[],
+      metrics:{clicks:0,impressions:0,ctr:0,position:null},pages:[],countries:[],devices:[],daily:[],
+      trend:summarizeGscGenerativeAiTrend([]),
     };
   }
 
@@ -201,11 +205,25 @@ export async function readGscGenerativeAiSummary(db,{
     "AND date BETWEEN ? AND ?"
   ).bind(site.id,selected,window.start,window.end).first();
 
-  const [pages,countries,devices]=await Promise.all([
+  const historyStart=windowFrom(latest.latest_date,Math.max(windowDays,28)).start;
+  const [pages,countries,devices,dailyResult]=await Promise.all([
     aggregateRows(db,{siteProfileId:site.id,appearance:selected,dimensionSet:"page",primary:"page_url",window,limit:rowLimit}),
     aggregateRows(db,{siteProfileId:site.id,appearance:selected,dimensionSet:"country",primary:"country",window,limit:20}),
     aggregateRows(db,{siteProfileId:site.id,appearance:selected,dimensionSet:"device",primary:"device",window,limit:10}),
+    db.prepare(
+      "SELECT date, clicks, impressions, ctr, position FROM gsc_generative_ai_daily "+
+      "WHERE site_profile_id = ? AND appearance_value = ? AND dimension_set = 'property' "+
+      "AND date BETWEEN ? AND ? ORDER BY date ASC"
+    ).bind(site.id,selected,historyStart,latest.latest_date).all(),
   ]);
+  const daily=(dailyResult?.results??[]).map((row)=>({
+    date:row.date,
+    clicks:Number(row.clicks??0),
+    impressions:Number(row.impressions??0),
+    ctr:Number(row.ctr??0),
+    position:row.position==null?null:Number(row.position),
+  }));
+  const trend=summarizeGscGenerativeAiTrend(daily,{comparisonDays:7});
 
   return {
     site_profile_id:Number(site.id),
@@ -214,7 +232,7 @@ export async function readGscGenerativeAiSummary(db,{
     window:{start_date:window.start,end_date:window.end,days:windowDays},
     coverage_days:Number(total?.coverage_days??0),
     metrics:normalizeAggregate(total),
-    pages,countries,devices,
+    pages,countries,devices,daily,trend,
     disclaimer:
       "This view is Search Analytics filtered by the manually selected discovered searchAppearance value. It is not a reverse-engineered Google Generative AI score and does not infer unavailable traffic.",
   };
