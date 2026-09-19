@@ -62,6 +62,7 @@ export function gscPerformancePanelMarkup() {
         <div class="v2-gsc-performance-tabs">
           <button type="button" class="active" data-v2-gsc-performance-view="queries">Queries</button>
           <button type="button" data-v2-gsc-performance-view="pages">Pages</button>
+          <button type="button" data-v2-gsc-performance-view="cannibalization">Potential Cannibalization</button>
         </div>
         <label>Window
           <select data-v2-gsc-performance-days>
@@ -179,7 +180,9 @@ export function mountGscPerformanceTab({
   const renderHead = () => {
     head.innerHTML = activeView === "pages"
       ? "<tr><th>Page</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Position</th><th>Clicks Change</th><th>Action</th><th>Queries</th></tr>"
-      : "<tr><th>Query</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Position</th><th>Clicks Change</th><th>Action</th><th>Next</th></tr>";
+      : activeView === "cannibalization"
+        ? "<tr><th>Query</th><th>Total Imp.</th><th>Primary Page</th><th>Pos</th><th>Share</th><th>Competing Page</th><th>Pos</th><th>Share</th><th>Signal</th><th>Next</th></tr>"
+        : "<tr><th>Query</th><th>Clicks</th><th>Impressions</th><th>CTR</th><th>Position</th><th>Clicks Change</th><th>Action</th><th>Next</th></tr>";
     viewButtons.forEach((button) => button.classList.toggle("active", button.dataset.v2GscPerformanceView === activeView));
   };
 
@@ -209,7 +212,7 @@ export function mountGscPerformanceTab({
     if (!rows.length) {
       const tr = document.createElement("tr");
       const td = document.createElement("td");
-      td.colSpan = 8;
+      td.colSpan = activeView === "cannibalization" ? 10 : 8;
       td.className = "v2-organic-empty";
       td.textContent = data?.latest_date
         ? "当前窗口没有可展示的 GSC 行。"
@@ -221,6 +224,66 @@ export function mountGscPerformanceTab({
 
     rows.forEach((item) => {
       const tr = document.createElement("tr");
+
+      if (activeView === "cannibalization") {
+        const queryCell=document.createElement("td");
+        queryCell.textContent=item.query||"—";
+        queryCell.className="v2-gsc-query";
+
+        const total=document.createElement("td");
+        total.textContent=number(item.total_impressions);
+
+        const pageCell=(page)=>{
+          const td=document.createElement("td");
+          const link=document.createElement("a");
+          link.href=page?.page_url||"#";
+          link.target="_blank";
+          link.rel="noopener noreferrer";
+          link.className="v2-organic-url v2-gsc-page-url";
+          link.textContent=page?.page_url||"—";
+          td.append(link);
+          return td;
+        };
+        const positionCell=(page)=>{
+          const td=document.createElement("td");
+          td.textContent=number(page?.position,2);
+          return td;
+        };
+        const shareCell=(page)=>{
+          const td=document.createElement("td");
+          td.textContent=percent(page?.impression_share);
+          return td;
+        };
+
+        const signal=document.createElement("td");
+        const badge=actionBadge(document,item.action);
+        badge.dataset.severity=item.severity||"review";
+        signal.append(badge);
+
+        const next=document.createElement("td");
+        const research=document.createElement("button");
+        research.type="button";
+        research.className="v2-gsc-page-queries";
+        research.dataset.v2GscResearchKeyword=item.query||"";
+        research.textContent="Research";
+        next.append(research);
+
+        tr.append(
+          queryCell,
+          total,
+          pageCell(item.primary_page),
+          positionCell(item.primary_page),
+          shareCell(item.primary_page),
+          pageCell(item.competing_page),
+          positionCell(item.competing_page),
+          shareCell(item.competing_page),
+          signal,
+          next,
+        );
+        body.append(tr);
+        return;
+      }
+
       const primary = document.createElement("td");
       if (activeView === "pages") {
         const link = document.createElement("a");
@@ -272,6 +335,7 @@ export function mountGscPerformanceTab({
     note.textContent = data?.disclaimer || "Stored finalized Google Search Console data.";
     meta.textContent = [
       "D1 only · $0",
+      activeView === "cannibalization" ? "Potential overlap · review signal only" : null,
       data?.latest_date ? "Latest stored date " + data.latest_date : "No sync yet",
       gscCoverageLabel(data?.coverage),
       data?.summary?.comparison_complete ? "comparison complete" : "comparison partial",
