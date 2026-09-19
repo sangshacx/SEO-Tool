@@ -11,6 +11,7 @@ import {
 } from "../../../../src/v2/organic/organic-keywords-cache.js";
 import { normalizeMarketRequest } from "../../../../src/v2/markets/request-market.js";
 import { recordApiUsage } from "../../../../src/v2/storage/keyword-overview.js";
+import { recordManagedOrganicSnapshot } from "../../../../src/v2/storage/organic-history.js";
 
 const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
 const MAX_BODY_BYTES = 64 * 1024;
@@ -171,6 +172,26 @@ export async function onRequestPost({ request, env }) {
       JSON.stringify({ data: provider.data, cached_at: cachedAt }),
       { expirationTtl: CACHE_TTL_SECONDS },
     );
+    let historySnapshot = { inserted: false, reason: "not_recorded" };
+    let historySnapshotWarning = null;
+    try {
+      historySnapshot = await recordManagedOrganicSnapshot({
+        db: env.DB,
+        target: normalizedTarget.target,
+        targetType: normalizedTarget.target_type,
+        locationCode,
+        languageCode,
+        data: provider.data,
+        capturedAt: cachedAt,
+      });
+    } catch (error) {
+      historySnapshotWarning = "Project History snapshot could not be persisted.";
+      console.error(JSON.stringify({
+        message: "organic history snapshot persistence failed",
+        request_id: requestId,
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
     await logUsage(env, {
       requestId,
       taskCount: provider.taskCount,
@@ -193,6 +214,9 @@ export async function onRequestPost({ request, env }) {
         actual_cost_usd: provider.actualCostUsd,
         cache_ttl_days: 7,
         provider_requests: 1,
+        history_snapshot_saved: historySnapshot.inserted === true,
+        history_snapshot_deduped: historySnapshot.deduped === true,
+        ...(historySnapshotWarning ? { warning: historySnapshotWarning } : {}),
         duration_ms: Date.now() - startedAt,
       },
     });
