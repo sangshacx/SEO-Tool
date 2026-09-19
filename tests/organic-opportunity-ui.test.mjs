@@ -148,3 +148,19 @@ test("editing a Snoozed workflow note preserves the existing snooze deadline", (
   assert.match(opportunityUiSource,/button\.dataset\.v2WorkflowSnoozeUntil/);
   assert.match(opportunityUiSource,/new Date\(Date\.now\(\)\+7\*86400000\)/);
 });
+
+
+test("Opportunity Center renders observational GSC Outcome Validation for completed actions", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/OUTCOME VALIDATION/);
+  assert.match(markup,/data-v2-workflow-outcome-ready/);
+  assert.match(markup,/data-v2-workflow-outcome-total/);
+  assert.match(markup,/data-v2-workflow-outcomes-body/);
+  assert.match(markup,/observational only/);
+  assert.match(markup,/不证明这些变化由该 SEO 动作造成/);
+  assert.match(opportunityUiSource,/workflow_outcomes/);
+  assert.match(opportunityUiSource,/waiting_for_post_data/);
+  assert.match(opportunityUiSource,/collecting_post_data/);
+  assert.match(opportunityUiSource,/page_fallback/);
+  assert.match(opportunityUiSource,/position_improvement/);
+});
