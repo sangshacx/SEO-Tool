@@ -2,6 +2,7 @@ const STATUS_ENDPOINT="/api/v2/gsc/status";
 const PROPERTIES_ENDPOINT="/api/v2/gsc/properties";
 const MAPPINGS_ENDPOINT="/api/v2/gsc/mappings";
 const DISCONNECT_ENDPOINT="/api/v2/gsc/disconnect";
+const GENERATIVE_AI_ENDPOINT="/api/v2/gsc/generative-ai";
 
 export function gscPropertiesForDomain(properties, domain) {
   const normalized=String(domain||"").trim().toLowerCase().replace(/^www\./,"");
@@ -41,6 +42,22 @@ export function createGscSettingsWorkspace(documentLike=document) {
       <button type="button" data-v2-gsc-map>Map to Current Site</button>
       <button type="button" class="secondary" data-v2-gsc-unmap>Remove Mapping</button>
     </div>
+    <div class="v2-gsc-ai-discovery">
+      <div class="v2-gsc-ai-head">
+        <div>
+          <b>Generative AI API Discovery</b>
+          <span>先按官方要求查询 searchAppearance，再从当前 Property 实际返回的 raw value 中手工选择。不会硬编码未公开的 AI filter。</span>
+        </div>
+        <strong data-v2-gsc-ai-state>NOT DISCOVERED</strong>
+      </div>
+      <div class="v2-gsc-ai-controls">
+        <button type="button" data-v2-gsc-ai-discover>Discover Search Appearances · $0</button>
+        <select data-v2-gsc-ai-appearance aria-label="Generative AI Search Appearance"><option value="">Discover first</option></select>
+        <button type="button" data-v2-gsc-ai-select>Use Selected Value · $0</button>
+        <button type="button" class="secondary" data-v2-gsc-ai-clear>Clear</button>
+      </div>
+      <div class="v2-gsc-ai-note" data-v2-gsc-ai-note>需要先连接并映射 Search Console Property。Discovery 会发 1 次 Google Search Console API 请求，费用 $0。</div>
+    </div>
     <div class="v2-gsc-meta" data-v2-gsc-meta>OAuth state 10 min · refresh token AES-GCM · Google API cost $0</div>
   `;
   return section;
@@ -69,12 +86,61 @@ export function mountGscSettings({root,context,fetchImpl=globalThis.fetch,locati
   const mapButton=section.querySelector("[data-v2-gsc-map]");
   const unmapButton=section.querySelector("[data-v2-gsc-unmap]");
   const meta=section.querySelector("[data-v2-gsc-meta]");
+  const aiDiscover=section.querySelector("[data-v2-gsc-ai-discover]");
+  const aiAppearance=section.querySelector("[data-v2-gsc-ai-appearance]");
+  const aiSelect=section.querySelector("[data-v2-gsc-ai-select]");
+  const aiClear=section.querySelector("[data-v2-gsc-ai-clear]");
+  const aiState=section.querySelector("[data-v2-gsc-ai-state]");
+  const aiNote=section.querySelector("[data-v2-gsc-ai-note]");
   let connection={connected:false,mappings:[],oauth_configured:false};
   let properties=[];
+  let aiCapability={items:[],selected_appearance:null,discovered:false,mapped:false,sync_enabled:false};
 
   const currentDomain=()=>String(context?.get?.()?.domain||"").trim().toLowerCase();
   const currentMapping=()=>connection.mappings?.find((item)=>item.site_domain===currentDomain())||null;
   const setStatus=(message,state="info")=>{status.textContent=message;status.dataset.state=state;};
+
+  const renderAiCapability=()=>{
+    const mapping=currentMapping();
+    const rows=Array.isArray(aiCapability?.items)?aiCapability.items:[];
+    aiAppearance.replaceChildren(new Option(
+      rows.length?"Select discovered raw value":"Discover first",
+      ""
+    ));
+    rows.forEach((item)=>{
+      const labels=[
+        item.appearance,
+        item.generative_ai_candidate?"candidate hint":null,
+        Number.isFinite(Number(item.impressions))?Number(item.impressions).toLocaleString()+" impressions":null,
+      ].filter(Boolean);
+      aiAppearance.add(new Option(labels.join(" · "),item.appearance));
+    });
+    if(aiCapability?.selected_appearance&&rows.some((item)=>item.appearance===aiCapability.selected_appearance)){
+      aiAppearance.value=aiCapability.selected_appearance;
+    }
+
+    const mapped=Boolean(mapping);
+    const selected=aiCapability?.selected_appearance||null;
+    aiState.textContent=!mapped
+      ?"MAP PROPERTY"
+      :!rows.length
+        ?"NOT DISCOVERED"
+        :selected
+          ?"SELECTED"
+          :"SELECT VALUE";
+    aiState.dataset.state=selected?"selected":rows.length?"discovered":"empty";
+    aiDiscover.disabled=!connection.connected||!mapped;
+    aiAppearance.disabled=!mapped||!rows.length;
+    aiSelect.disabled=!mapped||!aiAppearance.value;
+    aiClear.disabled=!selected;
+    aiNote.textContent=!mapped
+      ?"需要先映射当前网站的 Search Console Property。"
+      :!rows.length
+        ?"尚未发现 searchAppearance。点击 Discover 会发 1 次 Google API 请求，费用 $0。"
+        :selected
+          ?"已选择 raw value: "+selected+"。Generative AI 同步门已就绪，但本阶段不会自动抓取明细。"
+          :"已发现 "+rows.length+" 个 searchAppearance；请选择一个 raw value。candidate hint 只是提示，不会自动启用。";
+  };
 
   const render=()=>{
     const domain=currentDomain();
@@ -90,6 +156,7 @@ export function mountGscSettings({root,context,fetchImpl=globalThis.fetch,locati
     mapButton.disabled=!connection.connected||!propertySelect.value||Boolean(mapping);
     unmapButton.disabled=!mapping;
     meta.textContent=[connection.scope||"webmasters.readonly","OAuth state 10 min","AES-GCM encrypted refresh token","Google API cost $0"].filter(Boolean).join(" · ");
+    renderAiCapability();
   };
 
   const renderProperties=()=>{
@@ -124,27 +191,88 @@ export function mountGscSettings({root,context,fetchImpl=globalThis.fetch,locati
     finally{refresh.disabled=!connection.connected;}
   };
 
+  const loadAiCapability=async()=>{
+    const domain=currentDomain();
+    if(!domain){aiCapability={items:[],selected_appearance:null,discovered:false,mapped:false,sync_enabled:false};renderAiCapability();return;}
+    try{
+      const payload=await jsonFetch(fetchImpl,GENERATIVE_AI_ENDPOINT+"?site_domain="+encodeURIComponent(domain));
+      aiCapability=payload.data||aiCapability;
+      renderAiCapability();
+    }catch(error){
+      aiCapability={items:[],selected_appearance:null,discovered:false,mapped:Boolean(currentMapping()),sync_enabled:false};
+      renderAiCapability();
+      if(error.status!==404)setStatus(error.message||"Generative AI capability 读取失败","error");
+    }
+  };
+
+  const discoverAiCapability=async()=>{
+    const domain=currentDomain();if(!domain||!currentMapping())return;
+    aiDiscover.disabled=true;setStatus("正在按 searchAppearance 发现当前 Property 的能力；Google API 费用 $0…","info");
+    try{
+      const payload=await jsonFetch(fetchImpl,GENERATIVE_AI_ENDPOINT,{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({site_domain:domain,action:"discover",days:90}),
+      });
+      aiCapability=payload.data||aiCapability;
+      renderAiCapability();
+      setStatus(
+        "Search Appearance Discovery 完成：发现 "+(aiCapability.items?.length??0)+" 个值，候选提示 "+(payload.data?.candidate_count??0)+" 个；请手工确认 raw value。",
+        "success"
+      );
+    }catch(error){setStatus(error.message||"Generative AI capability discovery 失败","error");renderAiCapability();}
+    finally{renderAiCapability();}
+  };
+
+  const selectAiCapability=async(action="select")=>{
+    const domain=currentDomain();if(!domain)return;
+    const appearance=aiAppearance.value;
+    if(action==="select"&&!appearance)return;
+    aiSelect.disabled=true;aiClear.disabled=true;
+    try{
+      const payload=await jsonFetch(fetchImpl,GENERATIVE_AI_ENDPOINT,{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({site_domain:domain,action,...(action==="select"?{appearance}:{})}),
+      });
+      aiCapability=payload.data||aiCapability;
+      renderAiCapability();
+      setStatus(
+        action==="clear"
+          ?"Generative AI raw filter 已清除，本次费用 $0。"
+          :"已保存 Generative AI raw filter: "+aiCapability.selected_appearance+"，本次费用 $0。",
+        "success"
+      );
+    }catch(error){setStatus(error.message||"Generative AI filter 保存失败","error");renderAiCapability();}
+  };
+
+
+
   connect.addEventListener("click",()=>{if(!connect.disabled)locationLike.assign("/api/v2/gsc/connect/start");},{signal});
   refresh.addEventListener("click",loadProperties,{signal});
   propertySelect.addEventListener("change",render,{signal});
   mapButton.addEventListener("click",async()=>{
     const domain=currentDomain(),property=propertySelect.value;if(!domain||!property)return;
     mapButton.disabled=true;setStatus("正在验证并映射 Property…","info");
-    try{const payload=await jsonFetch(fetchImpl,MAPPINGS_ENDPOINT,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({site_domain:domain,property})});connection.mappings=[...(connection.mappings||[]).filter((item)=>item.site_domain!==domain),payload.data];renderProperties();setStatus("当前网站已映射到 "+payload.data.property+"。","success");}
+    try{const payload=await jsonFetch(fetchImpl,MAPPINGS_ENDPOINT,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({site_domain:domain,property})});connection.mappings=[...(connection.mappings||[]).filter((item)=>item.site_domain!==domain),payload.data];renderProperties();await loadAiCapability();setStatus("当前网站已映射到 "+payload.data.property+"。","success");}
     catch(error){setStatus(error.message||"Property 映射失败","error");render();}
   },{signal});
   unmapButton.addEventListener("click",async()=>{
     const domain=currentDomain();if(!domain)return;unmapButton.disabled=true;
-    try{await jsonFetch(fetchImpl,MAPPINGS_ENDPOINT,{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({site_domain:domain})});connection.mappings=(connection.mappings||[]).filter((item)=>item.site_domain!==domain);renderProperties();setStatus("当前网站的 GSC 映射已移除。","success");}
+    try{await jsonFetch(fetchImpl,MAPPINGS_ENDPOINT,{method:"DELETE",headers:{"content-type":"application/json"},body:JSON.stringify({site_domain:domain})});connection.mappings=(connection.mappings||[]).filter((item)=>item.site_domain!==domain);aiCapability={...aiCapability,mapped:false,sync_enabled:false};renderProperties();setStatus("当前网站的 GSC 映射已移除。","success");}
     catch(error){setStatus(error.message||"移除映射失败","error");render();}
   },{signal});
   disconnect.addEventListener("click",async()=>{
     if(globalThis.confirm&&!globalThis.confirm("断开 Google Search Console？本地加密凭据与所有站点映射都会删除。"))return;
     disconnect.disabled=true;setStatus("正在断开 Google Search Console…","info");
-    try{const payload=await jsonFetch(fetchImpl,DISCONNECT_ENDPOINT,{method:"POST"});connection={connected:false,mappings:[],oauth_configured:connection.oauth_configured};properties=[];renderProperties();setStatus(payload.data?.revoke_warning||"Google Search Console 已断开。",payload.data?.revoke_warning?"warning":"success");}
+    try{const payload=await jsonFetch(fetchImpl,DISCONNECT_ENDPOINT,{method:"POST"});connection={connected:false,mappings:[],oauth_configured:connection.oauth_configured};properties=[];aiCapability={items:[],selected_appearance:null,discovered:false,mapped:false,sync_enabled:false};renderProperties();setStatus(payload.data?.revoke_warning||"Google Search Console 已断开。",payload.data?.revoke_warning?"warning":"success");}
     catch(error){setStatus(error.message||"断开失败","error");render();}
   },{signal});
-  const unsubscribe=context?.subscribe?.(()=>{renderProperties();})??(()=>{});
-  loadStatus();
+  aiDiscover.addEventListener("click",discoverAiCapability,{signal});
+  aiAppearance.addEventListener("change",renderAiCapability,{signal});
+  aiSelect.addEventListener("click",()=>selectAiCapability("select"),{signal});
+  aiClear.addEventListener("click",()=>selectAiCapability("clear"),{signal});
+  const unsubscribe=context?.subscribe?.(()=>{renderProperties();loadAiCapability();})??(()=>{});
+  loadStatus().then?.(()=>loadAiCapability());
   return()=>{unsubscribe();controller.abort();};
 }
