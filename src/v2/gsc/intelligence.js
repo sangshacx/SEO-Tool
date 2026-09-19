@@ -19,11 +19,11 @@ function actionForQuery(row) {
   if (position !== null && position <= 3 && clicks > 0) {
     return { code: "protect", label: "Protect", reason: "Already ranking in the Top 3 with real GSC clicks." };
   }
-  if (position !== null && position >= 4 && position <= 15 && impressions >= 50) {
-    return { code: "quick_win", label: "Quick Win", reason: "Real impressions plus a 4–15 average position create a striking-distance opportunity." };
-  }
   if (position !== null && position <= 10 && impressions >= 100 && ctr < 0.03) {
     return { code: "ctr_opportunity", label: "Improve CTR", reason: "Top-10 visibility is meaningful but stored GSC CTR is below 3%." };
+  }
+  if (position !== null && position >= 4 && position <= 15 && impressions >= 50) {
+    return { code: "quick_win", label: "Quick Win", reason: "Real impressions plus a 4–15 average position create a striking-distance opportunity." };
   }
   if (position !== null && position > 15 && position <= 30 && impressions >= 100) {
     return { code: "expand", label: "Expand", reason: "The query has meaningful impressions but still sits outside the first page." };
