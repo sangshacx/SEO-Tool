@@ -372,6 +372,61 @@ function renderGscGenerativeVisibility(section, data = null) {
   );
   setText(section.querySelector("[data-v2-ai-gsc-appearance]"), data?.selected_appearance ?? "—");
 
+  const trend=summary?.trend??null;
+  const trendBadge=section.querySelector("[data-v2-ai-gsc-trend]");
+  if(trendBadge){
+    trendBadge.textContent=trend?.change?.label??"No comparable history";
+    trendBadge.dataset.kind=trend?.change?.kind??"neutral";
+  }
+  setText(
+    section.querySelector("[data-v2-ai-gsc-impressions-delta]"),
+    trend?.deltas?.impressions==null
+      ?"—"
+      :(trend.deltas.impressions>0?"+":"")+numberLabel(trend.deltas.impressions),
+  );
+  setText(
+    section.querySelector("[data-v2-ai-gsc-clicks-delta]"),
+    trend?.deltas?.clicks==null
+      ?"—"
+      :(trend.deltas.clicks>0?"+":"")+numberLabel(trend.deltas.clicks),
+  );
+  setText(
+    section.querySelector("[data-v2-ai-gsc-compare-coverage]"),
+    trend?.current&&trend?.previous
+      ?trend.current.coverage_days+"/"+trend.current.requested_days+" vs "+
+        trend.previous.coverage_days+"/"+trend.previous.requested_days
+      :"—",
+  );
+
+  const dailyBody=section.querySelector("[data-v2-ai-gsc-daily]");
+  dailyBody?.replaceChildren();
+  const daily=Array.isArray(summary?.daily)?summary.daily.slice(-14).reverse():[];
+  if(!daily.length){
+    const row=document.createElement("tr");
+    const cell=document.createElement("td");
+    cell.colSpan=4;
+    cell.className="v2-ai-empty";
+    cell.textContent="暂无 first-party filtered daily history。";
+    row.append(cell);
+    dailyBody?.append(row);
+  }else{
+    daily.forEach((item)=>{
+      const row=document.createElement("tr");
+      const values=[
+        item.date,
+        numberLabel(item.impressions),
+        numberLabel(item.clicks),
+        Number.isFinite(Number(item.ctr))?(Number(item.ctr)*100).toFixed(2)+"%":"—",
+      ];
+      values.forEach((value)=>{
+        const cell=document.createElement("td");
+        cell.textContent=value;
+        row.append(cell);
+      });
+      dailyBody.append(row);
+    });
+  }
+
   body?.replaceChildren();
   const pages = Array.isArray(summary?.pages) ? summary.pages.slice(0, 10) : [];
   if (!pages.length) {
@@ -710,11 +765,25 @@ export function createAiVisibilityWorkspace() {
         <article><span>Coverage</span><b data-v2-ai-gsc-coverage>—</b></article>
         <article><span>Selected Appearance</span><b data-v2-ai-gsc-appearance>—</b></article>
       </div>
-      <div class="v2-ai-tablewrap">
-        <table>
-          <thead><tr><th>Top Page</th><th>Filtered Impressions</th><th>Filtered Clicks</th></tr></thead>
-          <tbody data-v2-ai-gsc-pages></tbody>
-        </table>
+      <div class="v2-ai-gsc-trendstrip">
+        <article><span>7d vs previous 7d</span><b data-v2-ai-gsc-trend data-kind="neutral">No comparable history</b></article>
+        <article><span>Impressions Δ</span><b data-v2-ai-gsc-impressions-delta>—</b></article>
+        <article><span>Clicks Δ</span><b data-v2-ai-gsc-clicks-delta>—</b></article>
+        <article><span>Comparable Coverage</span><b data-v2-ai-gsc-compare-coverage>—</b></article>
+      </div>
+      <div class="v2-ai-gsc-grids">
+        <div class="v2-ai-tablewrap">
+          <table>
+            <thead><tr><th>Top Page</th><th>Filtered Impressions</th><th>Filtered Clicks</th></tr></thead>
+            <tbody data-v2-ai-gsc-pages></tbody>
+          </table>
+        </div>
+        <div class="v2-ai-tablewrap">
+          <table>
+            <thead><tr><th>Date</th><th>Impressions</th><th>Clicks</th><th>CTR</th></tr></thead>
+            <tbody data-v2-ai-gsc-daily></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
