@@ -6,6 +6,7 @@ import {
   onRequestPost,
 } from "../functions/api/v2/organic/action-workflow.js";
 import { dashboardDatabase, seedProfile } from "./dashboard-test-helpers.mjs";
+import { upsertAiPromptTracker } from "../src/v2/storage/ai-prompt-tracker.js";
 
 const ACCESS={ "cf-access-jwt-assertion":"test-access" };
 
@@ -158,10 +159,33 @@ test("workflow API accepts AI visibility recovery actions on the managed-site ho
 });
 
 
-test("workflow API accepts Tracked Prompt recovery actions and keeps the full prompt as the workflow key", async () => {
+test("workflow API requires and persists the Saved Prompt tracker link for AI recovery actions", async () => {
   const {d1}=await dashboardDatabase();
   await seedProfile(d1,{domain:"example.com"});
   const prompt="Which waterproof membrane manufacturers should buyers consider?";
+  const tracker=await upsertAiPromptTracker(d1,{
+    siteDomain:"example.com",
+    platform:"chat_gpt",
+    modelName:"gpt-4.1-mini",
+    prompt,
+    webSearch:true,
+    locationCode:2840,
+    languageCode:"en",
+  });
+
+  const missing=await onRequestPost({
+    request:post({
+      site_domain:"example.com",
+      page_url:"https://example.com/",
+      action_code:"ai_prompt_recovery",
+      query:prompt,
+      status:"in_progress",
+      priority_score:80,
+    }),
+    env:{DB:d1},
+  });
+  assert.equal(missing.status,400);
+  assert.equal((await missing.json()).error.field,"tracker_id");
 
   const response=await onRequestPost({
     request:post({
@@ -169,6 +193,7 @@ test("workflow API accepts Tracked Prompt recovery actions and keeps the full pr
       page_url:"https://example.com/",
       action_code:"ai_prompt_recovery",
       query:prompt,
+      tracker_id:tracker.id,
       status:"in_progress",
       priority_score:80,
       note:"Review the previous cited observation before changing content.",
@@ -183,4 +208,9 @@ test("workflow API accepts Tracked Prompt recovery actions and keeps the full pr
   assert.equal(payload.data.status,"in_progress");
   assert.equal(payload.meta.actual_cost_usd,0);
   assert.equal(payload.meta.provider_requests,0);
+
+  const link=await d1.prepare(
+    "SELECT workflow_id, tracker_id FROM ai_prompt_workflow_links WHERE workflow_id = ?"
+  ).bind(payload.data.id).first();
+  assert.equal(Number(link.tracker_id),tracker.id);
 });
