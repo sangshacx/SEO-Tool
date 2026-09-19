@@ -222,7 +222,8 @@ test("Opportunity Center keeps GSC and AI Prompt outcome validation in separate 
   assert.match(opportunityUiSource,/ai_prompt_workflow_outcomes/);
   assert.match(opportunityUiSource,/ai_prompt_workflow_outcome_summary/);
   assert.match(opportunityUiSource,/citation_recovered/);
-  assert.match(opportunityUiSource,/waiting_for_post_observation/);
+  assert.match(opportunityUiSource,/item\.status\|\|"waiting"/);
+  assert.match(markup,/等待下一次真实 Prompt Test observation/);
   assert.match(opportunityUiSource,/模型回答变化不证明/);
 });
 
