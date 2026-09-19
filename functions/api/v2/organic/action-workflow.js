@@ -123,8 +123,9 @@ function normalizeInput(body) {
     error.httpStatus = 400;
     throw error;
   }
-  const note = String(body.note ?? "").trim();
-  if (note.length > 2000) {
+  const noteProvided = Object.hasOwn(body, "note");
+  const note = noteProvided ? String(body.note ?? "").trim() : null;
+  if (note !== null && note.length > 2000) {
     const error = new Error("Note must be 2,000 characters or fewer.");
     error.code = "VALIDATION_ERROR";
     error.field = "note";
@@ -170,6 +171,7 @@ function normalizeInput(body) {
     query,
     status,
     note,
+    note_provided: noteProvided,
     snooze_until: snoozeUntil,
     priority_score: priorityScore,
   };
