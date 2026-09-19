@@ -1,6 +1,8 @@
 import { classifyOrganicKeywordAction } from "../src/v2/intelligence/organic-keyword-actions.js";
+import { classifyOrganicPageAction } from "../src/v2/intelligence/organic-page-actions.js";
 
 const ENDPOINT = "/api/v2/organic/keywords";
+const PAGES_ENDPOINT = "/api/v2/organic/pages";
 const PAGE_SIZE = 50;
 
 function finite(value) {
@@ -78,6 +80,16 @@ export function filterOrganicKeywordRows(rows, filters = {}, mode = "own") {
   });
 }
 
+export function filterOrganicPageRows(rows, filters = {}, mode = "own") {
+  const query = String(filters.query ?? "").trim().toLowerCase();
+  const action = String(filters.action ?? "");
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    if (query && !String(row.relative_url ?? row.url ?? "").toLowerCase().includes(query)) return false;
+    if (action && classifyOrganicPageAction(row, { mode }).code !== action) return false;
+    return true;
+  });
+}
+
 function ensureStyles(documentLike) {
   if (documentLike.querySelector('link[data-v2-organic-styles]')) return;
   const link = documentLike.createElement("link");
@@ -111,6 +123,7 @@ export function createOrganicIntelligenceWorkspace(documentLike = document) {
     <div class="v2-organic-tabs" role="tablist" aria-label="Organic Intelligence views">
       <button type="button" class="active" role="tab" aria-selected="true" data-v2-organic-tab="overview">Overview</button>
       <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="keywords">Organic Keywords</button>
+      <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="pages">Top Pages</button>
     </div>
     <div class="v2-organic-panel active" data-v2-organic-panel="overview">
       <div class="v2-organic-metrics">
@@ -139,6 +152,35 @@ export function createOrganicIntelligenceWorkspace(documentLike = document) {
         </table>
       </div>
       <div class="v2-organic-pager"><span data-v2-organic-count>0 rows</span><div><button type="button" data-v2-organic-prev>Previous</button><span data-v2-organic-page>Page 1</span><button type="button" data-v2-organic-next>Next</button></div></div>
+    </div>
+    <div class="v2-organic-panel" data-v2-organic-panel="pages" hidden>
+      <div class="v2-organic-pages-head">
+        <div><b>Top Pages</b><span>按 Organic Traffic 查看最重要的页面；点击关键词数量可直接进入该页面的 Organic Keywords。</span></div>
+        <button type="button" data-v2-organic-pages-run>Load Top Pages</button>
+      </div>
+      <div class="v2-organic-pages-filters">
+        <input type="search" placeholder="Filter URL" data-v2-organic-pages-filter="query">
+        <select data-v2-organic-pages-filter="action">
+          <option value="">All page actions</option>
+          <option value="protect">Protect</option>
+          <option value="growing">Growing</option>
+          <option value="at_risk">At Risk</option>
+          <option value="reclaim">Reclaim</option>
+          <option value="improve">Improve</option>
+          <option value="monitor">Monitor</option>
+          <option value="study_winner">Study Winner</option>
+          <option value="study_gain">Study Gain</option>
+          <option value="competitor_weakness">Competitor Weakness</option>
+          <option value="study">Study</option>
+        </select>
+      </div>
+      <div class="v2-organic-table-shell">
+        <table class="v2-organic-table v2-organic-pages-table">
+          <thead><tr><th>Page</th><th>Traffic</th><th>Keywords</th><th>Top 3</th><th>Top 10</th><th>Top 20</th><th>New</th><th>Up</th><th>Down</th><th>Lost</th><th>Action</th></tr></thead>
+          <tbody data-v2-organic-pages-body><tr><td colspan="11" class="v2-organic-empty">尚未加载 Top Pages。</td></tr></tbody>
+        </table>
+      </div>
+      <div class="v2-organic-pager"><span data-v2-organic-pages-count>0 rows</span><div><button type="button" data-v2-organic-pages-prev>Previous</button><span data-v2-organic-pages-page>Page 1</span><button type="button" data-v2-organic-pages-next>Next</button></div></div>
     </div>
   `;
   return section;
@@ -195,10 +237,18 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
   const pageLabel = section.querySelector("[data-v2-organic-page]");
   const countLabel = section.querySelector("[data-v2-organic-count]");
   const modeBadge = section.querySelector("[data-v2-organic-mode]");
+  const pagesRun = section.querySelector("[data-v2-organic-pages-run]");
+  const pagesBody = section.querySelector("[data-v2-organic-pages-body]");
+  const pagesPrevious = section.querySelector("[data-v2-organic-pages-prev]");
+  const pagesNext = section.querySelector("[data-v2-organic-pages-next]");
+  const pagesPageLabel = section.querySelector("[data-v2-organic-pages-page]");
+  const pagesCountLabel = section.querySelector("[data-v2-organic-pages-count]");
   const controller = new AbortController();
   const signal = controller.signal;
   let rows = [];
+  let pageRows = [];
   let page = 1;
+  let pagesPage = 1;
   let targetDirty = false;
 
   const currentMode = () => organicTargetMode(target.value, context?.get?.()?.domain);
@@ -243,6 +293,37 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
     previous.disabled = page <= 1; next.disabled = page >= totalPages;
   };
 
+  const renderPages = () => {
+    const mode = syncMode();
+    const filters = Object.fromEntries([...section.querySelectorAll("[data-v2-organic-pages-filter]")].map((field) => [field.dataset.v2OrganicPagesFilter, field.value]));
+    const filtered = filterOrganicPageRows(pageRows, filters, mode);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if (pagesPage > totalPages) pagesPage = totalPages;
+    const visible = filtered.slice((pagesPage - 1) * PAGE_SIZE, pagesPage * PAGE_SIZE);
+    pagesBody.replaceChildren();
+    if (!visible.length) {
+      const row = document.createElement("tr"), cell = document.createElement("td");
+      cell.colSpan = 11; cell.className = "v2-organic-empty"; cell.textContent = pageRows.length ? "当前筛选条件下没有页面。" : "尚未加载 Top Pages。"; row.append(cell); pagesBody.append(row);
+    } else {
+      visible.forEach((item) => {
+        const row = document.createElement("tr");
+        const pageCell = document.createElement("td"), link = document.createElement("a");
+        link.href = item.url; link.target = "_blank"; link.rel = "noopener noreferrer"; link.className = "v2-organic-url v2-organic-page-url"; link.textContent = item.relative_url || item.url; pageCell.append(link);
+        const trafficCell = document.createElement("td"); trafficCell.textContent = number(item.organic_traffic);
+        const keywordsCell = document.createElement("td"), keywordsButton = document.createElement("button");
+        keywordsButton.type = "button"; keywordsButton.className = "v2-organic-page-keywords"; keywordsButton.dataset.v2OrganicPageUrl = item.url; keywordsButton.textContent = number(item.organic_keywords); keywordsButton.title = "查看这个页面排名的 Organic Keywords"; keywordsCell.append(keywordsButton);
+        const positions = item.positions ?? {}, changes = item.changes ?? {};
+        const cells = [positions.top_3, positions.top_10, positions.top_20, changes.new, changes.up, changes.down, changes.lost].map((value) => { const cell = document.createElement("td"); cell.textContent = number(value); return cell; });
+        const actionCell = document.createElement("td"), action = classifyOrganicPageAction(item, { mode }), badge = document.createElement("span");
+        badge.className = "v2-organic-action"; badge.dataset.action = action.code; badge.textContent = action.label; badge.title = action.reason; actionCell.append(badge);
+        row.append(pageCell, trafficCell, keywordsCell, ...cells, actionCell); pagesBody.append(row);
+      });
+    }
+    pagesCountLabel.textContent = filtered.length + " / " + pageRows.length + " rows";
+    pagesPageLabel.textContent = "Page " + pagesPage + " / " + totalPages;
+    pagesPrevious.disabled = pagesPage <= 1; pagesNext.disabled = pagesPage >= totalPages;
+  };
+
   const renderOverview = (data, meta) => {
     const organic = data?.organic ?? {}, positions = organic.positions ?? {};
     const values = { keywords:number(organic.ranked_keywords), traffic:number(organic.estimated_monthly_traffic), value:money(organic.estimated_paid_traffic_cost_usd), top3:number(positions.top_3), top10:number(positions.top_10), top20:number(positions.top_20) };
@@ -250,6 +331,22 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
     const source = meta?.cached ? "7-day cache" : "DataForSEO live";
     const update = data?.update_window?.last_updated_at ? " · SERP updated " + new Date(data.update_window.last_updated_at).toLocaleDateString("zh-CN") : "";
     section.querySelector("[data-v2-organic-summary]").textContent = [data?.target, source, "Depth " + (meta?.cached_from_depth ?? data?.depth ?? "—"), "Returned " + (data?.returned_count ?? rows.length), "Total " + (data?.total_count ?? "—")].filter(Boolean).join(" · ") + update;
+  };
+
+  const loadPages = async () => {
+    const market = context?.get?.();
+    const domain = hostnameForTarget(target.value);
+    if (!market?.location_code || !market?.language_code || !domain) return;
+    pagesRun.disabled = true; setStatus(section, "正在检查 Top Pages 的兼容 7 天缓存…", "info");
+    try {
+      const response = await fetchImpl(PAGES_ENDPOINT, { method:"POST", headers:{"content-type":"application/json",accept:"application/json"}, body:JSON.stringify({ target:domain, depth:Number(depth.value), location_code:market.location_code, language_code:market.language_code, allow_live_request:allowPaid.checked }) });
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 409 && payload?.error?.code === "LIVE_REQUEST_CONFIRMATION_REQUIRED") { setStatus(section, "当前域名没有兼容 Top Pages 缓存。勾选“允许本次付费请求”后再次加载，才会调用 DataForSEO。", "warning"); return; }
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Top Pages 查询失败");
+      pageRows = Array.isArray(payload.data?.items) ? payload.data.items : []; pagesPage = 1; allowPaid.checked = false; renderPages(); activateTab(section,"pages");
+      setStatus(section, payload.meta?.cached ? "Top Pages 已读取：缓存命中，本次费用 $0。" : "Top Pages 已更新：实际 API 费用已记录，结果缓存 7 天。", "success");
+    } catch (error) { setStatus(section,error?.message || "Top Pages 查询失败","error"); }
+    finally { pagesRun.disabled = false; }
   };
 
   const load = async () => {
@@ -271,11 +368,17 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
   target.addEventListener("input",()=>{targetDirty=true;syncMode();},{signal});
   section.querySelectorAll("[data-v2-organic-tab]").forEach((button)=>button.addEventListener("click",()=>activateTab(section,button.dataset.v2OrganicTab),{signal}));
   section.querySelectorAll("[data-v2-organic-filter]").forEach((field)=>field.addEventListener(field.tagName==="INPUT"?"input":"change",()=>{page=1;renderTable();},{signal}));
+  section.querySelectorAll("[data-v2-organic-pages-filter]").forEach((field)=>field.addEventListener(field.tagName==="INPUT"?"input":"change",()=>{pagesPage=1;renderPages();},{signal}));
+  pagesRun.addEventListener("click",loadPages,{signal});
+  pagesPrevious.addEventListener("click",()=>{if(pagesPage>1){pagesPage-=1;renderPages();}},{signal});
+  pagesNext.addEventListener("click",()=>{pagesPage+=1;renderPages();},{signal});
+  pagesBody.addEventListener("click",(event)=>{const button=event.target.closest("[data-v2-organic-page-url]");if(!button)return;target.value=button.dataset.v2OrganicPageUrl;targetDirty=true;syncMode();activateTab(section,"keywords");load();},{signal});
   previous.addEventListener("click",()=>{if(page>1){page-=1;renderTable();}},{signal});
   next.addEventListener("click",()=>{page+=1;renderTable();},{signal});
   body.addEventListener("click",(event)=>{const button=event.target.closest("[data-v2-organic-keyword]");if(!button)return;const input=root.querySelector("#keyword");if(input){input.value=button.dataset.v2OrganicKeyword;input.dispatchEvent(new Event("input",{bubbles:true}));}if(locationLike)locationLike.hash="keywords";},{signal});
 
   const unsubscribe = context?.subscribe?.((market)=>{if(!targetDirty || !target.value.trim()){target.value=market?.domain || "";targetDirty=false;}syncMode();}) ?? (()=>{});
   renderTable();
+  renderPages();
   return ()=>{unsubscribe();controller.abort();};
 }
