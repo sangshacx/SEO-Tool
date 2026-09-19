@@ -8,11 +8,14 @@ on:
       - src/v2/providers/dataforseo-ai-visibility.js
       - src/v2/ai/ai-visibility-cache.js
       - src/v2/storage/ai-visibility.js
+      - src/v2/intelligence/ai-visibility-actions.js
       - migrations/0018_ai_visibility_history.sql
       - functions/api/v2/ai/visibility.js
       - functions/api/v2/ai/history.js
       - functions/api/v2/ai/compare.js
       - functions/api/v2/ai/pages.js
+      - functions/api/v2/organic/opportunities.js
+      - functions/api/v2/organic/action-workflow.js
       - public/v2-ai-visibility.js
       - public/v2-ai-visibility.css
       - public/v2-shell.js
@@ -22,6 +25,9 @@ on:
       - tests/ai-visibility-secondary-api.test.mjs
       - tests/ai-visibility-storage.test.mjs
       - tests/ai-visibility-history-api.test.mjs
+      - tests/ai-visibility-actions.test.mjs
+      - tests/organic-opportunities-api.test.mjs
+      - tests/seo-action-workflow-api.test.mjs
       - tests/dashboard-test-helpers.mjs
       - tests/ai-visibility-ui.test.mjs
       - tests/v2-shell-navigation.test.mjs
@@ -41,4 +47,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 12 AI visibility provider tests
-        run: node --test tests/dataforseo-ai-visibility.test.mjs tests/ai-visibility-api.test.mjs tests/ai-visibility-secondary-api.test.mjs tests/ai-visibility-storage.test.mjs tests/ai-visibility-history-api.test.mjs tests/ai-visibility-ui.test.mjs tests/v2-shell-navigation.test.mjs
+        run: node --test tests/dataforseo-ai-visibility.test.mjs tests/ai-visibility-api.test.mjs tests/ai-visibility-secondary-api.test.mjs tests/ai-visibility-storage.test.mjs tests/ai-visibility-history-api.test.mjs tests/ai-visibility-ui.test.mjs tests/v2-shell-navigation.test.mjs tests/ai-visibility-actions.test.mjs tests/organic-opportunities-api.test.mjs tests/seo-action-workflow-api.test.mjs
