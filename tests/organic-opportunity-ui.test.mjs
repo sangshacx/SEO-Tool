@@ -140,3 +140,11 @@ test("Workflow tasks support editable notes and preserve notes on ordinary statu
   assert.match(opportunityUiSource,/payload\.note=extra\.note/);
   assert.match(opportunityUiSource,/note updated/);
 });
+
+
+test("editing a Snoozed workflow note preserves the existing snooze deadline", () => {
+  assert.match(opportunityUiSource,/v2WorkflowSnoozeUntil/);
+  assert.match(opportunityUiSource,/Object\.hasOwn\(extra,"note"\).*v2WorkflowSnoozeUntil/s);
+  assert.match(opportunityUiSource,/button\.dataset\.v2WorkflowSnoozeUntil/);
+  assert.match(opportunityUiSource,/new Date\(Date\.now\(\)\+7\*86400000\)/);
+});
