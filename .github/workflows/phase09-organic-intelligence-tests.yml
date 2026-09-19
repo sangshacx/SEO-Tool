@@ -14,6 +14,10 @@ on:
       - functions/api/v2/organic/pages.js
       - src/v2/organic/organic-position-changes.js
       - functions/api/v2/organic/changes.js
+      - src/v2/intelligence/organic-competitor-relevance.js
+      - src/v2/providers/dataforseo-organic-competitors.js
+      - src/v2/organic/organic-competitors-cache.js
+      - functions/api/v2/organic/competitors.js
       - src/v2/intelligence/organic-keyword-actions.js
       - public/v2-organic-intelligence.js
       - public/v2-organic-intelligence.css
@@ -30,6 +34,10 @@ on:
       - tests/organic-pages-api.test.mjs
       - tests/organic-position-changes.test.mjs
       - tests/organic-changes-api.test.mjs
+      - tests/organic-competitor-relevance.test.mjs
+      - tests/dataforseo-organic-competitors.test.mjs
+      - tests/organic-competitors-cache.test.mjs
+      - tests/organic-competitors-api.test.mjs
       - .github/workflows/phase09-organic-intelligence-tests.yml
 
 permissions:
@@ -45,4 +53,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 09 Organic Intelligence tests
-        run: node --test tests/dataforseo-ranked-keywords.test.mjs tests/organic-keywords-cache.test.mjs tests/organic-keywords-api.test.mjs tests/organic-keyword-actions.test.mjs tests/organic-intelligence-ui.test.mjs tests/organic-shell-integration.test.mjs tests/dataforseo-relevant-pages.test.mjs tests/organic-pages-cache.test.mjs tests/organic-page-actions.test.mjs tests/organic-pages-api.test.mjs tests/organic-position-changes.test.mjs tests/organic-changes-api.test.mjs
+        run: node --test tests/dataforseo-ranked-keywords.test.mjs tests/organic-keywords-cache.test.mjs tests/organic-keywords-api.test.mjs tests/organic-keyword-actions.test.mjs tests/organic-intelligence-ui.test.mjs tests/organic-shell-integration.test.mjs tests/dataforseo-relevant-pages.test.mjs tests/organic-pages-cache.test.mjs tests/organic-page-actions.test.mjs tests/organic-pages-api.test.mjs tests/organic-position-changes.test.mjs tests/organic-changes-api.test.mjs tests/organic-competitor-relevance.test.mjs tests/dataforseo-organic-competitors.test.mjs tests/organic-competitors-cache.test.mjs tests/organic-competitors-api.test.mjs
