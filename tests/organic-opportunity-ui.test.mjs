@@ -104,7 +104,9 @@ test("Opportunity Center renders recent D1 workflow activity without another ext
   assert.match(markup,/data-v2-workflow-activity-body/);
   assert.match(markup,/D1 only · \$0/);
   assert.match(opportunityUiSource,/workflow_activity/);
-  assert.match(opportunityUiSource,/created →/);
+  assert.match(opportunityUiSource,/event\.from_status/);
+  assert.match(opportunityUiSource,/event\.to_status/);
+  assert.match(opportunityUiSource,/from\+" → "\+to/);
   assert.match(opportunityUiSource,/v2-workflow-transition/);
   assert.match(opportunityUiSource,/events\.slice\(0,10\)/);
 });
