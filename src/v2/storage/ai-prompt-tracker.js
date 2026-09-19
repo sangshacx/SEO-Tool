@@ -1,3 +1,5 @@
+import { summarizeAiPromptTrend } from "../intelligence/ai-prompt-trends.js";
+
 function integer(value) {
   const number = Number(value);
   return Number.isInteger(number) ? number : null;
@@ -186,12 +188,42 @@ export async function listAiPromptTrackers(db, {
       o.target_domain_cited AS latest_target_domain_cited,
       o.citation_count AS latest_citation_count,
       o.actual_cost_usd AS latest_actual_cost_usd,
+      agg.observation_count,
+      agg.mention_observation_count,
+      agg.citation_observation_count,
+      agg.total_actual_cost_usd,
       (
-        SELECT COUNT(*)
-        FROM ai_prompt_observations c
-        WHERE c.tracker_id = t.id
-      ) AS observation_count
+        SELECT previous.observed_at
+        FROM ai_prompt_observations previous
+        WHERE previous.tracker_id = t.id
+        ORDER BY previous.observed_at DESC, previous.id DESC
+        LIMIT 1 OFFSET 1
+      ) AS previous_observed_at,
+      (
+        SELECT previous.target_domain_mentioned
+        FROM ai_prompt_observations previous
+        WHERE previous.tracker_id = t.id
+        ORDER BY previous.observed_at DESC, previous.id DESC
+        LIMIT 1 OFFSET 1
+      ) AS previous_target_domain_mentioned,
+      (
+        SELECT previous.target_domain_cited
+        FROM ai_prompt_observations previous
+        WHERE previous.tracker_id = t.id
+        ORDER BY previous.observed_at DESC, previous.id DESC
+        LIMIT 1 OFFSET 1
+      ) AS previous_target_domain_cited
     FROM ai_prompt_trackers t
+    LEFT JOIN (
+      SELECT
+        tracker_id,
+        COUNT(*) AS observation_count,
+        SUM(CASE WHEN target_domain_mentioned = 1 THEN 1 ELSE 0 END) AS mention_observation_count,
+        SUM(CASE WHEN target_domain_cited = 1 THEN 1 ELSE 0 END) AS citation_observation_count,
+        SUM(COALESCE(actual_cost_usd, 0)) AS total_actual_cost_usd
+      FROM ai_prompt_observations
+      GROUP BY tracker_id
+    ) agg ON agg.tracker_id = t.id
     LEFT JOIN ai_prompt_observations o
       ON o.id = (
         SELECT id
@@ -204,17 +236,34 @@ export async function listAiPromptTrackers(db, {
     ORDER BY t.status = 'active' DESC, t.updated_at DESC, t.id DESC
   `).bind(...values).all();
 
-  return (rows?.results ?? []).map((row) => ({
-    ...normalizeTrackerRow(row),
-    observation_count: Number(row.observation_count ?? 0),
-    latest_observation: row.latest_observed_at ? {
+  return (rows?.results ?? []).map((row) => {
+    const latest = row.latest_observed_at ? {
       observed_at: row.latest_observed_at,
       target_domain_mentioned: row.latest_target_domain_mentioned == null ? null : Number(row.latest_target_domain_mentioned) === 1,
       target_domain_cited: row.latest_target_domain_cited == null ? null : Number(row.latest_target_domain_cited) === 1,
       citation_count: Number(row.latest_citation_count ?? 0),
       actual_cost_usd: row.latest_actual_cost_usd == null ? null : Number(row.latest_actual_cost_usd),
-    } : null,
-  }));
+    } : null;
+    const previous = row.previous_observed_at ? {
+      observed_at: row.previous_observed_at,
+      target_domain_mentioned: row.previous_target_domain_mentioned == null ? null : Number(row.previous_target_domain_mentioned) === 1,
+      target_domain_cited: row.previous_target_domain_cited == null ? null : Number(row.previous_target_domain_cited) === 1,
+    } : null;
+    const trend = summarizeAiPromptTrend({
+      observationCount: row.observation_count,
+      mentionObservationCount: row.mention_observation_count,
+      citationObservationCount: row.citation_observation_count,
+      totalActualCostUsd: row.total_actual_cost_usd,
+      latest,
+      previous,
+    });
+    return {
+      ...normalizeTrackerRow(row),
+      observation_count: trend.observation_count,
+      latest_observation: latest,
+      trend,
+    };
+  });
 }
 
 export async function recordAiPromptObservation(db, {
