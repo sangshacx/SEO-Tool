@@ -5,6 +5,7 @@ import test from "node:test";
 
 import { applyDecisionWorkflow } from "../src/v2/intelligence/decision-workflow.js";
 import {
+  getSeoActionWorkflowStats,
   listSeoActionWorkflow,
   listSeoActionWorkflowEvents,
   upsertSeoActionWorkflow,
@@ -227,4 +228,40 @@ test("workflow activity is site-scoped and returns newest events first", async (
   assert.equal(events[0].page_url,"https://example.com/b/");
   assert.equal(events[1].page_url,"https://example.com/a/");
   assert.ok(events.every(event=>event.site_domain==="example.com"));
+});
+
+
+test("workflow execution stats summarize current states and recent transitions", async () => {
+  const {d1}=await workflowDb();
+  const action=async(page,action,query,status,score)=>upsertSeoActionWorkflow(d1,{
+    site_domain:"example.com",
+    page_url:"https://example.com/"+page+"/",
+    action_code:action,
+    query,
+    status,
+    note:"",
+    snooze_until:status==="snoozed"?"2099-01-01T00:00:00.000Z":null,
+    priority_score:score,
+  });
+
+  await action("a","optimize","a","in_progress",60);
+  await action("a","optimize","a","done",70);
+  await action("b","recover","b","in_progress",80);
+  await action("c","protect","c","snoozed",50);
+  await action("d","scale","d","new",40);
+
+  const stats=await getSeoActionWorkflowStats(d1,"example.com");
+  assert.deepEqual(stats.current,{
+    new:1,
+    in_progress:1,
+    done:1,
+    snoozed:1,
+    total:4,
+  });
+  assert.equal(stats.last_7_days.started,2);
+  assert.equal(stats.last_7_days.completed,1);
+  assert.equal(stats.last_7_days.snoozed,1);
+  assert.equal(stats.last_7_days.reopened,0);
+  assert.equal(stats.last_7_days.events,5);
+  assert.equal(stats.last_30_days.completed,1);
 });
