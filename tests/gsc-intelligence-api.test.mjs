@@ -55,3 +55,49 @@ test("GSC intelligence returns an empty D1 state before the first sync", async (
   assert.deepEqual(payload.data.rows,[]);
   assert.equal(payload.data.summary.current_days,0);
 });
+
+
+test("GSC cannibalization view detects meaningful Query+Page overlap from D1 only", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let fetchCalls=0;
+  globalThis.fetch=async()=>{fetchCalls+=1;throw new Error("must not call Google");};
+
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const site=await d1.prepare("SELECT id FROM site_profiles WHERE domain = ?").bind("example.com").first();
+
+  for(const date of ["2026-09-15","2026-09-16","2026-09-17"]){
+    await replaceGscAnalyticsPartition(d1,{
+      siteProfileId:site.id,
+      property:"sc-domain:example.com",
+      date,
+      dimensionSet:"query_page",
+      rows:[
+        {query:"waterproof membrane",page:"https://example.com/a/",clicks:10,impressions:200,ctr:0.05,position:6},
+        {query:"waterproof membrane",page:"https://example.com/b/",clicks:6,impressions:140,ctr:6/140,position:9},
+        {query:"roof coating",page:"https://example.com/c/",clicks:10,impressions:300,ctr:1/30,position:5},
+        {query:"roof coating",page:"https://example.com/d/",clicks:1,impressions:20,ctr:0.05,position:12},
+      ],
+    });
+  }
+
+  const response=await onRequestGet({
+    request:new Request("https://preview.example/api/v2/gsc/intelligence?site_domain=example.com&view=cannibalization&days=7&limit=50",{headers:ACCESS}),
+    env:{DB:d1},
+  });
+  const payload=await response.json();
+  assert.equal(response.status,200);
+  assert.equal(payload.meta.source,"d1");
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+  assert.equal(fetchCalls,0);
+  assert.equal(payload.data.view,"cannibalization");
+  assert.equal(payload.data.rows.length,1);
+  assert.equal(payload.data.rows[0].query,"waterproof membrane");
+  assert.equal(payload.data.rows[0].severity,"high_overlap");
+  assert.equal(payload.data.rows[0].action.code,"review_cannibalization");
+  assert.equal(payload.data.rows[0].primary_page.page_url,"https://example.com/a/");
+  assert.equal(payload.data.rows[0].competing_page.page_url,"https://example.com/b/");
+  assert.match(payload.data.disclaimer,/not automatically a problem/);
+});
