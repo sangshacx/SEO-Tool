@@ -9,6 +9,9 @@ on:
       - functions/api/v2/organic/opportunities.js
       - public/v2-organic-opportunity-ui.js
       - public/v2-organic-intelligence.css
+      - public/v2-dashboard.js
+      - public/v2-dashboard.css
+      - public/v2-shell.js
       - src/v2/gsc/intelligence.js
       - src/v2/storage/gsc-search-analytics.js
       - tests/organic-opportunities.test.mjs
@@ -16,6 +19,8 @@ on:
       - tests/organic-opportunity-ui.test.mjs
       - tests/gsc-intelligence.test.mjs
       - tests/gsc-intelligence-api.test.mjs
+      - tests/v2-dashboard-view.test.mjs
+      - tests/v2-shell-ui.test.mjs
       - tests/dashboard-test-helpers.mjs
       - migrations/0014_gsc_connections.sql
       - migrations/0015_gsc_search_analytics.sql
@@ -34,4 +39,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 11 decision intelligence tests
-        run: node --test tests/organic-opportunities.test.mjs tests/organic-opportunities-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/gsc-intelligence.test.mjs tests/gsc-intelligence-api.test.mjs
+        run: node --test tests/organic-opportunities.test.mjs tests/organic-opportunities-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/gsc-intelligence.test.mjs tests/gsc-intelligence-api.test.mjs tests/v2-dashboard-view.test.mjs tests/v2-shell-ui.test.mjs
