@@ -7,6 +7,12 @@ import {
   buildPromptModelsCacheKey,
   buildPromptResultCacheKey,
 } from "../src/v2/ai/prompt-tracker-cache.js";
+import { dashboardDatabase, seedProfile } from "./dashboard-test-helpers.mjs";
+import {
+  listAiPromptObservations,
+  updateAiPromptTrackerStatus,
+  upsertAiPromptTracker,
+} from "../src/v2/storage/ai-prompt-tracker.js";
 
 class FakeKv {
   constructor(entries = []) {
@@ -325,4 +331,170 @@ test("Prompt Test serves identical cached prompt observations at zero provider c
   assert.equal(payload.data.answer, "Cached answer");
   assert.equal(payload.meta.actual_cost_usd, 0);
   assert.equal(payload.meta.provider_requests, 0);
+});
+
+
+test("Saved Prompt Tracker live runs record exactly one lightweight D1 observation", async (context) => {
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const tracker=await upsertAiPromptTracker(d1,{
+    siteDomain:"example.com",
+    name:"Supplier visibility",
+    platform:"chat_gpt",
+    modelName:"gpt-4.1-mini",
+    prompt:"Which waterproof membrane manufacturers should buyers consider?",
+    webSearch:true,
+    locationCode:2840,
+    languageCode:"en",
+  });
+
+  const modelKey=buildPromptModelsCacheKey("chat_gpt");
+  const cache=new FakeKv([[
+    modelKey,
+    {
+      cached_at:"2026-09-19T08:00:00.000Z",
+      data:{
+        platform:"chat_gpt",
+        models:[{
+          model_name:"gpt-4.1-mini",
+          reasoning:false,
+          web_search_supported:true,
+          task_post_supported:true,
+        }],
+      },
+    },
+  ]]);
+
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let liveCalls=0;
+  globalThis.fetch=async(url)=>{
+    liveCalls+=1;
+    assert.match(String(url),/\/live$/);
+    return new Response(JSON.stringify(promptPayload()),{
+      headers:{"content-type":"application/json"},
+    });
+  };
+
+  const response=await promptPost({
+    request:postPrompt({
+      target:"example.com",
+      location_code:2840,
+      language_code:"en",
+      platform:"chat_gpt",
+      model_name:"gpt-4.1-mini",
+      prompt:"Which waterproof membrane manufacturers should buyers consider?",
+      web_search:true,
+      tracker_id:tracker.id,
+      allow_live_request:true,
+      force_refresh:true,
+    }),
+    env:{
+      CACHE:cache,
+      DB:d1,
+      DATAFORSEO_LOGIN:"login",
+      DATAFORSEO_PASSWORD:"password",
+    },
+  });
+  const payload=await response.json();
+
+  assert.equal(response.status,200);
+  assert.equal(payload.meta.provider_requests,1);
+  assert.equal(payload.meta.observation_recorded,true);
+  assert.equal(payload.meta.tracker_id,tracker.id);
+  assert.ok(payload.meta.observation_id>0);
+  assert.equal(liveCalls,1);
+
+  const observations=await listAiPromptObservations(d1,{
+    siteDomain:"example.com",
+    trackerId:tracker.id,
+  });
+  assert.equal(observations.length,1);
+  assert.equal(observations[0].target_domain_mentioned,true);
+  assert.equal(observations[0].target_domain_cited,true);
+  assert.equal(observations[0].actual_cost_usd,0.0042);
+
+  const cached=await promptPost({
+    request:postPrompt({
+      target:"example.com",
+      location_code:2840,
+      language_code:"en",
+      platform:"chat_gpt",
+      model_name:"gpt-4.1-mini",
+      prompt:"Which waterproof membrane manufacturers should buyers consider?",
+      web_search:true,
+      tracker_id:tracker.id,
+    }),
+    env:{CACHE:cache,DB:d1},
+  });
+  const cachedPayload=await cached.json();
+  assert.equal(cached.status,200);
+  assert.equal(cachedPayload.meta.observation_recorded,false);
+  assert.equal(cachedPayload.meta.actual_cost_usd,0);
+
+  const observationsAfterCache=await listAiPromptObservations(d1,{
+    siteDomain:"example.com",
+    trackerId:tracker.id,
+  });
+  assert.equal(observationsAfterCache.length,1);
+});
+
+test("Paused or mismatched Prompt Trackers fail before any paid provider call", async (context) => {
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const tracker=await upsertAiPromptTracker(d1,{
+    siteDomain:"example.com",
+    platform:"gemini",
+    modelName:"gemini-2.5-flash",
+    prompt:"Recommend waterproof membrane suppliers.",
+    webSearch:true,
+    locationCode:2840,
+    languageCode:"en",
+  });
+
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let calls=0;
+  globalThis.fetch=async()=>{calls+=1;throw new Error("provider must not run");};
+
+  const mismatch=await promptPost({
+    request:postPrompt({
+      target:"example.com",
+      location_code:2840,
+      language_code:"en",
+      platform:"gemini",
+      model_name:"gemini-2.5-flash",
+      prompt:"A different prompt.",
+      web_search:true,
+      tracker_id:tracker.id,
+      allow_live_request:true,
+    }),
+    env:{CACHE:new FakeKv(),DB:d1},
+  });
+  assert.equal(mismatch.status,409);
+  assert.equal((await mismatch.json()).error.code,"TRACKER_CONFIG_MISMATCH");
+  assert.equal(calls,0);
+
+  await updateAiPromptTrackerStatus(d1,{
+    siteDomain:"example.com",
+    trackerId:tracker.id,
+    status:"paused",
+  });
+  const paused=await promptPost({
+    request:postPrompt({
+      target:"example.com",
+      location_code:2840,
+      language_code:"en",
+      platform:"gemini",
+      model_name:"gemini-2.5-flash",
+      prompt:"Recommend waterproof membrane suppliers.",
+      web_search:true,
+      tracker_id:tracker.id,
+      allow_live_request:true,
+    }),
+    env:{CACHE:new FakeKv(),DB:d1},
+  });
+  assert.equal(paused.status,409);
+  assert.equal((await paused.json()).error.code,"TRACKER_PAUSED");
+  assert.equal(calls,0);
 });
