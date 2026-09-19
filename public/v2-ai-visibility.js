@@ -7,6 +7,7 @@ const ENDPOINTS = Object.freeze({
   promptModels: "/api/v2/ai/prompt-models",
   promptTest: "/api/v2/ai/prompt-test",
   promptTracker: "/api/v2/ai/prompt-tracker",
+  gscGenerative: "/api/v2/gsc/generative-ai-sync",
 });
 
 function cleanDomain(value) {
@@ -359,6 +360,62 @@ function usdLabel(value) {
   return Number.isFinite(number) ? "$" + number.toFixed(6).replace(/0+$/, "").replace(/\.$/, "") : "—";
 }
 
+function renderGscGenerativeVisibility(section, data = null) {
+  const summary = data?.summary ?? null;
+  const note = section.querySelector("[data-v2-ai-gsc-note]");
+  const body = section.querySelector("[data-v2-ai-gsc-pages]");
+  setText(section.querySelector("[data-v2-ai-gsc-impressions]"), summary ? numberLabel(summary?.metrics?.impressions) : "—");
+  setText(section.querySelector("[data-v2-ai-gsc-clicks]"), summary ? numberLabel(summary?.metrics?.clicks) : "—");
+  setText(
+    section.querySelector("[data-v2-ai-gsc-coverage]"),
+    summary?.window ? String(summary.coverage_days ?? 0) + "/" + String(summary.window.days ?? 28) + " days" : "—",
+  );
+  setText(section.querySelector("[data-v2-ai-gsc-appearance]"), data?.selected_appearance ?? "—");
+
+  body?.replaceChildren();
+  const pages = Array.isArray(summary?.pages) ? summary.pages.slice(0, 10) : [];
+  if (!pages.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 3;
+    cell.className = "v2-ai-empty";
+    cell.textContent = data?.selected_appearance
+      ? "已选择 raw searchAppearance，但 D1 还没有 filtered page 数据。请在 GSC Settings 手工同步。"
+      : "尚未配置 GSC Generative AI raw searchAppearance。";
+    row.append(cell);
+    body?.append(row);
+  } else {
+    pages.forEach((item) => {
+      const row = document.createElement("tr");
+      const page = document.createElement("td");
+      const link = document.createElement("a");
+      link.href = item.key;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = item.key;
+      page.append(link);
+      const impressions = document.createElement("td");
+      impressions.textContent = numberLabel(item.impressions);
+      const clicks = document.createElement("td");
+      clicks.textContent = numberLabel(item.clicks);
+      row.append(page, impressions, clicks);
+      body.append(row);
+    });
+  }
+
+  if (note) {
+    note.textContent = !data
+      ? "GSC first-party view unavailable."
+      : !data.selected_appearance
+        ? "需要先在 GSC Settings 运行 searchAppearance discovery 并手工选择 raw value。"
+        : summary?.latest_date
+          ? "Source: Google Search Console · selected searchAppearance " + data.selected_appearance +
+            " · latest " + summary.latest_date +
+            " · D1 read $0. 这是 filtered Search Analytics，不是推算的 AI traffic。"
+          : "已选择 " + data.selected_appearance + "；等待在 GSC Settings 手工同步 filtered Search Analytics。";
+  }
+}
+
 function renderPromptTestResult(section, data = null, meta = {}) {
   const result = section.querySelector("[data-v2-ai-prompt-result]");
   const answer = section.querySelector("[data-v2-ai-prompt-answer]");
@@ -637,6 +694,30 @@ export function createAiVisibilityWorkspace() {
       </div>
     </section>
 
+    <section class="v2-ai-panel v2-ai-gsc-generative">
+      <div class="v2-ai-panel-head">
+        <div><span>FIRST-PARTY · GOOGLE SEARCH CONSOLE</span><h3>Generative AI Search Appearance</h3></div>
+        <div class="v2-ai-actions">
+          <button type="button" class="secondary-action" data-v2-ai-gsc-refresh>Refresh D1 · $0</button>
+        </div>
+      </div>
+      <div class="v2-ai-gsc-note" data-v2-ai-gsc-note>
+        需要先在 GSC Settings 发现并手工选择 raw searchAppearance，再手工同步。
+      </div>
+      <div class="v2-ai-metrics">
+        <article><span>Filtered Impressions · 28d</span><b data-v2-ai-gsc-impressions>—</b></article>
+        <article><span>Filtered Clicks · 28d</span><b data-v2-ai-gsc-clicks>—</b></article>
+        <article><span>Coverage</span><b data-v2-ai-gsc-coverage>—</b></article>
+        <article><span>Selected Appearance</span><b data-v2-ai-gsc-appearance>—</b></article>
+      </div>
+      <div class="v2-ai-tablewrap">
+        <table>
+          <thead><tr><th>Top Page</th><th>Filtered Impressions</th><th>Filtered Clicks</th></tr></thead>
+          <tbody data-v2-ai-gsc-pages></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="v2-ai-panel">
       <div class="v2-ai-panel-head">
         <div><span>COMPETITOR GAP</span><h3>AI Visibility Comparison</h3></div>
@@ -857,6 +938,7 @@ export function mountAiVisibility({
   const trackerHistory = section.querySelector("[data-v2-ai-tracker-history]");
   const trackerHistoryTitle = section.querySelector("[data-v2-ai-tracker-history-title]");
   const trackerHistoryBody = section.querySelector("[data-v2-ai-prompt-history-body]");
+  const gscPagesBody = section.querySelector("[data-v2-ai-gsc-pages]");
   let scope = context.get?.() ?? {};
   let requestId = 0;
   let destroyed = false;
@@ -920,6 +1002,24 @@ export function mountAiVisibility({
       if (!destroyed && current === requestId) setStatus(error?.message || "AI Visibility 读取失败。", "error");
     } finally {
       if (!destroyed && current === requestId) busy(false);
+    }
+  };
+
+  const loadGscGenerative = async () => {
+    if (!scope?.domain) return renderGscGenerativeVisibility(section, null);
+    try {
+      const { response, payload } = await getJson(fetchImpl, ENDPOINTS.gscGenerative, {
+        site_domain: scope.domain,
+        days: "28",
+        limit: "10",
+      });
+      if (!response.ok || !payload.ok) {
+        renderGscGenerativeVisibility(section, null);
+        return;
+      }
+      renderGscGenerativeVisibility(section, payload.data);
+    } catch {
+      renderGscGenerativeVisibility(section, null);
     }
   };
 
@@ -1302,6 +1402,7 @@ export function mountAiVisibility({
 
   const listeners = [
     [section.querySelector("[data-v2-ai-read-overview]"), "click", () => loadOverview()],
+    [section.querySelector("[data-v2-ai-gsc-refresh]"), "click", () => loadGscGenerative()],
     [section.querySelector("[data-v2-ai-refresh-overview]"), "click", () => loadOverview({ live: true })],
     [section.querySelector("[data-v2-ai-read-compare]"), "click", () => loadComparison()],
     [section.querySelector("[data-v2-ai-refresh-compare]"), "click", () => loadComparison({ live: true })],
@@ -1336,6 +1437,7 @@ export function mountAiVisibility({
       renderComparison(compareBody, []);
       renderPages(pagesBody, []);
       renderCitationExplorer(mentionsList, []);
+  renderGscGenerativeVisibility(section, null);
       syncScope();
       loadOverview();
       loadStoredHistory();
@@ -1356,6 +1458,7 @@ export function mountAiVisibility({
     syncScope();
     loadOverview();
     loadStoredHistory();
+    loadGscGenerative();
     loadSavedTrackers();
   });
 
