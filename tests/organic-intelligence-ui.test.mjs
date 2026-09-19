@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterOrganicChangeRows, filterOrganicKeywordRows, filterOrganicPageRows, formatOrganicMovement, organicTargetMode } from "../public/v2-organic-intelligence.js";
+import { filterOrganicChangeRows, filterOrganicCompetitorRows, filterOrganicKeywordRows, filterOrganicPageRows, formatOrganicMovement, organicTargetMode } from "../public/v2-organic-intelligence.js";
 
 test("Organic Intelligence distinguishes own-site URLs from competitor targets", () => {
   assert.equal(organicTargetMode("great-ocean-waterproof.com", "great-ocean-waterproof.com"), "own");
@@ -43,4 +43,16 @@ test("Position Changes filters by change type and action without another provide
   assert.deepEqual(filterOrganicChangeRows(rows,{change:"declined"},"own").map((row)=>row.keyword),["decliner"]);
   assert.deepEqual(filterOrganicChangeRows(rows,{action:"recover"},"own").map((row)=>row.keyword),["decliner"]);
   assert.deepEqual(filterOrganicChangeRows(rows,{action:"reclaim"},"own").map((row)=>row.keyword),["lost"]);
+});
+
+
+test("Organic Competitors filters by domain, saved business type, and transparent similarity", () => {
+  const rows = [
+    { domain:"business.example", business_competitor:true, relevance:{keyword_similarity_percent:42.5} },
+    { domain:"seo-only.example", business_competitor:false, relevance:{keyword_similarity_percent:18.2} },
+  ];
+  assert.deepEqual(filterOrganicCompetitorRows(rows,{type:"business"}).map((row)=>row.domain),["business.example"]);
+  assert.deepEqual(filterOrganicCompetitorRows(rows,{type:"seo"}).map((row)=>row.domain),["seo-only.example"]);
+  assert.deepEqual(filterOrganicCompetitorRows(rows,{minSimilarity:"30"}).map((row)=>row.domain),["business.example"]);
+  assert.deepEqual(filterOrganicCompetitorRows(rows,{query:"seo-only"}).map((row)=>row.domain),["seo-only.example"]);
 });
