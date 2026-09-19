@@ -195,3 +195,18 @@ test("AI recovery tasks route to AI Visibility instead of pretending the workflo
   assert.match(opportunityUiSource,/item\.query_source!=="dataforseo_ai_history"/);
   assert.match(opportunityUiSource,/nextBestOpenPage\.hidden = aiHistory/);
 });
+
+
+test("Opportunity Center exposes Prompt Tracker D1 evidence and routes Prompt loss actions to AI Visibility", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/data-v2-opportunity-source="ai_prompt_tracker"/);
+  assert.match(markup,/Prompt Tracker/);
+  assert.match(markup,/Open Prompt Tracker/);
+  assert.match(opportunityUiSource,/source === "ai_prompt_tracker"/);
+  assert.match(opportunityUiSource,/Prompt Tracker ready · D1/);
+  assert.match(opportunityUiSource,/ai_prompt_tracker_d1/);
+  assert.match(opportunityUiSource,/ai_prompt_recovery/);
+  assert.match(opportunityUiSource,/Prompt Tracker · D1/);
+  assert.match(opportunityUiSource,/\["dataforseo_ai_history","ai_prompt_tracker_d1"\]|\["dataforseo_ai_history", "ai_prompt_tracker_d1"\]/);
+  assert.match(opportunityUiSource,/Open AI Visibility/);
+});
