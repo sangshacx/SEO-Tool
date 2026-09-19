@@ -6,13 +6,14 @@ import test from "node:test";
 import { applyDecisionWorkflow } from "../src/v2/intelligence/decision-workflow.js";
 import {
   listSeoActionWorkflow,
+  listSeoActionWorkflowEvents,
   upsertSeoActionWorkflow,
 } from "../src/v2/storage/seo-action-workflow.js";
 import { d1For } from "./dashboard-test-helpers.mjs";
 
 async function workflowDb() {
   const raw = new DatabaseSync(":memory:");
-  for (const file of ["0007_site_profiles.sql", "0016_seo_action_workflow.sql"]) {
+  for (const file of ["0007_site_profiles.sql", "0016_seo_action_workflow.sql", "0017_seo_action_workflow_events.sql"]) {
     raw.exec(await readFile(new URL("../migrations/" + file, import.meta.url), "utf8"));
   }
   const d1=d1For(raw);
@@ -35,6 +36,15 @@ test("SEO action workflow migration enforces scoped unique decisions and support
   const indexes=raw.prepare("SELECT name FROM sqlite_schema WHERE type='index' AND tbl_name='seo_action_workflow' ORDER BY name").all().map(row=>row.name);
   assert.ok(indexes.includes("idx_seo_action_workflow_site_page"));
   assert.ok(indexes.includes("idx_seo_action_workflow_site_status"));
+
+  const eventColumns=raw.prepare("SELECT name FROM pragma_table_info('seo_action_workflow_events') ORDER BY cid").all().map(row=>row.name);
+  assert.deepEqual(eventColumns,[
+    "id","site_profile_id","workflow_id","page_url","action_code","query_text","from_status","to_status",
+    "note_snapshot","snooze_until","priority_score","created_at",
+  ]);
+  const eventIndexes=raw.prepare("SELECT name FROM sqlite_schema WHERE type='index' AND tbl_name='seo_action_workflow_events' ORDER BY name").all().map(row=>row.name);
+  assert.ok(eventIndexes.includes("idx_seo_action_events_site_created"));
+  assert.ok(eventIndexes.includes("idx_seo_action_events_workflow_created"));
 });
 
 test("workflow storage upserts the same page/action/query instead of duplicating it", async () => {
@@ -56,6 +66,14 @@ test("workflow storage upserts the same page/action/query instead of duplicating
   assert.equal(items[0].status,"done");
   assert.equal(items[0].last_priority_score,81);
   assert.equal(items[0].query,"waterproof membrane");
+
+  const events=await listSeoActionWorkflowEvents(d1,"example.com");
+  assert.equal(events.length,2);
+  assert.equal(events[0].from_status,"in_progress");
+  assert.equal(events[0].to_status,"done");
+  assert.equal(events[0].priority_score,81);
+  assert.equal(events[1].from_status,null);
+  assert.equal(events[1].to_status,"in_progress");
 });
 
 test("workflow suppression backfills Top 5 from deeper actionable candidates", () => {
@@ -159,4 +177,54 @@ test("full Opportunity rows retain suppressed workflow state so Done or Snoozed 
   assert.equal(data.opportunities[0].workflow.status,"done");
   assert.equal(data.opportunities[0].workflow.suppressed,true);
   assert.equal(data.opportunities[0].workflow.note,"implemented");
+});
+
+
+test("repeating the exact same workflow state does not create duplicate activity", async () => {
+  const {d1}=await workflowDb();
+  const input={
+    site_domain:"example.com",
+    page_url:"https://example.com/page/",
+    action_code:"recover",
+    query:"ranking loss",
+    status:"in_progress",
+    note:"",
+    snooze_until:null,
+    priority_score:66,
+  };
+  await upsertSeoActionWorkflow(d1,input);
+  await upsertSeoActionWorkflow(d1,input);
+  const events=await listSeoActionWorkflowEvents(d1,"example.com");
+  assert.equal(events.length,1);
+  assert.equal(events[0].from_status,null);
+  assert.equal(events[0].to_status,"in_progress");
+});
+
+test("workflow activity is site-scoped and returns newest events first", async () => {
+  const {d1}=await workflowDb();
+  await d1.prepare(`
+    INSERT INTO site_profiles (
+      domain,label,location_code,location_name,country_iso_code,
+      language_code,language_name,include_subdomains,competitors_json
+    ) VALUES ('other.example','Other',2840,'United States','US','en','English',0,'[]')
+  `).bind().run();
+
+  await upsertSeoActionWorkflow(d1,{
+    site_domain:"example.com",page_url:"https://example.com/a/",action_code:"optimize",query:"a",
+    status:"in_progress",note:"",snooze_until:null,priority_score:50,
+  });
+  await upsertSeoActionWorkflow(d1,{
+    site_domain:"example.com",page_url:"https://example.com/b/",action_code:"recover",query:"b",
+    status:"done",note:"",snooze_until:null,priority_score:70,
+  });
+  await upsertSeoActionWorkflow(d1,{
+    site_domain:"other.example",page_url:"https://other.example/x/",action_code:"protect",query:"x",
+    status:"done",note:"",snooze_until:null,priority_score:80,
+  });
+
+  const events=await listSeoActionWorkflowEvents(d1,"example.com",{limit:10});
+  assert.equal(events.length,2);
+  assert.equal(events[0].page_url,"https://example.com/b/");
+  assert.equal(events[1].page_url,"https://example.com/a/");
+  assert.ok(events.every(event=>event.site_domain==="example.com"));
 });
