@@ -393,3 +393,161 @@ export async function readGscCannibalizationCandidates(db, {
     rows,
   };
 }
+
+
+export async function replaceGscSearchAppearanceCapabilities(db, {
+  siteProfileId,
+  property,
+  startDate,
+  endDate,
+  appearances,
+  discoveredAt = new Date().toISOString(),
+} = {}) {
+  const siteId = Number(siteProfileId);
+  if (!Number.isInteger(siteId) || siteId <= 0) throw new TypeError("A valid GSC site profile id is required.");
+  if (!property) throw new TypeError("A Search Console property is required.");
+  const rows = Array.isArray(appearances) ? appearances : [];
+
+  const selected = await db.prepare(
+    "SELECT appearance_value FROM gsc_search_appearance_capabilities " +
+    "WHERE site_profile_id = ? AND selected_for_generative_ai = 1 LIMIT 1"
+  ).bind(siteId).first();
+  const selectedValue = selected?.appearance_value ?? null;
+
+  const statements = [
+    db.prepare("DELETE FROM gsc_search_appearance_capabilities WHERE site_profile_id = ?").bind(siteId),
+  ];
+
+  for (const row of rows) {
+    const appearance = String(row?.appearance ?? "").trim();
+    if (!appearance) continue;
+    statements.push(db.prepare(
+      "INSERT INTO gsc_search_appearance_capabilities (" +
+      "site_profile_id, property, appearance_value, clicks, impressions, ctr, position, " +
+      "generative_ai_candidate, selected_for_generative_ai, start_date, end_date, discovered_at" +
+      ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind(
+      siteId,
+      String(property),
+      appearance,
+      Number(row?.clicks ?? 0),
+      Number(row?.impressions ?? 0),
+      Number(row?.ctr ?? 0),
+      row?.position == null ? null : Number(row.position),
+      row?.generative_ai_candidate === true ? 1 : 0,
+      selectedValue === appearance ? 1 : 0,
+      String(startDate),
+      String(endDate),
+      discoveredAt,
+    ));
+  }
+
+  const results = await db.batch(statements);
+  if (!Array.isArray(results) || results.some((result) => result?.success === false)) {
+    throw new Error("GSC search appearance capabilities could not be persisted.");
+  }
+  return {
+    rows_written: rows.filter((row) => String(row?.appearance ?? "").trim()).length,
+    selected_preserved: Boolean(selectedValue && rows.some((row) => String(row?.appearance ?? "").trim() === selectedValue)),
+  };
+}
+
+export async function readGscSearchAppearanceCapabilities(db, siteDomain) {
+  const site = await db.prepare(
+    "SELECT id FROM site_profiles WHERE domain = ? LIMIT 1"
+  ).bind(siteDomain).first();
+  if (!site?.id) {
+    const error = new Error("SITE_PROFILE_NOT_FOUND");
+    error.code = "SITE_PROFILE_NOT_FOUND";
+    error.httpStatus = 404;
+    throw error;
+  }
+
+  const rows = await db.prepare(
+    "SELECT property, appearance_value, clicks, impressions, ctr, position, " +
+    "generative_ai_candidate, selected_for_generative_ai, start_date, end_date, discovered_at " +
+    "FROM gsc_search_appearance_capabilities WHERE site_profile_id = ? " +
+    "ORDER BY selected_for_generative_ai DESC, generative_ai_candidate DESC, impressions DESC, appearance_value ASC"
+  ).bind(site.id).all();
+
+  const items = (rows?.results ?? []).map((row) => ({
+    property: row.property,
+    appearance: row.appearance_value,
+    clicks: Number(row.clicks ?? 0),
+    impressions: Number(row.impressions ?? 0),
+    ctr: Number(row.ctr ?? 0),
+    position: row.position == null ? null : Number(row.position),
+    generative_ai_candidate: Number(row.generative_ai_candidate) === 1,
+    selected_for_generative_ai: Number(row.selected_for_generative_ai) === 1,
+    start_date: row.start_date,
+    end_date: row.end_date,
+    discovered_at: row.discovered_at,
+  }));
+
+  const selected = items.find((row) => row.selected_for_generative_ai) ?? null;
+  return {
+    site_profile_id: Number(site.id),
+    items,
+    selected_appearance: selected?.appearance ?? null,
+    selected,
+    discovered: items.length > 0,
+  };
+}
+
+export async function selectGscGenerativeAiAppearance(db, {
+  siteDomain,
+  appearance,
+} = {}) {
+  const site = await db.prepare(
+    "SELECT id FROM site_profiles WHERE domain = ? LIMIT 1"
+  ).bind(siteDomain).first();
+  if (!site?.id) {
+    const error = new Error("SITE_PROFILE_NOT_FOUND");
+    error.code = "SITE_PROFILE_NOT_FOUND";
+    error.httpStatus = 404;
+    throw error;
+  }
+
+  const value = appearance == null ? "" : String(appearance).trim();
+  if (!value) {
+    await db.prepare(
+      "UPDATE gsc_search_appearance_capabilities " +
+      "SET selected_for_generative_ai = 0, updated_at = CURRENT_TIMESTAMP WHERE site_profile_id = ?"
+    ).bind(site.id).run();
+    return { selected_appearance: null, selected: null };
+  }
+
+  const exists = await db.prepare(
+    "SELECT appearance_value, generative_ai_candidate FROM gsc_search_appearance_capabilities " +
+    "WHERE site_profile_id = ? AND appearance_value = ? LIMIT 1"
+  ).bind(site.id, value).first();
+  if (!exists?.appearance_value) {
+    const error = new Error("Choose a search appearance value discovered from this mapped property.");
+    error.code = "GSC_SEARCH_APPEARANCE_NOT_DISCOVERED";
+    error.httpStatus = 400;
+    throw error;
+  }
+
+  const results = await db.batch([
+    db.prepare(
+      "UPDATE gsc_search_appearance_capabilities " +
+      "SET selected_for_generative_ai = 0, updated_at = CURRENT_TIMESTAMP WHERE site_profile_id = ?"
+    ).bind(site.id),
+    db.prepare(
+      "UPDATE gsc_search_appearance_capabilities " +
+      "SET selected_for_generative_ai = 1, updated_at = CURRENT_TIMESTAMP " +
+      "WHERE site_profile_id = ? AND appearance_value = ?"
+    ).bind(site.id, value),
+  ]);
+  if (!Array.isArray(results) || results.some((result) => result?.success === false)) {
+    throw new Error("GSC Generative AI appearance selection could not be saved.");
+  }
+
+  return {
+    selected_appearance: value,
+    selected: {
+      appearance: value,
+      generative_ai_candidate: Number(exists.generative_ai_candidate) === 1,
+    },
+  };
+}
