@@ -119,3 +119,43 @@ test("expired snooze returns to the active queue without rewriting D1", () => {
   assert.equal(data.action_queue[0].workflow.snooze_expired,true);
   assert.equal(data.workflow_summary.suppressed,0);
 });
+
+
+test("full Opportunity rows retain suppressed workflow state so Done or Snoozed actions can be reopened", () => {
+  const rawData={
+    action_queue:[{
+      rank:1,page:"https://example.com/page/",action:"optimize",action_label:"Optimize",
+      priority_score:70,confidence:"high",query:"term",query_source:"dataforseo_cache",why_now:"reason",evidence:null,
+    }],
+    opportunities:[{
+      url:"https://example.com/page/",
+      action:{code:"optimize",label:"Optimize"},
+      priority_score:70,
+      next_best_action:{
+        page:"https://example.com/page/",
+        action:"optimize",
+        action_label:"Optimize",
+        priority_score:70,
+        query:"term",
+        query_source:"dataforseo_cache",
+        why_now:"reason",
+        evidence:null,
+      },
+    }],
+  };
+  const data=applyDecisionWorkflow(rawData,[{
+    page_url:"https://example.com/page/",
+    action_code:"optimize",
+    query:"term",
+    status:"done",
+    note:"implemented",
+    snooze_until:null,
+    updated_at:"2026-09-19T00:00:00.000Z",
+  }],new Date("2026-09-19T00:00:00.000Z"));
+
+  assert.equal(data.action_queue.length,0);
+  assert.equal(data.next_best_action,null);
+  assert.equal(data.opportunities[0].workflow.status,"done");
+  assert.equal(data.opportunities[0].workflow.suppressed,true);
+  assert.equal(data.opportunities[0].workflow.note,"implemented");
+});
