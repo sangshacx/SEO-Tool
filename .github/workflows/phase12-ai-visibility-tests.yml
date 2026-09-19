@@ -14,6 +14,7 @@ on:
       - functions/api/v2/ai/history.js
       - functions/api/v2/ai/compare.js
       - functions/api/v2/ai/pages.js
+      - functions/api/v2/ai/mentions.js
       - functions/api/v2/organic/opportunities.js
       - functions/api/v2/organic/action-workflow.js
       - public/v2-ai-visibility.js
