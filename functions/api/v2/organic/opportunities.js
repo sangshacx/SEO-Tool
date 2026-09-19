@@ -3,7 +3,9 @@ import { organicPagesCacheCandidates } from "../../../../src/v2/organic/organic-
 import { buildOrganicOpportunities } from "../../../../src/v2/intelligence/organic-opportunities.js";
 import { normalizeMarketRequest } from "../../../../src/v2/markets/request-market.js";
 import { normalizeRelevantPagesDomain } from "../../../../src/v2/providers/dataforseo-relevant-pages.js";
-import { readGscCannibalizationCandidates, readGscIntelligence } from "../../../../src/v2/storage/gsc-search-analytics.js";
+import { getGscSiteMapping, readGscCannibalizationCandidates, readGscIntelligence, readGscSearchAppearanceCapabilities } from "../../../../src/v2/storage/gsc-search-analytics.js";
+import { readGscGenerativeAiSummary } from "../../../../src/v2/storage/gsc-generative-ai.js";
+import { buildGscGenerativeAiRecoveryAction, mergeGscGenerativeAiActions } from "../../../../src/v2/intelligence/gsc-generative-ai-actions.js";
 import { enrichGscIntelligenceRows } from "../../../../src/v2/gsc/intelligence.js";
 import { applyDecisionWorkflow } from "../../../../src/v2/intelligence/decision-workflow.js";
 import { mergeCannibalizationActions } from "../../../../src/v2/intelligence/cannibalization-actions.js";
@@ -198,6 +200,41 @@ export async function onRequestPost({ request, env }) {
     .map((tracker) => buildAiPromptRecoveryAction({ target: domain, tracker }))
     .filter(Boolean);
 
+  let gscGenerativeSummary = null;
+  let gscGenerativeAppearance = null;
+  try {
+    const [mapping, capability] = await Promise.all([
+      getGscSiteMapping(env.DB, domain),
+      readGscSearchAppearanceCapabilities(env.DB, domain),
+    ]);
+    if (
+      mapping?.property &&
+      capability?.selected?.property === mapping.property &&
+      capability?.selected_appearance
+    ) {
+      gscGenerativeAppearance = capability.selected_appearance;
+      gscGenerativeSummary = await readGscGenerativeAiSummary(env.DB, {
+        siteDomain: domain,
+        appearance: gscGenerativeAppearance,
+        days: 28,
+        limit: 20,
+      });
+    }
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "Opportunity Center GSC Generative AI evidence read failed",
+      request_id: requestId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    gscGenerativeSummary = null;
+    gscGenerativeAppearance = null;
+  }
+  const gscGenerativeAction = buildGscGenerativeAiRecoveryAction({
+    target: domain,
+    selectedAppearance: gscGenerativeAppearance,
+    summary: gscGenerativeSummary,
+  });
+
   const sources = {
     organic_keywords: keywords ? { available: true, depth: keywords.depth, cached_at: keywords.cached_at } : null,
     top_pages: pages ? { available: true, depth: pages.depth, cached_at: pages.cached_at } : null,
@@ -221,6 +258,16 @@ export async function onRequestPost({ request, env }) {
       tracked_prompts: aiPromptTrackers.length,
       observed_prompts: aiPromptTrackers.filter((item) => (item?.trend?.observation_count ?? 0) > 0).length,
     } : null,
+    gsc_generative_ai: gscGenerativeSummary?.latest_date ? {
+      available: true,
+      source: "d1",
+      scope: "property_global",
+      appearance: gscGenerativeAppearance,
+      latest_date: gscGenerativeSummary.latest_date,
+      coverage_days: gscGenerativeSummary.coverage_days,
+      trend_status: gscGenerativeSummary?.trend?.status ?? null,
+      change_code: gscGenerativeSummary?.trend?.change?.code ?? null,
+    } : null,
   };
   const baseData = buildOrganicOpportunities({
     target: domain,
@@ -230,17 +277,21 @@ export async function onRequestPost({ request, env }) {
     gscQueryPageRows,
     sources,
   });
-  const rawData = mergeAiPromptRecoveryActions(
-    mergeAiVisibilityActions(
-      mergeCannibalizationActions(
-        baseData,
-        gscCannibalizationStored?.rows ?? [],
+  const rawData = mergeGscGenerativeAiActions(
+    mergeAiPromptRecoveryActions(
+      mergeAiVisibilityActions(
+        mergeCannibalizationActions(
+          baseData,
+          gscCannibalizationStored?.rows ?? [],
+          { limit: 25 },
+        ),
+        aiVisibilityEvidence.map((item) => item.action).filter(Boolean),
         { limit: 25 },
       ),
-      aiVisibilityEvidence.map((item) => item.action).filter(Boolean),
+      aiPromptActions,
       { limit: 25 },
     ),
-    aiPromptActions,
+    [gscGenerativeAction].filter(Boolean),
     { limit: 25 },
   );
 
@@ -300,6 +351,18 @@ export async function onRequestPost({ request, env }) {
     source: "d1",
     actual_cost_usd: 0,
   };
+  data.gsc_generative_ai_summary = {
+    available: Boolean(gscGenerativeSummary?.latest_date),
+    appearance: gscGenerativeAppearance,
+    latest_date: gscGenerativeSummary?.latest_date ?? null,
+    coverage_days: gscGenerativeSummary?.coverage_days ?? 0,
+    trend: gscGenerativeSummary?.trend ?? null,
+    candidate_count: gscGenerativeAction ? 1 : 0,
+    scope: "property_global",
+    model: "gsc-generative-recovery-v0.1",
+    source: "d1",
+    actual_cost_usd: 0,
+  };
   data.workflow_stats = workflowStats;
   data.workflow_activity = workflowEvents;
   data.workflow_outcomes = workflowOutcomes;
@@ -330,6 +393,7 @@ export async function onRequestPost({ request, env }) {
         ...(!sources.gsc_pages ? ["gsc_pages"] : []),
         ...(!sources.ai_visibility ? ["ai_visibility_history"] : []),
         ...(!sources.ai_prompt_tracker ? ["ai_prompt_tracker"] : []),
+        ...(!sources.gsc_generative_ai ? ["gsc_generative_ai"] : []),
       ],
     },
     meta: {
