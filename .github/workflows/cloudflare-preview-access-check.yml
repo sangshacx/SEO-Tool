@@ -9,10 +9,17 @@ on:
       - functions/api/v2/usage/summary.js
       - functions/api/v2/sites/index.js
       - functions/api/v2/dashboard/**
+      - functions/api/v2/organic/**
       - public/v2-dashboard*.js
       - public/v2-dashboard.css
+      - public/v2-organic-*.js
+      - public/v2-organic-*.css
+      - public/v2-shell.js
       - src/v2/dashboard/**
+      - src/v2/organic/**
+      - src/v2/providers/dataforseo-organic-*.js
       - src/v2/storage/site-dashboard.js
+      - src/v2/storage/organic-history.js
   workflow_dispatch:
 
 permissions:
@@ -38,11 +45,74 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN" || { echo "CLOUDFLARE_API_TOKEN is missing"; exit 1; }
           test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "CLOUDFLARE_ACCOUNT_ID is missing"; exit 1; }
 
-      - name: Verify Cloudflare authentication
-        run: npx --yes wrangler@4 whoami
+      - name: Verify Cloudflare Pages project authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/seo-tool"
+          curl --fail --silent --show-error             --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             "$project_url" |
+          jq --exit-status '.success == true and .result.name == "seo-tool"'
 
-      - name: Check Pages Preview deployments
+      - name: Verify this commit reached the seo-pro-v2 Preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployments_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/seo-tool/deployments?env=preview"
+          found="false"
+          for attempt in {1..24}; do
+            json="$(curl --fail --silent --show-error               --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"               "$deployments_url")"
+            if echo "$json" | jq --exit-status --arg sha "$GITHUB_SHA" '
+              .success == true
+              and any(.result[]?;
+                .source.config.branch == "seo-pro-v2"
+                and .source.config.commit_hash == $sha
+                and .latest_stage.name == "deploy"
+                and .latest_stage.status == "success"
+              )
+            ' >/dev/null; then
+              found="true"
+              break
+            fi
+            sleep 10
+          done
+          test "$found" = "true" || {
+            echo "Cloudflare Pages did not report a successful seo-pro-v2 deployment for $GITHUB_SHA."
+            exit 1
+          }
+
+      - name: List Pages Preview deployments
         run: npx --yes wrangler@4 pages deployment list --project-name seo-tool --environment preview
+
+      - name: Verify authenticated Organic History Preview route
+        if: ${{ env.CF_ACCESS_CLIENT_ID != '' && env.CF_ACCESS_CLIENT_SECRET != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://seo-pro-v2.seo-tool-dme.pages.dev/api/v2/organic/history?target=example.com&location_code=2840&language_code=en&days=90"
+          response_file="$(mktemp)"
+          status="000"
+          for attempt in {1..12}; do
+            status="$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}"               --header "CF-Access-Client-Id: ${CF_ACCESS_CLIENT_ID}"               --header "CF-Access-Client-Secret: ${CF_ACCESS_CLIENT_SECRET}"               "$endpoint" || true)"
+            [ "$status" = "200" ] && break
+            sleep 10
+          done
+          test "$status" = "200"
+          jq -e '
+            .ok == true
+            and .data.source == "project"
+            and (.data.points | type == "array")
+            and .meta.actual_cost_usd == 0
+            and .meta.provider_requests == 0
+          ' "$response_file"
+
+      - name: Verify Organic History is protected when Access service token is unavailable
+        if: ${{ env.CF_ACCESS_CLIENT_ID == '' || env.CF_ACCESS_CLIENT_SECRET == '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="https://seo-pro-v2.seo-tool-dme.pages.dev/api/v2/organic/history?target=example.com&location_code=2840&language_code=en&days=90"
+          status="$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" "$endpoint")"
+          case "$status" in 301|302|303|307|308|403) ;; *) echo "Expected Access rejection for Organic History, got HTTP $status"; exit 1;; esac
 
       - name: Verify usage summary endpoint
         shell: bash
