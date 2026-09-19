@@ -482,6 +482,8 @@ export function mountDashboardDecision({
     text(why, message);
     research.disabled = true;
     research.dataset.v2DashboardResearchQuery = "";
+    research.dataset.v2DashboardResearchRoute = "";
+    text(research, "Research Recommended Query");
   };
 
   const render = (data) => {
@@ -517,13 +519,22 @@ export function mountDashboardDecision({
     page.title = next.page;
     text(query, next.query || "No single query selected");
     query.title = next.query || "";
-    text(source, next.query_source === "gsc_query_page" ? "GSC Query+Page" : next.query_source === "dataforseo_cache" ? "DataForSEO cache" : "Page evidence");
+    const aiHistory = next.query_source === "dataforseo_ai_history";
+    text(source, next.query_source === "gsc_query_page"
+      ? "GSC Query+Page"
+      : next.query_source === "dataforseo_cache"
+        ? "DataForSEO cache"
+        : aiHistory
+          ? "AI History · D1"
+          : "Page evidence");
     const workflowStatus=next.workflow?.status||"new";
     text(workflow, workflowStatus==="in_progress"?"In Progress":workflowStatus==="done"?"Done":workflowStatus==="snoozed"?"Snoozed":"New");
     workflow.dataset.status=workflowStatus;
     text(why, next.why_now || "Top-ranked local decision evidence.");
-    research.disabled = !next.query;
-    research.dataset.v2DashboardResearchQuery = next.query || "";
+    research.disabled = aiHistory ? false : !next.query;
+    research.dataset.v2DashboardResearchQuery = aiHistory ? "" : next.query || "";
+    research.dataset.v2DashboardResearchRoute = aiHistory ? "ai-visibility" : "";
+    text(research, aiHistory ? "Open AI Visibility" : "Research Recommended Query");
   };
 
   const load = async (scope) => {
@@ -555,6 +566,11 @@ export function mountDashboardDecision({
   const handleClick = (event) => {
     const researchButton = event.target.closest?.("[data-v2-dashboard-research-query]");
     if (researchButton) {
+      const route = String(researchButton.dataset.v2DashboardResearchRoute || "").trim();
+      if (route) {
+        if (locationLike) locationLike.hash = route;
+        return;
+      }
       const value = String(researchButton.dataset.v2DashboardResearchQuery || "").trim();
       if (!value) return;
       const input = root.querySelector("#keyword");
