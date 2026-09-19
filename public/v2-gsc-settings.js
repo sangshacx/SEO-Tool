@@ -47,7 +47,7 @@ export function createGscSettingsWorkspace(documentLike=document) {
 }
 
 async function jsonFetch(fetchImpl,url,options={}) {
-  const response=await fetchImpl(url,{headers:{accept:"application/json",...(options.headers||{})},...options});
+  const response=await fetchImpl(url,{...options,headers:{accept:"application/json",...(options.headers||{})}});
   const payload=await response.json().catch(()=>({}));
   if(!response.ok||!payload.ok){const error=new Error(payload?.error?.message||"GSC request failed");error.code=payload?.error?.code;error.status=response.status;throw error;}
   return payload;
