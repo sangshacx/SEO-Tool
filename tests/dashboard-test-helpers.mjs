@@ -17,6 +17,7 @@ const MIGRATIONS = [
   "0019_ai_prompt_tracker.sql",
   "0020_ai_prompt_workflow_links.sql",
   "0021_gsc_search_appearance_capabilities.sql",
+  "0022_gsc_generative_ai_daily.sql",
 ];
 
 export function d1For(database, { before, after } = {}) {
