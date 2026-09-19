@@ -19,6 +19,12 @@ on:
       - tests/gsc-oauth-state.test.mjs
       - tests/gsc-connections-storage.test.mjs
       - tests/gsc-connect-api.test.mjs
+      - public/v2-gsc-settings.js
+      - public/v2-shell.js
+      - public/v2-shell.css
+      - tests/gsc-settings-ui.test.mjs
+      - tests/v2-shell-navigation.test.mjs
+      - tests/v2-shell-ui.test.mjs
       - tests/google-search-console-provider.test.mjs
       - .github/workflows/phase10-gsc-provider-tests.yml
 
@@ -35,4 +41,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 10 GSC provider tests
-        run: node --test tests/google-search-console-provider.test.mjs tests/secret-crypto.test.mjs tests/google-oauth.test.mjs tests/gsc-oauth-state.test.mjs tests/gsc-connections-storage.test.mjs tests/gsc-connect-api.test.mjs
+        run: node --test tests/google-search-console-provider.test.mjs tests/secret-crypto.test.mjs tests/google-oauth.test.mjs tests/gsc-oauth-state.test.mjs tests/gsc-connections-storage.test.mjs tests/gsc-connect-api.test.mjs tests/gsc-settings-ui.test.mjs tests/v2-shell-navigation.test.mjs tests/v2-shell-ui.test.mjs
