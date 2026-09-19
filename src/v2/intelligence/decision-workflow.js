@@ -17,15 +17,11 @@ export function applyDecisionWorkflow(data = {}, workflowRows = [], now = new Da
     ]),
   );
 
-  const active = [];
-  const counts = { new: 0, in_progress: 0, done: 0, snoozed: 0, suppressed: 0 };
-
-  for (const item of Array.isArray(data.action_queue) ? data.action_queue : []) {
-    const row = workflowMap.get(workflowKey(item.page, item.action, item.query)) ?? null;
+  const workflowState = (page, action, query) => {
+    const row = workflowMap.get(workflowKey(page, action, query)) ?? null;
     let effectiveStatus = row?.status ?? "new";
     let suppressed = false;
     let snoozeExpired = false;
-
     if (effectiveStatus === "done") {
       suppressed = true;
     } else if (effectiveStatus === "snoozed") {
@@ -37,27 +33,61 @@ export function applyDecisionWorkflow(data = {}, workflowRows = [], now = new Da
         snoozeExpired = true;
       }
     }
+    return {
+      status: effectiveStatus,
+      persisted_status: row?.status ?? null,
+      note: row?.note ?? "",
+      snooze_until: row?.snooze_until ?? null,
+      snooze_expired: snoozeExpired,
+      updated_at: row?.updated_at ?? null,
+      suppressed,
+    };
+  };
 
-    counts[effectiveStatus] = (counts[effectiveStatus] ?? 0) + 1;
-    if (suppressed) counts.suppressed += 1;
+  const active = [];
+  const counts = { new: 0, in_progress: 0, done: 0, snoozed: 0, suppressed: 0 };
+
+  for (const item of Array.isArray(data.action_queue) ? data.action_queue : []) {
+    const state = workflowState(item.page, item.action, item.query);
+    counts[state.status] = (counts[state.status] ?? 0) + 1;
+    if (state.suppressed) counts.suppressed += 1;
 
     const enriched = {
       ...item,
       workflow: {
-        status: effectiveStatus,
-        persisted_status: row?.status ?? null,
-        note: row?.note ?? "",
-        snooze_until: row?.snooze_until ?? null,
-        snooze_expired: snoozeExpired,
-        updated_at: row?.updated_at ?? null,
+        status: state.status,
+        persisted_status: state.persisted_status,
+        note: state.note,
+        snooze_until: state.snooze_until,
+        snooze_expired: state.snooze_expired,
+        updated_at: state.updated_at,
       },
     };
-    if (!suppressed) active.push(enriched);
+    if (!state.suppressed) active.push(enriched);
   }
+
+  const opportunities = (Array.isArray(data.opportunities) ? data.opportunities : []).map((item) => {
+    const next = item?.next_best_action;
+    if (!next?.page) return item;
+    const state = workflowState(next.page, next.action, next.query);
+    return {
+      ...item,
+      workflow: {
+        status: state.status,
+        persisted_status: state.persisted_status,
+        note: state.note,
+        snooze_until: state.snooze_until,
+        snooze_expired: state.snooze_expired,
+        suppressed: state.suppressed,
+        updated_at: state.updated_at,
+      },
+    };
+  });
 
   const visibleQueue = active.slice(0, 5);
   return {
     ...data,
+    opportunities,
     action_queue: visibleQueue,
     next_best_action: visibleQueue[0] ?? null,
     workflow_summary: {
