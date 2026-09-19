@@ -9,6 +9,7 @@ const MIGRATIONS = [
   "0007_site_profiles.sql",
   "0008_site_dashboard_snapshots.sql",
   "0009_nullable_api_usage_task_count.sql",
+  "0014_gsc_connections.sql",
 ];
 
 export function d1For(database, { before, after } = {}) {
@@ -77,6 +78,9 @@ export function memoryCache(seed = {}) {
     async put(key, value, options) {
       writes.push({ key, value, options });
       values.set(key, value);
+    },
+    async delete(key) {
+      values.delete(key);
     },
   };
 }
