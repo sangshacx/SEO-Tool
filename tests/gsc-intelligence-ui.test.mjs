@@ -33,3 +33,15 @@ test("GSC Performance exposes Potential Cannibalization as a cautious review sig
   assert.match(gscUiSource,/Potential overlap · review signal only/);
   assert.match(gscUiSource,/data-v2-gsc-research-keyword/);
 });
+
+
+test("Potential Cannibalization swaps ordinary GSC metrics for overlap-specific review metrics", () => {
+  const markup=gscPerformancePanelMarkup();
+  assert.match(markup,/data-v2-gsc-performance-label="clicks"/);
+  assert.match(gscUiSource,/Candidates/);
+  assert.match(gscUiSource,/High Overlap/);
+  assert.match(gscUiSource,/Moderate/);
+  assert.match(gscUiSource,/Candidate Impressions/);
+  assert.match(gscUiSource,/Current-window overlap review/);
+  assert.match(gscUiSource,/activeView === "cannibalization"/);
+});
