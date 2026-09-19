@@ -1,0 +1,37 @@
+name: Phase 11 Decision Intelligence Tests
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - src/v2/intelligence/organic-opportunities.js
+      - functions/api/v2/organic/opportunities.js
+      - public/v2-organic-opportunity-ui.js
+      - public/v2-organic-intelligence.css
+      - src/v2/gsc/intelligence.js
+      - src/v2/storage/gsc-search-analytics.js
+      - tests/organic-opportunities.test.mjs
+      - tests/organic-opportunities-api.test.mjs
+      - tests/organic-opportunity-ui.test.mjs
+      - tests/gsc-intelligence.test.mjs
+      - tests/gsc-intelligence-api.test.mjs
+      - tests/dashboard-test-helpers.mjs
+      - migrations/0014_gsc_connections.sql
+      - migrations/0015_gsc_search_analytics.sql
+      - .github/workflows/phase11-decision-intelligence-tests.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test-decision-intelligence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Phase 11 decision intelligence tests
+        run: node --test tests/organic-opportunities.test.mjs tests/organic-opportunities-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/gsc-intelligence.test.mjs tests/gsc-intelligence-api.test.mjs
