@@ -1,0 +1,26 @@
+name: Phase 12 AI Visibility Tests
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - src/v2/providers/dataforseo-ai-visibility.js
+      - tests/dataforseo-ai-visibility.test.mjs
+      - docs/phase12-ai-search-visibility.md
+      - .github/workflows/phase12-ai-visibility-tests.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test-ai-visibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Phase 12 AI visibility provider tests
+        run: node --test tests/dataforseo-ai-visibility.test.mjs
