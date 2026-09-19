@@ -164,3 +164,12 @@ test("Opportunity Center renders observational GSC Outcome Validation for comple
   assert.match(opportunityUiSource,/page_fallback/);
   assert.match(opportunityUiSource,/position_improvement/);
 });
+
+
+test("architecture overlap tasks hand off directly to the GSC Potential Cannibalization view", () => {
+  assert.match(opportunityUiSource,/Open GSC Overlap/);
+  assert.match(opportunityUiSource,/data-v2-opportunity-gsc-overlap/);
+  assert.match(opportunityUiSource,/activateTab\?\.\(section,"gsc"\)/);
+  assert.match(opportunityUiSource,/data-v2-gsc-performance-view="cannibalization"/);
+  assert.match(opportunityUiSource,/review_cannibalization/);
+});
