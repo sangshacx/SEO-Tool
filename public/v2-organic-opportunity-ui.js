@@ -1,4 +1,5 @@
 const OPPORTUNITY_ENDPOINT = "/api/v2/organic/opportunities";
+const WORKFLOW_ENDPOINT = "/api/v2/organic/action-workflow";
 
 function finite(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -75,16 +76,16 @@ export function organicOpportunityPanelMarkup() {
         </div>
         <div class="v2-organic-table-shell">
           <table class="v2-organic-table v2-action-queue-table">
-            <thead><tr><th>#</th><th>Workstream</th><th>Action</th><th>Page</th><th>Recommended Query</th><th>Priority</th><th>Confidence</th><th>Why Now</th><th>Next</th></tr></thead>
-            <tbody data-v2-action-queue-body><tr><td colspan="9" class="v2-organic-empty">Recalculate 后生成 Top 5 可执行任务。</td></tr></tbody>
+            <thead><tr><th>#</th><th>Workstream</th><th>Action</th><th>Page</th><th>Recommended Query</th><th>Priority</th><th>Confidence</th><th>Workflow</th><th>Why Now</th><th>Next</th></tr></thead>
+            <tbody data-v2-action-queue-body><tr><td colspan="10" class="v2-organic-empty">Recalculate 后生成 Top 5 可执行任务。</td></tr></tbody>
           </table>
         </div>
       </section>
 
       <div class="v2-organic-table-shell">
         <table class="v2-organic-table v2-organic-opportunity-table">
-          <thead><tr><th>Priority</th><th>Page</th><th>Action</th><th>Traffic</th><th>Quick Wins</th><th>Down / Lost</th><th>Commercial QW</th><th>GSC Reality</th><th>Score Breakdown</th><th>Confidence</th><th>Next</th></tr></thead>
-          <tbody data-v2-organic-opportunities-body><tr><td colspan="11" class="v2-organic-empty">点击 Recalculate，从现有缓存和 D1 证据生成机会。</td></tr></tbody>
+          <thead><tr><th>Priority</th><th>Page</th><th>Action</th><th>Traffic</th><th>Quick Wins</th><th>Down / Lost</th><th>Commercial QW</th><th>GSC Reality</th><th>Score Breakdown</th><th>Confidence</th><th>Workflow</th><th>Next</th></tr></thead>
+          <tbody data-v2-organic-opportunities-body><tr><td colspan="12" class="v2-organic-empty">点击 Recalculate，从现有缓存和 D1 证据生成机会。</td></tr></tbody>
         </table>
       </div>
       <div class="v2-organic-summary" data-v2-organic-opportunities-meta>Cache-only decision layer · $0</div>
@@ -193,13 +194,52 @@ export function mountOrganicOpportunityTab({
     nextBestResearch.disabled = !next.query;
   };
 
+  const workflowBadge = (item) => {
+    const badge=document.createElement("span");
+    const status=item?.workflow?.status||"new";
+    badge.className="v2-workflow-status";
+    badge.dataset.status=status;
+    badge.textContent=status==="in_progress"?"In Progress":status==="done"?"Done":status==="snoozed"?"Snoozed":"New";
+    if(item?.workflow?.snooze_until)badge.title="Snoozed until "+item.workflow.snooze_until;
+    return badge;
+  };
+
+  const workflowControls = (item) => {
+    const wrap=document.createElement("div");
+    wrap.className="v2-workflow-controls";
+    const status=item?.workflow?.status||"new";
+    const add=(label,nextStatus)=>{
+      const button=document.createElement("button");
+      button.type="button";
+      button.textContent=label;
+      button.dataset.v2WorkflowStatus=nextStatus;
+      button.dataset.v2WorkflowPage=item.page||item.url||"";
+      button.dataset.v2WorkflowAction=item.action||item.action?.code||item.next_best_action?.action||"";
+      button.dataset.v2WorkflowQuery=item.query||item.next_best_action?.query||"";
+      button.dataset.v2WorkflowScore=String(item.priority_score??item.next_best_action?.priority_score??"");
+      wrap.append(button);
+    };
+    if(status==="new"){
+      add("Start","in_progress");
+      add("Done","done");
+      add("Snooze 7d","snoozed");
+    }else if(status==="in_progress"){
+      add("Done","done");
+      add("Snooze 7d","snoozed");
+      add("Reset","new");
+    }else{
+      add("Reopen","new");
+    }
+    return wrap;
+  };
+
   const renderActionQueue = (data) => {
     const queue = Array.isArray(data?.action_queue) ? data.action_queue : [];
     actionQueueCount.textContent = String(queue.length);
     actionQueueBody.replaceChildren();
     if (!queue.length) {
       const row=document.createElement("tr"),cell=document.createElement("td");
-      cell.colSpan=9;cell.className="v2-organic-empty";
+      cell.colSpan=10;cell.className="v2-organic-empty";
       cell.textContent=data?.ready
         ? "当前没有需要立即执行的页面；Monitor-only 页面不会进入 Action Queue。"
         : "证据不足，先加载 Organic Keywords / Top Pages 或同步 GSC。";
@@ -218,6 +258,7 @@ export function mountOrganicOpportunityTab({
       if(item.query_source)query.title=item.query_source==="gsc_query_page"?"GSC Query+Page":"DataForSEO cache";
       const score=document.createElement("td");score.textContent=num(item.priority_score);
       const confidence=document.createElement("td");confidence.textContent=item.confidence||"—";
+      const workflow=document.createElement("td");workflow.className="v2-workflow-cell";workflow.append(workflowBadge(item),workflowControls(item));
       const why=document.createElement("td");why.className="v2-action-queue-why";why.textContent=item.why_now||"—";why.title=item.why_now||"";
       const next=document.createElement("td"),actions=document.createElement("div");actions.className="v2-organic-competitor-actions";
       const pageButton=document.createElement("button");pageButton.type="button";pageButton.dataset.v2OpportunityPage=item.page;pageButton.textContent="Page";
@@ -226,7 +267,7 @@ export function mountOrganicOpportunityTab({
         const research=document.createElement("button");research.type="button";research.dataset.v2OpportunityKeyword=item.query;research.textContent="Research";actions.append(research);
       }
       next.append(actions);
-      row.append(rank,workstream,actionCell,page,query,score,confidence,why,next);
+      row.append(rank,workstream,actionCell,page,query,score,confidence,workflow,why,next);
       actionQueueBody.append(row);
     });
   };
@@ -236,7 +277,7 @@ export function mountOrganicOpportunityTab({
     body.replaceChildren();
     if (!rows.length) {
       const row=document.createElement("tr"),cell=document.createElement("td");
-      cell.colSpan=11;cell.className="v2-organic-empty";
+      cell.colSpan=12;cell.className="v2-organic-empty";
       cell.textContent=(data?.missing_sources?.length ?? 0)
         ? "证据不足：先加载上方标记为 Missing cache 的模块；Opportunity Center 本身不会产生 API 费用。"
         : "当前缓存没有生成可展示的页面机会。";
@@ -284,6 +325,8 @@ export function mountOrganicOpportunityTab({
       const breakdown=document.createElement("td");breakdown.className="v2-opportunity-breakdown";
       breakdown.textContent="Base "+num(item.components?.base_score)+" · Risk "+num(item.components?.risk_points)+" · QW "+num(item.components?.quick_win_points)+" · Traffic "+num(item.components?.traffic_points)+" · Intent "+num(item.components?.business_intent_points)+" · GSC +"+num(item.components?.gsc_reality_points);
       const confidence=document.createElement("td");confidence.textContent=item.confidence||"—";
+      const workflow=document.createElement("td");workflow.className="v2-workflow-cell";workflow.append(workflowBadge(item));
+      if((item.action?.code||"monitor")!=="monitor")workflow.append(workflowControls(item));
 
       const next=document.createElement("td"),actions=document.createElement("div");actions.className="v2-organic-competitor-actions";
       const pageKeywords=document.createElement("button");pageKeywords.type="button";pageKeywords.dataset.v2OpportunityPage=item.url;pageKeywords.textContent="Page Keywords";
@@ -293,7 +336,7 @@ export function mountOrganicOpportunityTab({
         const research=document.createElement("button");research.type="button";research.dataset.v2OpportunityKeyword=researchKeyword;research.textContent="Research QW";actions.append(research);
       }
       next.append(actions);
-      row.append(priority,page,actionCell,traffic,quickWins,risk,commercial,gsc,breakdown,confidence,next);body.append(row);
+      row.append(priority,page,actionCell,traffic,quickWins,risk,commercial,gsc,breakdown,confidence,workflow,next);body.append(row);
     });
   };
 
@@ -309,6 +352,7 @@ export function mountOrganicOpportunityTab({
       "Cache only · $0",
       missing.length ? "Missing primary: "+missing.join(", ") : "DataForSEO evidence ready",
       data?.sources?.gsc_pages ? "GSC reality ready" : "GSC optional · no stored page data",
+      data?.workflow_summary ? "Workflow active "+(data.workflow_summary.active??0)+" · hidden "+(data.workflow_summary.suppressed??0) : null,
       data?.disclaimer,
     ].filter(Boolean).join(" · ");
   };
@@ -343,6 +387,39 @@ export function mountOrganicOpportunityTab({
     if(loadedForKey!==scopeKey())load();
   },{signal});
   section.querySelectorAll("[data-v2-opportunity-go]").forEach((button)=>button.addEventListener("click",()=>activateTab?.(section,button.dataset.v2OpportunityGo),{signal}));
+  const saveWorkflow = async (button) => {
+    const siteDomain=hostname(target.value);
+    const status=button.dataset.v2WorkflowStatus;
+    if(!siteDomain||!status)return;
+    const payload={
+      site_domain:siteDomain,
+      page_url:button.dataset.v2WorkflowPage,
+      action_code:button.dataset.v2WorkflowAction,
+      query:button.dataset.v2WorkflowQuery||"",
+      status,
+      priority_score:button.dataset.v2WorkflowScore===""?null:Number(button.dataset.v2WorkflowScore),
+    };
+    if(status==="snoozed")payload.snooze_until=new Date(Date.now()+7*86400000).toISOString();
+    button.disabled=true;
+    setStatus?.("正在更新 SEO Action Workflow；只写 D1，本次费用 $0…","info");
+    try{
+      const response=await fetchImpl(WORKFLOW_ENDPOINT,{
+        method:"POST",
+        headers:{"content-type":"application/json",accept:"application/json"},
+        body:JSON.stringify(payload),
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok||!result.ok)throw new Error(result?.error?.message||"Workflow 更新失败");
+      loadedForKey=null;
+      await load();
+      setStatus?.("Workflow 已更新并重新计算 Action Queue，本次费用 $0。","success");
+    }catch(error){
+      setStatus?.(error?.message||"Workflow 更新失败","error");
+    }finally{
+      button.disabled=false;
+    }
+  };
+
   const openPageKeywords = (pageUrl) => {
     const value=String(pageUrl||"").trim();
     if(!value)return;
@@ -359,6 +436,8 @@ export function mountOrganicOpportunityTab({
   };
 
   const handleOpportunityActionClick = (event) => {
+    const workflowButton=event.target.closest("[data-v2-workflow-status]");
+    if(workflowButton){saveWorkflow(workflowButton);return;}
     const pageButton=event.target.closest("[data-v2-opportunity-page]");
     if(pageButton){openPageKeywords(pageButton.dataset.v2OpportunityPage);return;}
     const keywordButton=event.target.closest("[data-v2-opportunity-keyword]");
