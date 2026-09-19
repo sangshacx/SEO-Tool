@@ -297,15 +297,16 @@ function dashboardHarness() {
   const outcomeReady = new FakeElement("b"); outcomeReady.dataset.v2DashboardOutcomeReady = "";
   const outcomeImproved = new FakeElement("b"); outcomeImproved.dataset.v2DashboardOutcomeImproved = "";
   const outcomeWaiting = new FakeElement("b"); outcomeWaiting.dataset.v2DashboardOutcomeWaiting = "";
+  const overlapReviews = new FakeElement("b"); overlapReviews.dataset.v2DashboardOverlapReviews = "";
   const decisionWhy = new FakeElement("p"); decisionWhy.dataset.v2DashboardDecisionWhy = "";
   const decisionOpen = new FakeElement("button"); decisionOpen.dataset.v2DashboardOpenOpportunity = "";
   const decisionResearch = new FakeElement("button"); decisionResearch.dataset.v2DashboardResearchQuery = "";
-  decision.append(decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionCompleted, decisionProgress, decisionSnoozed, outcomeReady, outcomeImproved, outcomeWaiting, decisionWhy, decisionOpen, decisionResearch);
+  decision.append(decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionCompleted, decisionProgress, decisionSnoozed, outcomeReady, outcomeImproved, outcomeWaiting, overlapReviews, decisionWhy, decisionOpen, decisionResearch);
   const body = new FakeElement("div");
   body.dataset.v2DashboardBody = "";
   dashboard.append(title, updated, status, warning, refresh, retry, decision, body);
   root.append(dashboard);
-  return { root, dashboard, title, updated, status, warning, refresh, retry, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionCompleted, decisionProgress, decisionSnoozed, outcomeReady, outcomeImproved, outcomeWaiting, decisionWhy, decisionOpen, decisionResearch, body };
+  return { root, dashboard, title, updated, status, warning, refresh, retry, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionCompleted, decisionProgress, decisionSnoozed, outcomeReady, outcomeImproved, outcomeWaiting, overlapReviews, decisionWhy, decisionOpen, decisionResearch, body };
 }
 
 test("distinguishes unavailable metrics from an explicitly sourced zero", () => {
