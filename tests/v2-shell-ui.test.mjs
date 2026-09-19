@@ -174,3 +174,10 @@ test("settings workspace mounts Google Search Console beside shared cost usage",
   assert.match(shellCss, /\.v2-gsc-settings/);
   assert.match(shellCss, /\.v2-gsc-state/);
 });
+
+
+test("overview mounts Decision Intelligence separately from the core Dashboard loader", () => {
+  assert.match(shell, /mountDashboardDecision/);
+  assert.match(shell, /dashboardDecisionCleanup/);
+  assert.match(shell, /mountDashboardDecision\(\{ root: shell, context, fetchImpl \}\)/);
+});
