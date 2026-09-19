@@ -3,6 +3,7 @@ import {
   listSeoActionWorkflow,
   upsertSeoActionWorkflow,
 } from "../../../../src/v2/storage/seo-action-workflow.js";
+import { linkAiPromptWorkflow } from "../../../../src/v2/storage/ai-prompt-tracker.js";
 
 const ALLOW = "GET, POST, OPTIONS";
 const MAX_BODY_BYTES = 32 * 1024;
@@ -164,6 +165,25 @@ function normalizeInput(body) {
     throw error;
   }
 
+  let trackerId = null;
+  if (body.tracker_id !== null && body.tracker_id !== undefined && body.tracker_id !== "") {
+    trackerId = Number(body.tracker_id);
+    if (!Number.isInteger(trackerId) || trackerId <= 0) {
+      const error = new Error("tracker_id must be a positive integer.");
+      error.code = "VALIDATION_ERROR";
+      error.field = "tracker_id";
+      error.httpStatus = 400;
+      throw error;
+    }
+  }
+  if (actionCode === "ai_prompt_recovery" && trackerId === null) {
+    const error = new Error("AI Prompt recovery requires tracker_id.");
+    error.code = "VALIDATION_ERROR";
+    error.field = "tracker_id";
+    error.httpStatus = 400;
+    throw error;
+  }
+
   return {
     site_domain: siteDomain,
     page_url: pageUrl,
@@ -174,6 +194,7 @@ function normalizeInput(body) {
     note_provided: noteProvided,
     snooze_until: snoozeUntil,
     priority_score: priorityScore,
+    tracker_id: trackerId,
   };
 }
 
@@ -212,6 +233,13 @@ export async function onRequestPost({ request, env }) {
     const body = await readBody(request);
     const input = normalizeInput(body);
     const item = await upsertSeoActionWorkflow(env.DB, input);
+    if (input.action_code === "ai_prompt_recovery") {
+      await linkAiPromptWorkflow(env.DB, {
+        siteDomain: input.site_domain,
+        workflowId: item.id,
+        trackerId: input.tracker_id,
+      });
+    }
     return json({
       ok: true,
       data: item,
