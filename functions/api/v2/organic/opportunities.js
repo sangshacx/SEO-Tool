@@ -3,9 +3,10 @@ import { organicPagesCacheCandidates } from "../../../../src/v2/organic/organic-
 import { buildOrganicOpportunities } from "../../../../src/v2/intelligence/organic-opportunities.js";
 import { normalizeMarketRequest } from "../../../../src/v2/markets/request-market.js";
 import { normalizeRelevantPagesDomain } from "../../../../src/v2/providers/dataforseo-relevant-pages.js";
-import { readGscIntelligence } from "../../../../src/v2/storage/gsc-search-analytics.js";
+import { readGscCannibalizationCandidates, readGscIntelligence } from "../../../../src/v2/storage/gsc-search-analytics.js";
 import { enrichGscIntelligenceRows } from "../../../../src/v2/gsc/intelligence.js";
 import { applyDecisionWorkflow } from "../../../../src/v2/intelligence/decision-workflow.js";
+import { mergeCannibalizationActions } from "../../../../src/v2/intelligence/cannibalization-actions.js";
 import { getSeoActionWorkflowStats, listSeoActionWorkflow, listSeoActionWorkflowEvents, readSeoActionOutcomes } from "../../../../src/v2/storage/seo-action-workflow.js";
 
 const JSON_HEADERS = {
@@ -84,10 +85,11 @@ export async function onRequestPost({ request, env }) {
 
   let gscStored = null;
   let gscQueryPageStored = null;
+  let gscCannibalizationStored = null;
   let gscRows = [];
   let gscQueryPageRows = [];
   try {
-    [gscStored, gscQueryPageStored] = await Promise.all([
+    [gscStored, gscQueryPageStored, gscCannibalizationStored] = await Promise.all([
       readGscIntelligence(env.DB, {
         siteDomain: domain,
         view: "pages",
@@ -99,6 +101,11 @@ export async function onRequestPost({ request, env }) {
         view: "query_page",
         days: 28,
         limit: 200,
+      }),
+      readGscCannibalizationCandidates(env.DB, {
+        siteDomain: domain,
+        days: 28,
+        limit: 50,
       }),
     ]);
     const pageComparisonAvailable =
@@ -134,7 +141,7 @@ export async function onRequestPost({ request, env }) {
       query_page_rows: gscQueryPageRows.length,
     } : null,
   };
-  const rawData = buildOrganicOpportunities({
+  const baseData = buildOrganicOpportunities({
     target: domain,
     keywordRows: keywords?.data?.items ?? [],
     pageRows: pages?.data?.items ?? [],
@@ -142,6 +149,11 @@ export async function onRequestPost({ request, env }) {
     gscQueryPageRows,
     sources,
   });
+  const rawData = mergeCannibalizationActions(
+    baseData,
+    gscCannibalizationStored?.rows ?? [],
+    { limit: 25 },
+  );
 
   let workflowRows = [];
   let workflowEvents = [];
@@ -168,6 +180,12 @@ export async function onRequestPost({ request, env }) {
     ...(data.workflow_summary ?? {}),
     source: workflowSource,
     activity_count: workflowEvents.length,
+  };
+  data.gsc_overlap_summary = {
+    candidate_count: gscCannibalizationStored?.rows?.length ?? 0,
+    latest_date: gscCannibalizationStored?.latest_date ?? null,
+    model: "gsc-query-overlap-v0.1",
+    actual_cost_usd: 0,
   };
   data.workflow_stats = workflowStats;
   data.workflow_activity = workflowEvents;
