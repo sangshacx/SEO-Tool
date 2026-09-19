@@ -901,3 +901,46 @@ test("Dashboard routes AI visibility recovery actions to the AI Visibility works
     cleanup();
   });
 });
+
+
+test("Dashboard routes Tracked Prompt loss to AI Visibility and labels the D1 source correctly", async () => {
+  await withFakeDocument(async () => {
+    const {root,decision,decisionSource,decisionResearch}=dashboardHarness();
+    const fetchImpl=async()=>({
+      ok:true,
+      status:200,
+      json:async()=>({
+        ok:true,
+        data:{
+          ready:true,
+          workflow_stats:{current:{in_progress:0,snoozed:0},last_7_days:{completed:0}},
+          workflow_outcomes:[],
+          ai_prompt_tracker_summary:{candidate_count:1,source:"d1"},
+          next_best_action:{
+            page:"https://example.com/",
+            action:"ai_prompt_recovery",
+            action_label:"Review lost AI citation",
+            priority_score:80,
+            query:"Which waterproof membrane manufacturers should buyers consider?",
+            query_source:"ai_prompt_tracker_d1",
+            workflow:{status:"new"},
+            why_now:"The latest saved observation lost the target-domain citation.",
+          },
+        },
+      }),
+    });
+    const context={subscribe(handler){handler(dashboardScope());return()=>{};}};
+    const locationLike={hash:""};
+    const cleanup=mountDashboardDecision({root,context,fetchImpl,locationLike});
+    await new Promise((resolve)=>setTimeout(resolve,0));
+
+    assert.equal(decisionSource.textContent,"Prompt Tracker · D1");
+    assert.equal(decisionResearch.textContent,"Open AI Visibility");
+    assert.equal(decisionResearch.dataset.v2DashboardResearchQuery,"");
+    assert.equal(decisionResearch.dataset.v2DashboardResearchRoute,"ai-visibility");
+
+    decision.dispatchEvent({type:"click",target:decisionResearch});
+    assert.equal(locationLike.hash,"ai-visibility");
+    cleanup();
+  });
+});
