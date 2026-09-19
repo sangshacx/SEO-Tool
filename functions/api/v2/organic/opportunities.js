@@ -81,20 +81,37 @@ export async function onRequestPost({ request, env }) {
   ]);
 
   let gscStored = null;
+  let gscQueryPageStored = null;
   let gscRows = [];
+  let gscQueryPageRows = [];
   try {
-    gscStored = await readGscIntelligence(env.DB, {
-      siteDomain: domain,
-      view: "pages",
-      days: 28,
-      limit: 200,
-    });
-    const comparisonAvailable =
+    [gscStored, gscQueryPageStored] = await Promise.all([
+      readGscIntelligence(env.DB, {
+        siteDomain: domain,
+        view: "pages",
+        days: 28,
+        limit: 200,
+      }),
+      readGscIntelligence(env.DB, {
+        siteDomain: domain,
+        view: "query_page",
+        days: 28,
+        limit: 200,
+      }),
+    ]);
+    const pageComparisonAvailable =
       Number(gscStored?.coverage?.current_days ?? 0) > 0 &&
       Number(gscStored?.coverage?.previous_days ?? 0) > 0;
+    const queryPageComparisonAvailable =
+      Number(gscQueryPageStored?.coverage?.current_days ?? 0) > 0 &&
+      Number(gscQueryPageStored?.coverage?.previous_days ?? 0) > 0;
     gscRows = enrichGscIntelligenceRows(gscStored?.rows ?? [], {
       view: "pages",
-      comparisonAvailable,
+      comparisonAvailable: pageComparisonAvailable,
+    });
+    gscQueryPageRows = enrichGscIntelligenceRows(gscQueryPageStored?.rows ?? [], {
+      view: "query_page",
+      comparisonAvailable: queryPageComparisonAvailable,
     });
   } catch (error) {
     console.error(JSON.stringify({
@@ -107,11 +124,12 @@ export async function onRequestPost({ request, env }) {
   const sources = {
     organic_keywords: keywords ? { available: true, depth: keywords.depth, cached_at: keywords.cached_at } : null,
     top_pages: pages ? { available: true, depth: pages.depth, cached_at: pages.cached_at } : null,
-    gsc_pages: gscStored?.latest_date ? {
+    gsc_pages: (gscStored?.latest_date || gscQueryPageStored?.latest_date) ? {
       available: true,
-      latest_date: gscStored.latest_date,
-      coverage: gscStored.coverage,
+      latest_date: gscStored?.latest_date ?? gscQueryPageStored?.latest_date ?? null,
+      coverage: gscStored?.coverage ?? gscQueryPageStored?.coverage ?? null,
       stored_rows: gscRows.length,
+      query_page_rows: gscQueryPageRows.length,
     } : null,
   };
   const data = buildOrganicOpportunities({
@@ -119,6 +137,7 @@ export async function onRequestPost({ request, env }) {
     keywordRows: keywords?.data?.items ?? [],
     pageRows: pages?.data?.items ?? [],
     gscPageRows: gscRows,
+    gscQueryPageRows,
     sources,
   });
   const missing = [];
