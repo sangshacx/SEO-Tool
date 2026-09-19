@@ -11,7 +11,7 @@ const HEADERS = {
   "Content-Type": "application/json; charset=UTF-8",
 };
 
-const ACTIONS = new Set(["reclaim", "recover", "ctr_opportunity", "optimize", "scale", "protect", "monitor", "review_cannibalization"]);
+const ACTIONS = new Set(["reclaim", "recover", "ctr_opportunity", "optimize", "scale", "protect", "monitor", "review_cannibalization", "ai_visibility_recovery"]);
 const STATUSES = new Set(["new", "in_progress", "done", "snoozed"]);
 
 function json(body, status = 200, headers = {}) {
