@@ -291,15 +291,18 @@ function dashboardHarness() {
   const decisionQuery = new FakeElement("b"); decisionQuery.dataset.v2DashboardDecisionQuery = "";
   const decisionSource = new FakeElement("b"); decisionSource.dataset.v2DashboardDecisionSource = "";
   const decisionWorkflow = new FakeElement("b"); decisionWorkflow.dataset.v2DashboardDecisionWorkflow = "";
+  const decisionCompleted = new FakeElement("b"); decisionCompleted.dataset.v2DashboardExecutionCompleted = "";
+  const decisionProgress = new FakeElement("b"); decisionProgress.dataset.v2DashboardExecutionProgress = "";
+  const decisionSnoozed = new FakeElement("b"); decisionSnoozed.dataset.v2DashboardExecutionSnoozed = "";
   const decisionWhy = new FakeElement("p"); decisionWhy.dataset.v2DashboardDecisionWhy = "";
   const decisionOpen = new FakeElement("button"); decisionOpen.dataset.v2DashboardOpenOpportunity = "";
   const decisionResearch = new FakeElement("button"); decisionResearch.dataset.v2DashboardResearchQuery = "";
-  decision.append(decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionWhy, decisionOpen, decisionResearch);
+  decision.append(decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionCompleted, decisionProgress, decisionSnoozed, decisionWhy, decisionOpen, decisionResearch);
   const body = new FakeElement("div");
   body.dataset.v2DashboardBody = "";
   dashboard.append(title, updated, status, warning, refresh, retry, decision, body);
   root.append(dashboard);
-  return { root, dashboard, title, updated, status, warning, refresh, retry, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionWhy, decisionOpen, decisionResearch, body };
+  return { root, dashboard, title, updated, status, warning, refresh, retry, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionCompleted, decisionProgress, decisionSnoozed, decisionWhy, decisionOpen, decisionResearch, body };
 }
 
 test("distinguishes unavailable metrics from an explicitly sourced zero", () => {
@@ -704,7 +707,7 @@ test("mountDashboard cleanup suppresses late loader callbacks from the old mount
 
 test("Dashboard Decision Intelligence reads only the internal Opportunity API and supports Keyword Explorer handoff", async () => {
   await withFakeDocument(async () => {
-    const { root, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionWhy, decisionResearch } = dashboardHarness();
+    const { root, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionCompleted, decisionProgress, decisionSnoozed, decisionWhy, decisionResearch } = dashboardHarness();
     const keywordInput = new FakeElement("input");
     keywordInput.id = "keyword";
     root.append(keywordInput);
@@ -718,6 +721,10 @@ test("Dashboard Decision Intelligence reads only the internal Opportunity API an
           ok: true,
           data: {
             ready: true,
+            workflow_stats:{
+              current:{in_progress:3,snoozed:2},
+              last_7_days:{completed:4},
+            },
             next_best_action: {
               page: "https://example.com/page/",
               action: "optimize",
@@ -759,6 +766,9 @@ test("Dashboard Decision Intelligence reads only the internal Opportunity API an
     assert.equal(decisionSource.textContent, "GSC Query+Page");
     assert.equal(decisionWorkflow.textContent, "In Progress");
     assert.equal(decisionWorkflow.dataset.status, "in_progress");
+    assert.equal(decisionCompleted.textContent, "4");
+    assert.equal(decisionProgress.textContent, "3");
+    assert.equal(decisionSnoozed.textContent, "2");
     assert.match(decisionWhy.textContent, /GSC impressions/);
     assert.equal(decisionResearch.disabled, false);
 
@@ -793,6 +803,25 @@ test("Dashboard explains when workflow has hidden every actionable recommendatio
     await new Promise((resolve)=>setTimeout(resolve,0));
     assert.equal(decisionState.textContent,"NEEDS EVIDENCE");
     assert.match(decisionWhy.textContent,/3 项已被 Done \/ Snoozed/);
+    cleanup();
+  });
+});
+
+
+test("Dashboard Decision Intelligence clears execution progress when local decision data is unavailable", async () => {
+  await withFakeDocument(async () => {
+    const {root,decisionCompleted,decisionProgress,decisionSnoozed}=dashboardHarness();
+    const context={subscribe(handler){handler(dashboardScope());return()=>{};}};
+    const fetchImpl=async()=>({
+      ok:false,
+      status:503,
+      json:async()=>({ok:false,error:{message:"Decision unavailable"}}),
+    });
+    const cleanup=mountDashboardDecision({root,context,fetchImpl,locationLike:{hash:""}});
+    await new Promise((resolve)=>setTimeout(resolve,0));
+    assert.equal(decisionCompleted.textContent,"—");
+    assert.equal(decisionProgress.textContent,"—");
+    assert.equal(decisionSnoozed.textContent,"—");
     cleanup();
   });
 });
