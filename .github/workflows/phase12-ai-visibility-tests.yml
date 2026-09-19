@@ -8,8 +8,11 @@ on:
       - src/v2/providers/dataforseo-ai-visibility.js
       - src/v2/ai/ai-visibility-cache.js
       - functions/api/v2/ai/visibility.js
+      - functions/api/v2/ai/compare.js
+      - functions/api/v2/ai/pages.js
       - tests/dataforseo-ai-visibility.test.mjs
       - tests/ai-visibility-api.test.mjs
+      - tests/ai-visibility-secondary-api.test.mjs
       - docs/phase12-ai-search-visibility.md
       - .github/workflows/phase12-ai-visibility-tests.yml
 
@@ -26,4 +29,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 12 AI visibility provider tests
-        run: node --test tests/dataforseo-ai-visibility.test.mjs tests/ai-visibility-api.test.mjs
+        run: node --test tests/dataforseo-ai-visibility.test.mjs tests/ai-visibility-api.test.mjs tests/ai-visibility-secondary-api.test.mjs
