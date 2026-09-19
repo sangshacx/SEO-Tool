@@ -11,6 +11,7 @@ const MIGRATIONS = [
   "0009_nullable_api_usage_task_count.sql",
   "0014_gsc_connections.sql",
   "0015_gsc_search_analytics.sql",
+  "0016_seo_action_workflow.sql",
 ];
 
 export function d1For(database, { before, after } = {}) {
