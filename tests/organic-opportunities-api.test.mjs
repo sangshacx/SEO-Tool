@@ -5,7 +5,9 @@ import { onRequestPost } from "../functions/api/v2/organic/opportunities.js";
 import { buildOrganicKeywordsCacheKey } from "../src/v2/organic/organic-keywords-cache.js";
 import { buildOrganicPagesCacheKey } from "../src/v2/organic/organic-pages-cache.js";
 import { dashboardDatabase, memoryCache, seedProfile } from "./dashboard-test-helpers.mjs";
-import { replaceGscAnalyticsPartition } from "../src/v2/storage/gsc-search-analytics.js";
+import { replaceGscAnalyticsPartition, replaceGscSearchAppearanceCapabilities, selectGscGenerativeAiAppearance } from "../src/v2/storage/gsc-search-analytics.js";
+import { replaceGscGenerativeAiPartition } from "../src/v2/storage/gsc-generative-ai.js";
+import { saveGscMapping } from "../src/v2/storage/gsc-connections.js";
 import { upsertSeoActionWorkflow } from "../src/v2/storage/seo-action-workflow.js";
 import { persistAiVisibilityHistorical, persistAiVisibilityNewLost } from "../src/v2/storage/ai-visibility.js";
 import { linkAiPromptWorkflow, recordAiPromptObservation, upsertAiPromptTracker } from "../src/v2/storage/ai-prompt-tracker.js";
@@ -668,4 +670,94 @@ test("Opportunity API returns AI-native Prompt outcomes separately from GSC outc
   assert.equal(payload.data.ai_prompt_workflow_outcome_summary.recovered,1);
   assert.equal(payload.data.ai_prompt_workflow_outcome_summary.regressed,0);
   assert.equal(payload.data.ai_prompt_workflow_outcome_summary.actual_cost_usd,0);
+});
+
+
+test("Opportunity API creates a conservative property-global GSC Generative recovery review from comparable first-party loss", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let calls=0;
+  globalThis.fetch=async()=>{calls+=1;throw new Error("provider must not execute");};
+
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  await saveGscMapping(d1,{siteDomain:"example.com",property:"sc-domain:example.com",propertyType:"domain",permissionLevel:"siteOwner"});
+  const site=await d1.prepare("SELECT id FROM site_profiles WHERE domain = ?").bind("example.com").first();
+  await replaceGscSearchAppearanceCapabilities(d1,{
+    siteProfileId:site.id,
+    property:"sc-domain:example.com",
+    startDate:"2026-08-20",
+    endDate:"2026-09-16",
+    appearances:[{appearance:"AI_OVERVIEW",impressions:600,generative_ai_candidate:true}],
+  });
+  await selectGscGenerativeAiAppearance(d1,{siteDomain:"example.com",appearance:"AI_OVERVIEW"});
+
+  const history=[
+    ["2026-09-03",150,3],["2026-09-04",150,3],["2026-09-05",150,3],["2026-09-06",150,3],
+    ["2026-09-10",0,0],["2026-09-11",0,0],["2026-09-12",0,0],["2026-09-16",0,0],
+  ];
+  for(const [date,impressions,clicks] of history){
+    await replaceGscGenerativeAiPartition(d1,{
+      siteProfileId:site.id,
+      property:"sc-domain:example.com",
+      appearance:"AI_OVERVIEW",
+      date,
+      dimensionSet:"property",
+      rows:[{impressions,clicks,ctr:impressions?clicks/impressions:0,position:1}],
+    });
+  }
+
+  const response=await onRequestPost({
+    request:request({target:"example.com",location_code:2682,language_code:"ar"}),
+    env:{DB:d1,CACHE:memoryCache()},
+  });
+  const payload=await response.json();
+
+  assert.equal(response.status,200);
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+  assert.equal(calls,0);
+  assert.equal(payload.data.sources.gsc_generative_ai.available,true);
+  assert.equal(payload.data.sources.gsc_generative_ai.scope,"property_global");
+  assert.equal(payload.data.gsc_generative_ai_summary.candidate_count,1);
+  assert.equal(payload.data.gsc_generative_ai_summary.appearance,"AI_OVERVIEW");
+  const action=payload.data.action_queue.find((item)=>item.action==="gsc_generative_recovery");
+  assert.ok(action);
+  assert.equal(action.query_source,"gsc_generative_ai_d1");
+  assert.equal(action.evidence.scope,"property_global");
+  assert.equal(action.evidence.previous_impressions,600);
+  assert.equal(action.evidence.current_impressions,0);
+  assert.match(action.why_now,/not the currently selected market/);
+  assert.match(payload.data.supplemental_signals.gsc_generative_ai.disclaimer,/not causal claims/);
+});
+
+test("Opportunity API keeps sparse or low-volume GSC Generative changes out of the Action Queue", async () => {
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  await saveGscMapping(d1,{siteDomain:"example.com",property:"sc-domain:example.com",propertyType:"domain",permissionLevel:"siteOwner"});
+  const site=await d1.prepare("SELECT id FROM site_profiles WHERE domain = ?").bind("example.com").first();
+  await replaceGscSearchAppearanceCapabilities(d1,{
+    siteProfileId:site.id,
+    property:"sc-domain:example.com",
+    startDate:"2026-08-20",
+    endDate:"2026-09-16",
+    appearances:[{appearance:"AI_OVERVIEW",impressions:40,generative_ai_candidate:true}],
+  });
+  await selectGscGenerativeAiAppearance(d1,{siteDomain:"example.com",appearance:"AI_OVERVIEW"});
+  for(const [date,impressions] of [["2026-09-05",40],["2026-09-16",0]]){
+    await replaceGscGenerativeAiPartition(d1,{
+      siteProfileId:site.id,property:"sc-domain:example.com",appearance:"AI_OVERVIEW",
+      date,dimensionSet:"property",rows:[{impressions,clicks:0,ctr:0,position:1}],
+    });
+  }
+
+  const response=await onRequestPost({
+    request:request({target:"example.com",location_code:2840,language_code:"en"}),
+    env:{DB:d1,CACHE:memoryCache()},
+  });
+  const payload=await response.json();
+  assert.equal(response.status,200);
+  assert.equal(payload.data.sources.gsc_generative_ai.available,true);
+  assert.equal(payload.data.gsc_generative_ai_summary.candidate_count,0);
+  assert.equal(payload.data.action_queue.some((item)=>item.action==="gsc_generative_recovery"),false);
 });
