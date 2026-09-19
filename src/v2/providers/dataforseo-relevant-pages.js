@@ -71,7 +71,7 @@ function normalizeItem(item, totalEtv) {
     url,
     relative_url: relativeUrl,
     organic_traffic: traffic,
-    traffic_share_percent:
+    returned_traffic_share_percent:
       traffic !== null && totalEtv !== null && totalEtv > 0
         ? Math.round((traffic / totalEtv) * 10000) / 100
         : null,
@@ -99,7 +99,7 @@ function normalizeResult(result, request) {
     returned_count: items.length,
     items,
     generated_at: new Date().toISOString(),
-    disclaimer: "Top Pages traffic and keyword counts are DataForSEO estimates for the selected market. Change counters compare the provider's latest and previous database updates.",
+    disclaimer: "Top Pages traffic and keyword counts are DataForSEO estimates for the selected market. returned_traffic_share_percent is only the share of traffic within the returned page sample, not the whole domain. Change counters compare the provider's latest and previous database updates.",
   };
 }
 
