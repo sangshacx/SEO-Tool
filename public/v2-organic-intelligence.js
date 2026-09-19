@@ -5,6 +5,7 @@ import { classifyOrganicPositionChange } from "../src/v2/organic/organic-positio
 const ENDPOINT = "/api/v2/organic/keywords";
 const PAGES_ENDPOINT = "/api/v2/organic/pages";
 const CHANGES_ENDPOINT = "/api/v2/organic/changes";
+const COMPETITORS_ENDPOINT = "/api/v2/organic/competitors";
 const PAGE_SIZE = 50;
 
 function finite(value) {
@@ -105,6 +106,19 @@ export function filterOrganicChangeRows(rows, filters = {}, mode = "own") {
   });
 }
 
+export function filterOrganicCompetitorRows(rows, filters = {}) {
+  const query = String(filters.query ?? "").trim().toLowerCase();
+  const type = String(filters.type ?? "");
+  const minSimilarity = filters.minSimilarity === "" || filters.minSimilarity == null ? null : finite(filters.minSimilarity);
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    if (query && !String(row.domain ?? "").toLowerCase().includes(query)) return false;
+    if (type === "business" && row.business_competitor !== true) return false;
+    if (type === "seo" && row.business_competitor === true) return false;
+    if (minSimilarity !== null && (finite(row.relevance?.keyword_similarity_percent) ?? -Infinity) < minSimilarity) return false;
+    return true;
+  });
+}
+
 function ensureStyles(documentLike) {
   if (documentLike.querySelector('link[data-v2-organic-styles]')) return;
   const link = documentLike.createElement("link");
@@ -140,6 +154,7 @@ export function createOrganicIntelligenceWorkspace(documentLike = document) {
       <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="keywords">Organic Keywords</button>
       <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="pages">Top Pages</button>
       <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="changes">Position Changes</button>
+      <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="competitors">Organic Competitors</button>
     </div>
     <div class="v2-organic-panel active" data-v2-organic-panel="overview">
       <div class="v2-organic-metrics">
@@ -222,6 +237,25 @@ export function createOrganicIntelligenceWorkspace(documentLike = document) {
       </div>
       <div class="v2-organic-pager"><span data-v2-organic-changes-count>0 rows</span><div><button type="button" data-v2-organic-changes-prev>Previous</button><span data-v2-organic-changes-page>Page 1</span><button type="button" data-v2-organic-changes-next>Next</button></div></div>
     </div>
+    <div class="v2-organic-panel" data-v2-organic-panel="competitors" hidden>
+      <div class="v2-organic-pages-head">
+        <div><b>Organic Competitors</b><span>基于共同进入 Google Top 20 的关键词发现 SEO 竞争对手，并排除大型通用平台。</span></div>
+        <button type="button" data-v2-organic-competitors-run>Discover Competitors</button>
+      </div>
+      <div class="v2-organic-competitor-note">Keyword Similarity = Shared Keywords / √(Your Keywords × Competitor Keywords)。这是透明的关键词重叠指标，不代表商业竞争强度。</div>
+      <div class="v2-organic-competitor-filters">
+        <input type="search" placeholder="Filter domain" data-v2-organic-competitors-filter="query">
+        <select data-v2-organic-competitors-filter="type"><option value="">All competitor types</option><option value="business">Business + SEO</option><option value="seo">SEO only</option></select>
+        <input type="number" min="0" max="100" step="1" placeholder="Min similarity %" data-v2-organic-competitors-filter="minSimilarity">
+      </div>
+      <div class="v2-organic-table-shell">
+        <table class="v2-organic-table v2-organic-competitors-table">
+          <thead><tr><th>Domain</th><th>Similarity</th><th>Shared</th><th>Your Coverage</th><th>Their Overlap</th><th>Organic Keywords</th><th>Traffic</th><th>Avg Pos.</th><th>Type</th><th>Actions</th></tr></thead>
+          <tbody data-v2-organic-competitors-body><tr><td colspan="10" class="v2-organic-empty">尚未发现 Organic Competitors。</td></tr></tbody>
+        </table>
+      </div>
+      <div class="v2-organic-pager"><span data-v2-organic-competitors-count>0 rows</span><div><button type="button" data-v2-organic-competitors-prev>Previous</button><span data-v2-organic-competitors-page>Page 1</span><button type="button" data-v2-organic-competitors-next>Next</button></div></div>
+    </div>
   `;
   return section;
 }
@@ -290,14 +324,22 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
   const changesPageLabel = section.querySelector("[data-v2-organic-changes-page]");
   const changesCountLabel = section.querySelector("[data-v2-organic-changes-count]");
   const changeWindow = section.querySelector("[data-v2-organic-change-window]");
+  const competitorsRun = section.querySelector("[data-v2-organic-competitors-run]");
+  const competitorsBody = section.querySelector("[data-v2-organic-competitors-body]");
+  const competitorsPrevious = section.querySelector("[data-v2-organic-competitors-prev]");
+  const competitorsNext = section.querySelector("[data-v2-organic-competitors-next]");
+  const competitorsPageLabel = section.querySelector("[data-v2-organic-competitors-page]");
+  const competitorsCountLabel = section.querySelector("[data-v2-organic-competitors-count]");
   const controller = new AbortController();
   const signal = controller.signal;
   let rows = [];
   let pageRows = [];
   let changeRows = [];
+  let competitorRows = [];
   let page = 1;
   let pagesPage = 1;
   let changesPage = 1;
+  let competitorsPage = 1;
   let targetDirty = false;
 
   const currentMode = () => organicTargetMode(target.value, context?.get?.()?.domain);
@@ -410,6 +452,42 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
     changesPrevious.disabled = changesPage <= 1; changesNext.disabled = changesPage >= totalPages;
   };
 
+  const renderCompetitors = () => {
+    const filters = Object.fromEntries([...section.querySelectorAll("[data-v2-organic-competitors-filter]")].map((field) => [field.dataset.v2OrganicCompetitorsFilter, field.value]));
+    const filtered = filterOrganicCompetitorRows(competitorRows, filters);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if (competitorsPage > totalPages) competitorsPage = totalPages;
+    const visible = filtered.slice((competitorsPage - 1) * PAGE_SIZE, competitorsPage * PAGE_SIZE);
+    competitorsBody.replaceChildren();
+    if (!visible.length) {
+      const row = document.createElement("tr"), cell = document.createElement("td");
+      cell.colSpan = 10; cell.className = "v2-organic-empty"; cell.textContent = competitorRows.length ? "当前筛选条件下没有竞争对手。" : "尚未发现 Organic Competitors。"; row.append(cell); competitorsBody.append(row);
+    } else {
+      visible.forEach((item) => {
+        const row = document.createElement("tr");
+        const domainCell = document.createElement("td"), domain = document.createElement("button");
+        domain.type = "button"; domain.className = "v2-organic-competitor-domain"; domain.dataset.v2OrganicCompetitorDomain = item.domain; domain.textContent = item.domain; domainCell.append(domain);
+        const similarityCell = document.createElement("td"); similarityCell.textContent = finite(item.relevance?.keyword_similarity_percent) === null ? "—" : number(item.relevance.keyword_similarity_percent) + "%";
+        const sharedCell = document.createElement("td"); sharedCell.textContent = number(item.shared_keywords);
+        const yourCoverageCell = document.createElement("td"); yourCoverageCell.textContent = finite(item.relevance?.your_coverage_percent) === null ? "—" : number(item.relevance.your_coverage_percent) + "%";
+        const theirOverlapCell = document.createElement("td"); theirOverlapCell.textContent = finite(item.relevance?.their_overlap_percent) === null ? "—" : number(item.relevance.their_overlap_percent) + "%";
+        const keywordsCell = document.createElement("td"); keywordsCell.textContent = number(item.organic_keywords);
+        const trafficCell = document.createElement("td"); trafficCell.textContent = number(item.organic_traffic);
+        const avgCell = document.createElement("td"); avgCell.textContent = number(item.avg_position);
+        const typeCell = document.createElement("td"), type = document.createElement("span");
+        type.className = "v2-organic-competitor-type"; type.dataset.type = item.business_competitor ? "business" : "seo"; type.textContent = item.business_competitor ? "Business + SEO" : "SEO"; typeCell.append(type);
+        const actionsCell = document.createElement("td"), actions = document.createElement("div"); actions.className = "v2-organic-competitor-actions";
+        const analyze = document.createElement("button"); analyze.type = "button"; analyze.dataset.v2AnalyzeCompetitor = item.domain; analyze.textContent = "Analyze";
+        const gap = document.createElement("button"); gap.type = "button"; gap.dataset.v2CompetitorGap = item.domain; gap.textContent = "Keyword Gap";
+        actions.append(analyze,gap); actionsCell.append(actions);
+        row.append(domainCell,similarityCell,sharedCell,yourCoverageCell,theirOverlapCell,keywordsCell,trafficCell,avgCell,typeCell,actionsCell); competitorsBody.append(row);
+      });
+    }
+    competitorsCountLabel.textContent = filtered.length + " / " + competitorRows.length + " rows";
+    competitorsPageLabel.textContent = "Page " + competitorsPage + " / " + totalPages;
+    competitorsPrevious.disabled = competitorsPage <= 1; competitorsNext.disabled = competitorsPage >= totalPages;
+  };
+
   const renderOverview = (data, meta) => {
     const organic = data?.organic ?? {}, positions = organic.positions ?? {};
     const values = { keywords:number(organic.ranked_keywords), traffic:number(organic.estimated_monthly_traffic), value:money(organic.estimated_paid_traffic_cost_usd), top3:number(positions.top_3), top10:number(positions.top_10), top20:number(positions.top_20) };
@@ -417,6 +495,22 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
     const source = meta?.cached ? "7-day cache" : "DataForSEO live";
     const update = data?.update_window?.last_updated_at ? " · SERP updated " + new Date(data.update_window.last_updated_at).toLocaleDateString("zh-CN") : "";
     section.querySelector("[data-v2-organic-summary]").textContent = [data?.target, source, "Depth " + (meta?.cached_from_depth ?? data?.depth ?? "—"), "Returned " + (data?.returned_count ?? rows.length), "Total " + (data?.total_count ?? "—")].filter(Boolean).join(" · ") + update;
+  };
+
+  const loadCompetitors = async () => {
+    const market = context?.get?.();
+    const domain = hostnameForTarget(target.value);
+    if (!market?.location_code || !market?.language_code || !domain) return;
+    competitorsRun.disabled = true; setStatus(section, "正在检查 Organic Competitors 的 7 天缓存…", "info");
+    try {
+      const response = await fetchImpl(COMPETITORS_ENDPOINT, { method:"POST", headers:{"content-type":"application/json",accept:"application/json"}, body:JSON.stringify({ target:domain, location_code:market.location_code, language_code:market.language_code, allow_live_request:allowPaid.checked }) });
+      const payload = await response.json().catch(() => ({}));
+      if (response.status === 409 && payload?.error?.code === "LIVE_REQUEST_CONFIRMATION_REQUIRED") { setStatus(section, "当前域名没有 Organic Competitors 缓存。勾选“允许本次付费请求”后再次发现，才会调用 DataForSEO。", "warning"); return; }
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Organic Competitors 查询失败");
+      competitorRows = Array.isArray(payload.data?.competitors) ? payload.data.competitors : []; competitorsPage = 1; allowPaid.checked = false; renderCompetitors(); activateTab(section,"competitors");
+      setStatus(section, payload.meta?.cached ? "Organic Competitors 已读取：缓存命中，本次费用 $0。" : "Organic Competitors 已更新：实际 API 费用已记录，结果缓存 7 天。", "success");
+    } catch (error) { setStatus(section,error?.message || "Organic Competitors 查询失败","error"); }
+    finally { competitorsRun.disabled = false; }
   };
 
   const loadChanges = async () => {
@@ -476,6 +570,16 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
   section.querySelectorAll("[data-v2-organic-filter]").forEach((field)=>field.addEventListener(field.tagName==="INPUT"?"input":"change",()=>{page=1;renderTable();},{signal}));
   section.querySelectorAll("[data-v2-organic-pages-filter]").forEach((field)=>field.addEventListener(field.tagName==="INPUT"?"input":"change",()=>{pagesPage=1;renderPages();},{signal}));
   section.querySelectorAll("[data-v2-organic-changes-filter]").forEach((field)=>field.addEventListener(field.tagName==="INPUT"?"input":"change",()=>{changesPage=1;renderChanges();},{signal}));
+  section.querySelectorAll("[data-v2-organic-competitors-filter]").forEach((field)=>field.addEventListener(field.tagName==="INPUT"?"input":"change",()=>{competitorsPage=1;renderCompetitors();},{signal}));
+  competitorsRun.addEventListener("click",loadCompetitors,{signal});
+  competitorsPrevious.addEventListener("click",()=>{if(competitorsPage>1){competitorsPage-=1;renderCompetitors();}},{signal});
+  competitorsNext.addEventListener("click",()=>{competitorsPage+=1;renderCompetitors();},{signal});
+  competitorsBody.addEventListener("click",(event)=>{
+    const analyze=event.target.closest("[data-v2-analyze-competitor]");
+    if(analyze){target.value=analyze.dataset.v2AnalyzeCompetitor;targetDirty=true;syncMode();activateTab(section,"keywords");load();return;}
+    const gap=event.target.closest("[data-v2-competitor-gap]");
+    if(gap){const input=root.querySelector("#gapCompetitorDomain");if(input)input.value=gap.dataset.v2CompetitorGap;const gapTab=root.querySelector('[data-v2-competitor-tab="gap"]');gapTab?.click?.();if(locationLike)locationLike.hash="competitors";}
+  },{signal});
   section.querySelectorAll("[data-v2-change-card]").forEach((button)=>button.addEventListener("click",()=>{const select=section.querySelector('[data-v2-organic-changes-filter="change"]');if(select){select.value=select.value===button.dataset.v2ChangeCard?"":button.dataset.v2ChangeCard;changesPage=1;renderChanges();}},{signal}));
   changesRun.addEventListener("click",loadChanges,{signal});
   changesPrevious.addEventListener("click",()=>{if(changesPage>1){changesPage-=1;renderChanges();}},{signal});
@@ -492,5 +596,6 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
   renderTable();
   renderPages();
   renderChanges();
+  renderCompetitors();
   return ()=>{unsubscribe();controller.abort();};
 }
