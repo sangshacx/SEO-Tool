@@ -840,3 +840,64 @@ test("Dashboard Decision Intelligence clears execution progress when local decis
     cleanup();
   });
 });
+
+
+test("Dashboard routes AI visibility recovery actions to the AI Visibility workspace instead of Keyword Explorer", async () => {
+  await withFakeDocument(async () => {
+    const {
+      root,
+      decision,
+      decisionSource,
+      decisionResearch,
+    } = dashboardHarness();
+
+    const fetchImpl = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        data: {
+          ready: true,
+          workflow_stats: {
+            current: { in_progress: 0, snoozed: 0 },
+            last_7_days: { completed: 0 },
+          },
+          workflow_outcomes: [],
+          ai_visibility_summary: {
+            candidate_count: 1,
+            source: "d1",
+          },
+          next_best_action: {
+            page: "https://example.com/",
+            action: "ai_visibility_recovery",
+            action_label: "Recover AI visibility",
+            priority_score: 78,
+            query: "AI visibility · google",
+            query_source: "dataforseo_ai_history",
+            workflow: { status: "new" },
+            why_now: "Google AI Overview shows a net loss in stored LLM mentions.",
+          },
+        },
+      }),
+    });
+    const context = {
+      subscribe(handler) {
+        handler(dashboardScope());
+        return () => {};
+      },
+    };
+    const locationLike = { hash: "" };
+    const cleanup = mountDashboardDecision({ root, context, fetchImpl, locationLike });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(decisionSource.textContent, "AI History · D1");
+    assert.equal(decisionResearch.textContent, "Open AI Visibility");
+    assert.equal(decisionResearch.disabled, false);
+    assert.equal(decisionResearch.dataset.v2DashboardResearchQuery, "");
+    assert.equal(decisionResearch.dataset.v2DashboardResearchRoute, "ai-visibility");
+
+    decision.dispatchEvent({ type: "click", target: decisionResearch });
+    assert.equal(locationLike.hash, "ai-visibility");
+    cleanup();
+  });
+});
