@@ -6,6 +6,19 @@ on:
       - seo-pro-v2
     paths:
       - src/v2/providers/google-search-console.js
+      - src/v2/providers/google-oauth.js
+      - src/v2/security/secret-crypto.js
+      - src/v2/security/access-request.js
+      - src/v2/gsc/**
+      - src/v2/storage/gsc-connections.js
+      - functions/api/v2/gsc/**
+      - migrations/0014_gsc_connections.sql
+      - tests/dashboard-test-helpers.mjs
+      - tests/secret-crypto.test.mjs
+      - tests/google-oauth.test.mjs
+      - tests/gsc-oauth-state.test.mjs
+      - tests/gsc-connections-storage.test.mjs
+      - tests/gsc-connect-api.test.mjs
       - tests/google-search-console-provider.test.mjs
       - .github/workflows/phase10-gsc-provider-tests.yml
 
@@ -22,4 +35,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 10 GSC provider tests
-        run: node --test tests/google-search-console-provider.test.mjs
+        run: node --test tests/google-search-console-provider.test.mjs tests/secret-crypto.test.mjs tests/google-oauth.test.mjs tests/gsc-oauth-state.test.mjs tests/gsc-connections-storage.test.mjs tests/gsc-connect-api.test.mjs
