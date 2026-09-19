@@ -13,6 +13,7 @@ const MIGRATIONS = [
   "0015_gsc_search_analytics.sql",
   "0016_seo_action_workflow.sql",
   "0017_seo_action_workflow_events.sql",
+  "0018_ai_visibility_history.sql",
 ];
 
 export function d1For(database, { before, after } = {}) {
