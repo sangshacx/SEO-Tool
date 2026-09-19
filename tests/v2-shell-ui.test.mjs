@@ -164,3 +164,13 @@ test("controlled Cluster SERP verification reuses the existing Cost Guard and re
   assert.match(shell, /locationLike\.hash = "keyword-library"/);
   assert.match(shell, /返回 Cluster Intelligence 并重新分析/);
 });
+
+
+test("settings workspace mounts Google Search Console beside shared cost usage", () => {
+  assert.match(shell, /createGscSettingsWorkspace/);
+  assert.match(shell, /mountGscSettings/);
+  assert.match(shell, /createGscSettingsWorkspace\(\)/);
+  assert.match(shell, /mountGscSettings\(\{ root: shell, context, fetchImpl \}\)/);
+  assert.match(shellCss, /\.v2-gsc-settings/);
+  assert.match(shellCss, /\.v2-gsc-state/);
+});
