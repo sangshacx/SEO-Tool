@@ -70,7 +70,7 @@ test("GSC page reality is an additive adjustment and never changes the no-GSC ba
       change:{clicks_percent:-50},
     }],
   });
-  assert.equal(base.formula.version,"organic-opportunity-v0.2");
+  assert.equal(base.formula.version,"organic-opportunity-v0.3");
   assert.equal(base.opportunities[0].components.gsc_reality_points,0);
   assert.equal(base.opportunities[0].priority_score,base.opportunities[0].components.base_score);
   assert.ok(combined.opportunities[0].components.gsc_reality_points>0);
@@ -79,4 +79,80 @@ test("GSC page reality is an additive adjustment and never changes the no-GSC ba
   assert.equal(combined.opportunities[0].evidence.gsc_pages,true);
   assert.equal(combined.opportunities[0].metrics.gsc_impressions,500);
   assert.equal(combined.opportunities[0].confidence,"high");
+});
+
+
+test("Query+Page GSC opportunities match same-page DataForSEO keyword evidence and drive the next query", () => {
+  const data=buildOrganicOpportunities({
+    target:"example.com",
+    sources:{
+      organic_keywords:{available:true},
+      top_pages:{available:true},
+      gsc_pages:{available:true},
+    },
+    pageRows:[
+      {url:"https://example.com/page/",organic_traffic:80,organic_keywords:12,positions:{top_10:3},changes:{up:0,down:0,lost:0}},
+    ],
+    keywordRows:[
+      {
+        keyword:"waterproof membrane supplier",
+        ranking_url:"https://example.com/page/",
+        position:18,
+        search_volume:500,
+        keyword_difficulty:28,
+        estimated_traffic:5,
+        cpc_usd:2.4,
+        intent:{primary:"commercial"},
+      },
+      {
+        keyword:"different page keyword",
+        ranking_url:"https://example.com/other/",
+        position:8,
+        search_volume:1000,
+        keyword_difficulty:15,
+        estimated_traffic:30,
+        intent:{primary:"transactional"},
+      },
+    ],
+    gscQueryPageRows:[
+      {
+        primary_key:"waterproof membrane supplier",
+        secondary_key:"https://example.com/page/",
+        clicks:6,
+        impressions:420,
+        position:9,
+        previous_clicks:8,
+        previous_impressions:360,
+        change:{clicks_percent:-25},
+        action:{code:"quick_win",label:"Quick Win"},
+      },
+      {
+        primary_key:"different page keyword",
+        secondary_key:"https://example.com/page/",
+        clicks:3,
+        impressions:220,
+        position:12,
+        previous_clicks:3,
+        previous_impressions:200,
+        change:{clicks_percent:0},
+      },
+    ],
+  });
+
+  const page=data.opportunities.find((row)=>row.url==="https://example.com/page/");
+  assert.ok(page);
+  assert.equal(page.action.code,"recover");
+  assert.equal(page.metrics.gsc_query_opportunities,2);
+  assert.equal(page.metrics.gsc_query_recoveries,1);
+  assert.equal(page.gsc_query_opportunities[0].keyword,"waterproof membrane supplier");
+  assert.equal(page.gsc_query_opportunities[0].provider_match,true);
+  assert.equal(page.gsc_query_opportunities[0].search_volume,500);
+  assert.equal(page.gsc_query_opportunities[0].keyword_difficulty,28);
+  assert.equal(page.gsc_query_opportunities[0].intent,"commercial");
+
+  const crossPage=page.gsc_query_opportunities.find((row)=>row.keyword==="different page keyword");
+  assert.equal(crossPage.provider_match,false);
+  assert.equal(crossPage.search_volume,null);
+  assert.equal(page.evidence.gsc_pages,true);
+  assert.ok(page.components.gsc_reality_points>0);
 });
