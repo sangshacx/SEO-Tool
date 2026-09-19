@@ -11,6 +11,7 @@ test("GSC Performance is D1-first and sync is explicit", () => {
   const markup=gscPerformancePanelMarkup();
   assert.match(markup,/页面打开只读 D1/);
   assert.match(markup,/Sync latest finalized day · \$0/);
+  assert.match(markup,/Backfill 7 missing days · \$0/);
   assert.match(markup,/Queries/);
   assert.match(markup,/Pages/);
   assert.match(markup,/Stored Coverage/);
