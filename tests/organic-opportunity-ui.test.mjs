@@ -68,3 +68,18 @@ test("Opportunity Center renders a Top 5 actionable queue separately from the fu
   assert.match(opportunityUiSource,/data-v2-opportunity-page/);
   assert.match(opportunityUiSource,/data-v2-opportunity-keyword/);
 });
+
+
+test("Opportunity Center exposes zero-cost persistent workflow controls without live-provider flags", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/<th>Workflow<\/th>/);
+  assert.match(opportunityUiSource,/\/api\/v2\/organic\/action-workflow/);
+  assert.match(opportunityUiSource,/data-v2-workflow-status/);
+  assert.match(opportunityUiSource,/Start/);
+  assert.match(opportunityUiSource,/Snooze 7d/);
+  assert.match(opportunityUiSource,/Reopen/);
+  assert.match(opportunityUiSource,/7\*86400000/);
+  assert.match(opportunityUiSource,/只写 D1，本次费用 \$0/);
+  assert.doesNotMatch(opportunityUiSource,/allow_live_request/);
+  assert.doesNotMatch(opportunityUiSource,/provider_requests\s*:/);
+});
