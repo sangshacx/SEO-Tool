@@ -25,6 +25,7 @@ import {
   requestClusterIntelligenceReturn,
 } from "./v2-keyword-library.js";
 import { mountCompetitorIntelligence } from "./v2-competitor-intelligence-ui.js";
+import { createOrganicIntelligenceWorkspace, mountOrganicIntelligence } from "./v2-organic-intelligence.js";
 
 export const V2_VIEWS = Object.freeze([
   { id: "overview", label: "总览", group: "primary" },
@@ -1216,6 +1217,7 @@ function buildShell() {
   createBacklinkResearchWorkspace(content);
   createOpportunityWorkspace(content);
   createWebsiteDataWorkspace(content);
+  content.prepend(createOrganicIntelligenceWorkspace());
   content.querySelector(".top")?.classList.add("v2-legacy-heading");
   content.querySelector("h1")?.classList.add("v2-legacy-heading");
   content.querySelector("h1 + .lead")?.classList.add("v2-legacy-heading");
@@ -1333,6 +1335,7 @@ function buildShell() {
   let dashboardCleanup = () => {};
   let keywordLibraryCleanup = () => {};
   let competitorIntelligenceCleanup = () => {};
+  let organicIntelligenceCleanup = () => {};
   let clusterSerpVerificationCleanup = () => {};
   const marketInitialization = createMarketInitializationCoordinator({
     initialize: () => initializeSites(shell),
@@ -1345,6 +1348,8 @@ function buildShell() {
       keywordLibraryCleanup = mountKeywordLibrary({ root: shell, context, fetchImpl });
       competitorIntelligenceCleanup();
       competitorIntelligenceCleanup = mountCompetitorIntelligence({ root: shell, competitorWorkspace });
+      organicIntelligenceCleanup();
+      organicIntelligenceCleanup = mountOrganicIntelligence({ root: shell, context, fetchImpl });
       clusterSerpVerificationCleanup();
       clusterSerpVerificationCleanup = mountClusterSerpVerificationFlow({
         root: shell,
