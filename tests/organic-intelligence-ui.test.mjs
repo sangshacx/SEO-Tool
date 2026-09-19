@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterOrganicKeywordRows, formatOrganicMovement, organicTargetMode } from "../public/v2-organic-intelligence.js";
+import { filterOrganicKeywordRows, filterOrganicPageRows, formatOrganicMovement, organicTargetMode } from "../public/v2-organic-intelligence.js";
 
 test("Organic Intelligence distinguishes own-site URLs from competitor targets", () => {
   assert.equal(organicTargetMode("great-ocean-waterproof.com", "great-ocean-waterproof.com"), "own");
@@ -21,4 +21,14 @@ test("Organic Intelligence filters locally without requiring another API request
 test("movement labels keep absolute SERP change separate from organic position", () => {
   assert.deepEqual(formatOrganicMovement({movement:{is_up:true,absolute_delta:5}}),{code:"up",label:"Improved",delta:5});
   assert.deepEqual(formatOrganicMovement({movement:{is_lost:true}}),{code:"lost",label:"Lost",delta:null});
+});
+
+
+test("Top Pages filters locally and respects own-site page actions", () => {
+  const rows = [
+    { url:"https://example.com/winner/", relative_url:"/winner/", organic_keywords:20, positions:{top_10:12,top_20:14}, changes:{up:1,down:1,lost:0} },
+    { url:"https://example.com/risk/", relative_url:"/risk/", organic_keywords:20, positions:{top_10:4,top_20:8}, changes:{up:1,down:6,lost:0} },
+  ];
+  assert.deepEqual(filterOrganicPageRows(rows,{query:"winner"},"own").map((row)=>row.relative_url),["/winner/"]);
+  assert.deepEqual(filterOrganicPageRows(rows,{action:"at_risk"},"own").map((row)=>row.relative_url),["/risk/"]);
 });
