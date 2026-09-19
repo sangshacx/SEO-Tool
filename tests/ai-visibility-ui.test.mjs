@@ -6,6 +6,7 @@ import {
   aiPlatformAvailability,
   buildAiVisibilityBody,
   parseAiCompetitorDomains,
+  pickDefaultPromptModel,
 } from "../public/v2-ai-visibility.js";
 
 const shell = await readFile(new URL("../public/v2-shell.js", import.meta.url), "utf8");
@@ -113,4 +114,53 @@ test("AI Visibility stylesheet is loaded and defines the dedicated workspace pri
   assert.match(css, /\.v2-ai-citation-card/);
   assert.match(css, /\.v2-ai-citation-answer/);
   assert.match(css, /\.v2-ai-citation-sources/);
+});
+
+
+test("Custom Prompt Tracker chooses cost-conscious non-reasoning defaults without hardcoding one model version", () => {
+  assert.equal(
+    pickDefaultPromptModel([
+      {model_name:"gpt-5-pro",reasoning:true},
+      {model_name:"gpt-5-mini",reasoning:false},
+      {model_name:"gpt-4.1",reasoning:false},
+    ],"chat_gpt")?.model_name,
+    "gpt-5-mini",
+  );
+  assert.equal(
+    pickDefaultPromptModel([
+      {model_name:"gemini-pro",reasoning:false},
+      {model_name:"gemini-flash",reasoning:false},
+    ],"gemini")?.model_name,
+    "gemini-flash",
+  );
+  assert.equal(
+    pickDefaultPromptModel([
+      {model_name:"sonar-pro",reasoning:false},
+      {model_name:"sonar",reasoning:false},
+    ],"perplexity")?.model_name,
+    "sonar-pro",
+  );
+});
+
+test("Custom Prompt Tracker keeps model discovery free and paid prompt execution behind Cost Guard", () => {
+  assert.match(ui,/\/api\/v2\/ai\/prompt-models/);
+  assert.match(ui,/\/api\/v2\/ai\/prompt-test/);
+  assert.match(ui,/CUSTOM PROMPT TRACKER/);
+  assert.match(ui,/Models list · \$0/);
+  assert.match(ui,/读取相同 Prompt 缓存 · \$0/);
+  assert.match(ui,/运行 Prompt Test · 付费/);
+  assert.match(ui,/allow_live_request: true/);
+  assert.match(ui,/force_refresh: true/);
+  assert.match(ui,/maxLength="500"|maxlength="500"/i);
+  assert.match(ui,/reasoning 内容/);
+  assert.match(ui,/data-v2-ai-prompt-result-cited/);
+  assert.match(ui,/data-v2-ai-prompt-result-cost/);
+});
+
+test("Custom Prompt Tracker styling includes responsive model, answer, citation and token surfaces", () => {
+  assert.match(css,/\.v2-ai-prompt-form/);
+  assert.match(css,/\.v2-ai-prompt-metrics/);
+  assert.match(css,/\.v2-ai-prompt-output/);
+  assert.match(css,/\.v2-ai-prompt-fanout/);
+  assert.match(css,/\.v2-ai-prompt-guidance/);
 });
