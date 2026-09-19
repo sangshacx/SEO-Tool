@@ -374,8 +374,17 @@ export function mountOrganicHistoryTab({
     }
   };
 
+  const resetForScopeChange = () => {
+    projectLoadedOnce = false;
+    dataBySource.project = null;
+    dataBySource.provider = null;
+    activeSource = "project";
+    render();
+  };
+
   projectLoad.addEventListener("click", loadProject, { signal });
   providerLoad.addEventListener("click", loadProvider, { signal });
+  target.addEventListener("input", resetForScopeChange, { signal });
   projectDays.addEventListener("change", () => { projectLoadedOnce = false; }, { signal });
   metric.addEventListener("change", render, { signal });
   sourceButtons.forEach((button) => button.addEventListener("click", () => setSource(button.dataset.v2HistorySource), { signal }));
@@ -384,6 +393,10 @@ export function mountOrganicHistoryTab({
     if (!projectLoadedOnce) loadProject();
   }, { signal });
 
+  const unsubscribe = context?.subscribe?.(() => {
+    if (projectLoadedOnce || dataBySource.provider) resetForScopeChange();
+  }) ?? (() => {});
+
   render();
-  return () => {};
+  return () => unsubscribe();
 }
