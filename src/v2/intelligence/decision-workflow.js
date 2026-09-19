@@ -55,13 +55,15 @@ export function applyDecisionWorkflow(data = {}, workflowRows = [], now = new Da
     if (!suppressed) active.push(enriched);
   }
 
+  const visibleQueue = active.slice(0, 5);
   return {
     ...data,
-    action_queue: active,
-    next_best_action: active[0] ?? null,
+    action_queue: visibleQueue,
+    next_best_action: visibleQueue[0] ?? null,
     workflow_summary: {
       ...counts,
-      active: active.length,
+      active: visibleQueue.length,
+      active_candidates: active.length,
       source: "d1",
     },
   };
