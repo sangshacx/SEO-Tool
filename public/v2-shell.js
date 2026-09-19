@@ -29,7 +29,7 @@ import { createOrganicIntelligenceWorkspace, mountOrganicIntelligence } from "./
 
 export const V2_VIEWS = Object.freeze([
   { id: "overview", label: "总览", group: "primary" },
-  { id: "website", label: "网站数据", group: "research" },
+  { id: "website", label: "Site Explorer", group: "research" },
   { id: "competitors", label: "竞争对手", group: "research" },
   { id: "keywords", label: "关键词研究", group: "research" },
   { id: "keyword-library", label: "关键词库", group: "research" },
@@ -589,8 +589,8 @@ export function createWebsiteDataWorkspace(root) {
   hero.innerHTML = `
     <div>
       <div class="v2-website-data-eyebrow">SITE OVERVIEW</div>
-      <h2>网站数据</h2>
-      <p>查看当前站点的 Link Profile Health、核心外链指标和历史变化，先判断站点状态，再决定是否深入外链研究。</p>
+      <h2>Link Profile</h2>
+      <p>查看当前站点的外链健康、核心引用域和历史变化；Organic Intelligence 与机会判断统一在上方 Site Explorer 工作区。</p>
     </div>
     <div class="v2-website-data-hero-meta">
       <span>7 天快照</span>
