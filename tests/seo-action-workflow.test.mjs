@@ -8,13 +8,14 @@ import {
   getSeoActionWorkflowStats,
   listSeoActionWorkflow,
   listSeoActionWorkflowEvents,
+  readSeoActionOutcomes,
   upsertSeoActionWorkflow,
 } from "../src/v2/storage/seo-action-workflow.js";
 import { d1For } from "./dashboard-test-helpers.mjs";
 
 async function workflowDb() {
   const raw = new DatabaseSync(":memory:");
-  for (const file of ["0007_site_profiles.sql", "0016_seo_action_workflow.sql", "0017_seo_action_workflow_events.sql"]) {
+  for (const file of ["0007_site_profiles.sql", "0015_gsc_search_analytics.sql", "0016_seo_action_workflow.sql", "0017_seo_action_workflow_events.sql"]) {
     raw.exec(await readFile(new URL("../migrations/" + file, import.meta.url), "utf8"));
   }
   const d1=d1For(raw);
@@ -264,4 +265,85 @@ test("workflow execution stats summarize current states and recent transitions",
   assert.equal(stats.last_7_days.reopened,0);
   assert.equal(stats.last_7_days.events,5);
   assert.equal(stats.last_30_days.completed,1);
+});
+
+
+test("completed SEO actions compare exact Query+Page GSC windows before and after completion", async () => {
+  const {raw,d1}=await workflowDb();
+  await upsertSeoActionWorkflow(d1,{
+    site_domain:"example.com",
+    page_url:"https://example.com/outcome/",
+    action_code:"optimize",
+    query:"waterproof membrane",
+    status:"done",
+    note:"published title and copy changes",
+    snooze_until:null,
+    priority_score:78,
+  });
+  raw.prepare("UPDATE seo_action_workflow_events SET created_at = '2026-09-10 12:00:00' WHERE to_status = 'done'").run();
+
+  const insert=raw.prepare(`
+    INSERT INTO gsc_search_analytics_daily (
+      site_profile_id,property,date,dimension_set,query_text,page_url,country,device,
+      clicks,impressions,ctr,position,synced_at
+    ) VALUES (1,'sc-domain:example.com',?,'query_page','waterproof membrane','https://example.com/outcome/','','',?,?,?,?,?)
+  `);
+  for(let day=3;day<=9;day++){
+    const date="2026-09-"+String(day).padStart(2,"0");
+    insert.run(date,1,10,0.1,10,"2026-09-19T00:00:00.000Z");
+  }
+  for(let day=11;day<=17;day++){
+    const date="2026-09-"+String(day).padStart(2,"0");
+    insert.run(date,2,15,2/15,7,"2026-09-19T00:00:00.000Z");
+  }
+
+  const outcomes=await readSeoActionOutcomes(d1,"example.com",{limit:10,windowDays:7});
+  assert.equal(outcomes.length,1);
+  const outcome=outcomes[0];
+  assert.equal(outcome.scope,"query_page");
+  assert.equal(outcome.status,"ready");
+  assert.equal(outcome.coverage.before_days,7);
+  assert.equal(outcome.coverage.after_days,7);
+  assert.equal(outcome.before.clicks,7);
+  assert.equal(outcome.after.clicks,14);
+  assert.equal(outcome.before.impressions,70);
+  assert.equal(outcome.after.impressions,105);
+  assert.equal(outcome.change.clicks_percent,100);
+  assert.equal(outcome.change.position_improvement,3);
+  assert.equal(outcome.observed.code,"improved");
+});
+
+test("completed query actions explicitly fall back to page-level GSC only when Query+Page data is absent", async () => {
+  const {raw,d1}=await workflowDb();
+  await upsertSeoActionWorkflow(d1,{
+    site_domain:"example.com",
+    page_url:"https://example.com/fallback/",
+    action_code:"recover",
+    query:"missing query dimension",
+    status:"done",
+    note:"",
+    snooze_until:null,
+    priority_score:70,
+  });
+  raw.prepare("UPDATE seo_action_workflow_events SET created_at = '2026-09-10 12:00:00' WHERE to_status = 'done'").run();
+
+  const insert=raw.prepare(`
+    INSERT INTO gsc_search_analytics_daily (
+      site_profile_id,property,date,dimension_set,query_text,page_url,country,device,
+      clicks,impressions,ctr,position,synced_at
+    ) VALUES (1,'sc-domain:example.com',?,'page','','https://example.com/fallback/','','',?,?,?,?,?)
+  `);
+  for(let day=3;day<=9;day++){
+    insert.run("2026-09-"+String(day).padStart(2,"0"),1,20,0.05,12,"2026-09-19T00:00:00.000Z");
+  }
+  for(let day=11;day<=17;day++){
+    insert.run("2026-09-"+String(day).padStart(2,"0"),2,25,0.08,9,"2026-09-19T00:00:00.000Z");
+  }
+
+  const [outcome]=await readSeoActionOutcomes(d1,"example.com",{limit:10,windowDays:7});
+  assert.equal(outcome.scope,"page_fallback");
+  assert.equal(outcome.status,"ready");
+  assert.equal(outcome.coverage.before_days,7);
+  assert.equal(outcome.coverage.after_days,7);
+  assert.equal(outcome.observed.code,"improved");
 });
