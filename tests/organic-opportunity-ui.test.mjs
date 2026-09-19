@@ -236,3 +236,17 @@ test("AI Prompt outcome styling distinguishes recovered, lost and waiting observ
   assert.match(css,/data-outcome="waiting_for_post_observation"/);
   assert.match(css,/\.v2-ai-prompt-outcome-prompt/);
 });
+
+
+test("Opportunity Center exposes property-global GSC Generative evidence and routes recovery reviews only to AI Visibility", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/data-v2-opportunity-source="gsc_generative_ai"/);
+  assert.match(markup,/GSC Generative/);
+  assert.match(markup,/Property-global first-party/);
+  assert.match(opportunityUiSource,/source === "gsc_generative_ai"/);
+  assert.match(opportunityUiSource,/property-global/);
+  assert.match(opportunityUiSource,/gsc_generative_ai_d1/);
+  assert.match(opportunityUiSource,/gsc_generative_recovery/);
+  assert.match(opportunityUiSource,/GSC Generative · D1/);
+  assert.match(opportunityUiSource,/Open AI Visibility/);
+});
