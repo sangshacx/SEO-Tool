@@ -18,3 +18,12 @@ test("Organic Intelligence uses the dedicated API and explicit live-request conf
   assert.match(organic, /LIVE_REQUEST_CONFIRMATION_REQUIRED/);
   assert.match(organic, /Organic Keywords 已读取：缓存命中，本次费用 \$0/);
 });
+
+
+test("Organic Intelligence exposes Top Pages and reuses page URLs for keyword drilldown", () => {
+  assert.match(organic, /\/api\/v2\/organic\/pages/);
+  assert.match(organic, /data-v2-organic-tab="pages"/);
+  assert.match(organic, /data-v2-organic-page-url/);
+  assert.match(organic, /target\.value=button\.dataset\.v2OrganicPageUrl/);
+  assert.match(organic, /activateTab\(section,"keywords"\);load\(\)/);
+});
