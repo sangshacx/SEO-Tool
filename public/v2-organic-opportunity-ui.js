@@ -88,6 +88,7 @@ export function mountOrganicOpportunityTab({
   const sourceCards = {
     organic_keywords: section.querySelector('[data-v2-opportunity-source="organic_keywords"]'),
     top_pages: section.querySelector('[data-v2-opportunity-source="top_pages"]'),
+    gsc_pages: section.querySelector('[data-v2-opportunity-source="gsc_pages"]'),
   };
   let loadedForKey = null;
 
