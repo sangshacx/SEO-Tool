@@ -5,6 +5,8 @@ import {
   GSC_SEARCH_ANALYTICS_BASE,
   GSC_SITES_ENDPOINT,
   buildGscSearchAnalyticsRequest,
+  discoverGscSearchAppearances,
+  isGenerativeAiAppearanceCandidate,
   listGscProperties,
   queryGscSearchAnalytics,
 } from "../src/v2/providers/google-search-console.js";
@@ -87,4 +89,70 @@ test("GSC provider maps Google authorization and quota errors to stable applicat
     ()=>listGscProperties({accessToken:"token"}),
     (error)=>error.code==="GSC_QUOTA_EXCEEDED"&&error.httpStatus===429,
   );
+});
+
+
+test("GSC searchAppearance follows Google's two-step discovery rule and cannot be grouped with another dimension", () => {
+  const request=buildGscSearchAnalyticsRequest({
+    startDate:"2026-08-01",
+    endDate:"2026-09-15",
+    dimensions:["searchAppearance"],
+    rowLimit:250,
+  });
+  assert.deepEqual(request.dimensions,["searchAppearance"]);
+  assert.throws(
+    ()=>buildGscSearchAnalyticsRequest({
+      startDate:"2026-08-01",
+      endDate:"2026-09-15",
+      dimensions:["searchAppearance","page"],
+    }),
+    (error)=>error?.code==="GSC_SEARCH_APPEARANCE_DIMENSION_EXCLUSIVE",
+  );
+});
+
+test("GSC Generative AI candidate classification is conservative and never selects a raw value by itself", () => {
+  assert.equal(isGenerativeAiAppearanceCandidate("AI_OVERVIEW"),true);
+  assert.equal(isGenerativeAiAppearanceCandidate("GENERATIVE_AI"),true);
+  assert.equal(isGenerativeAiAppearanceCandidate("AMP_BLUE_LINK"),false);
+  assert.equal(isGenerativeAiAppearanceCandidate("FAQ"),false);
+});
+
+test("GSC search appearance discovery returns raw property values and candidate hints without hardcoding a filter", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let captured;
+  globalThis.fetch=async(url,options)=>{
+    captured={url,options};
+    return new Response(JSON.stringify({
+      responseAggregationType:"byProperty",
+      rows:[
+        {keys:["AI_OVERVIEW"],clicks:9,impressions:500,ctr:0.018,position:1},
+        {keys:["AMP_BLUE_LINK"],clicks:20,impressions:1000,ctr:0.02,position:4.2},
+      ],
+    }),{headers:{"content-type":"application/json"}});
+  };
+
+  const result=await discoverGscSearchAppearances({
+    accessToken:"token",
+    property:"sc-domain:example.com",
+    startDate:"2026-08-01",
+    endDate:"2026-09-15",
+  });
+
+  assert.equal(captured.url,GSC_SEARCH_ANALYTICS_BASE+"/sc-domain%3Aexample.com/searchAnalytics/query");
+  assert.deepEqual(JSON.parse(captured.options.body),{
+    startDate:"2026-08-01",
+    endDate:"2026-09-15",
+    dimensions:["searchAppearance"],
+    type:"web",
+    dataState:"final",
+    rowLimit:250,
+    startRow:0,
+  });
+  assert.equal(result.appearances.length,2);
+  assert.equal(result.appearances[0].appearance,"AI_OVERVIEW");
+  assert.equal(result.appearances[0].generative_ai_candidate,true);
+  assert.equal(result.appearances[1].generative_ai_candidate,false);
+  assert.equal(result.candidate_count,1);
+  assert.match(result.disclaimer,/never hard-codes or auto-selects/);
 });
