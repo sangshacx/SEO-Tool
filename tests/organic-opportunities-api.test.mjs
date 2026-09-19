@@ -318,3 +318,64 @@ test("Opportunity API returns ready post-completion GSC outcomes from D1 at zero
   assert.equal(outcome.change.position_improvement,3);
   assert.match(outcome.disclaimer,/not proof/);
 });
+
+
+test("Opportunity API adds Potential Cannibalization as a separate zero-cost architecture task", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let calls=0;
+  globalThis.fetch=async()=>{calls+=1;throw new Error("provider must not execute");};
+
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const site=await d1.prepare("SELECT id FROM site_profiles WHERE domain = ?").bind("example.com").first();
+
+  for(const date of ["2026-09-15","2026-09-16","2026-09-17"]){
+    await replaceGscAnalyticsPartition(d1,{
+      siteProfileId:site.id,
+      property:"sc-domain:example.com",
+      date,
+      dimensionSet:"query_page",
+      rows:[
+        {query:"waterproof membrane",page:"https://example.com/a/",clicks:10,impressions:200,ctr:0.05,position:6},
+        {query:"waterproof membrane",page:"https://example.com/b/",clicks:6,impressions:140,ctr:6/140,position:9},
+      ],
+    });
+  }
+
+  const pagesKey=buildOrganicPagesCacheKey({
+    target:"example.com",locationCode:2840,languageCode:"en",depth:500,
+  });
+  const cache=memoryCache({
+    [pagesKey]:{
+      data:{items:[{
+        url:"https://example.com/a/",
+        organic_traffic:50,
+        organic_keywords:10,
+        positions:{top_10:2},
+        changes:{up:0,down:3,lost:0},
+      }]},
+      cached_at:"2026-09-19T01:05:00.000Z",
+    },
+  });
+
+  const response=await onRequestPost({
+    request:request({target:"example.com",location_code:2840,language_code:"en"}),
+    env:{DB:d1,CACHE:cache},
+  });
+  const payload=await response.json();
+
+  assert.equal(response.status,200);
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+  assert.equal(calls,0);
+  assert.equal(payload.data.gsc_overlap_summary.candidate_count,1);
+  assert.equal(payload.data.opportunities.find((row)=>row.url==="https://example.com/a/").action.code,"recover");
+
+  const architecture=payload.data.action_queue.find((item)=>item.action==="review_cannibalization");
+  assert.ok(architecture);
+  assert.equal(architecture.workstream,"architecture");
+  assert.equal(architecture.query,"waterproof membrane");
+  assert.equal(architecture.evidence.competing_page,"https://example.com/b/");
+  assert.match(payload.data.supplemental_signals.cannibalization.disclaimer,/not proof/);
+});
