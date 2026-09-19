@@ -5,10 +5,12 @@ import {
   AI_VISIBILITY_HISTORY_ENDPOINT,
   AI_VISIBILITY_MULTI_TARGET_METRICS_ENDPOINT,
   AI_VISIBILITY_NEW_LOST_ENDPOINT,
+  AI_VISIBILITY_SEARCH_MENTIONS_ENDPOINT,
   AI_VISIBILITY_TARGET_METRICS_ENDPOINT,
   AI_VISIBILITY_TOP_PAGES_ENDPOINT,
   aiVisibilityHistoryDateRange,
   fetchAiVisibilityHistorical,
+  fetchAiVisibilityMentionExplorer,
   fetchAiVisibilityMultiTargetMetrics,
   fetchAiVisibilityNewLost,
   fetchAiVisibilityTargetMetrics,
@@ -338,4 +340,101 @@ test("AI Visibility New/Lost returns net monthly visibility changes for Decision
   assert.equal(result.data.points[0].net_ai_search_volume, 220);
   assert.equal(result.data.points[1].net_mentions, -6);
   assert.equal(result.data.points[1].net_ai_search_volume, -140);
+});
+
+
+test("AI Citation Explorer requests source-scoped mentions and bounds long response content", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let captured;
+  const longAnswer="A".repeat(4500);
+  const longSnippet="S".repeat(800);
+  globalThis.fetch=async(url,options)=>{
+    captured={url,options};
+    return okResponse({
+      total_count:1,
+      current_offset:0,
+      search_after_token:"next-token",
+      items_count:1,
+      items:[{
+        platform:"google",
+        model_name:"google_ai_overview",
+        location_code:2840,
+        language_code:"en",
+        question:"best waterproof membrane supplier",
+        answer:longAnswer,
+        sources:[
+          {
+            rank:1,
+            title:"Example source",
+            domain:"www.example.com".replace(/^www\./,""),
+            url:"https://example.com/page/",
+            snippet:longSnippet,
+            source_name:"Example",
+          },
+          {
+            rank:2,
+            title:"Other source",
+            domain:"other.example",
+            url:"https://other.example/article",
+            snippet:"Supporting source",
+          },
+        ],
+        ai_search_volume:120,
+        monthly_searches:[{year:2026,month:8,search_volume:100},{year:2026,month:9,search_volume:120}],
+        first_response_at:"2026-08-01 00:00:00 +00:00",
+        last_response_at:"2026-09-19 00:00:00 +00:00",
+        is_web_search_based:true,
+      }],
+    },{cost:0.103,resultCount:1});
+  };
+
+  const result=await fetchAiVisibilityMentionExplorer({
+    login:"login",
+    password:"password",
+    target:"https://www.example.com/",
+    platform:"google",
+    locationCode:2840,
+    languageCode:"en",
+    limit:25,
+  });
+
+  assert.equal(captured.url,AI_VISIBILITY_SEARCH_MENTIONS_ENDPOINT);
+  const task=JSON.parse(captured.options.body)[0];
+  assert.deepEqual(task.target,[{
+    domain:"example.com",
+    search_filter:"include",
+    search_scope:["sources"],
+    include_subdomains:true,
+  }]);
+  assert.equal(task.limit,25);
+  assert.deepEqual(task.order_by,["ai_search_volume,desc"]);
+  assert.equal(result.data.items.length,1);
+  assert.equal(result.data.items[0].question,"best waterproof membrane supplier");
+  assert.equal(result.data.items[0].target_source_count,1);
+  assert.ok(result.data.items[0].answer_excerpt.length<=4001);
+  assert.ok(result.data.items[0].sources[0].snippet.length<=601);
+  assert.equal(result.data.items[0].ai_search_volume,120);
+  assert.equal(result.data.search_after_token,"next-token");
+});
+
+test("AI Citation Explorer rejects unsupported depths before provider billing", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let calls=0;
+  globalThis.fetch=async()=>{calls+=1;throw new Error("provider should not run");};
+
+  await assert.rejects(
+    fetchAiVisibilityMentionExplorer({
+      login:"login",
+      password:"password",
+      target:"example.com",
+      platform:"google",
+      locationCode:2840,
+      languageCode:"en",
+      limit:100,
+    }),
+    (error)=>error?.code==="INVALID_PROVIDER_LIMIT"&&error?.httpStatus===400,
+  );
+  assert.equal(calls,0);
 });
