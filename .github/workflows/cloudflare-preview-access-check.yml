@@ -76,14 +76,15 @@ jobs:
               [
                 .result[]?
                 | select(
-                    .source.config.branch == "seo-pro-v2"
+                    .environment == "preview"
+                    and .deployment_trigger.metadata.branch == "seo-pro-v2"
                     and .latest_stage.name == "deploy"
                     and .latest_stage.status == "success"
                   )
               ]
               | sort_by(.created_on)
               | last
-              | .source.config.commit_hash // empty
+              | .deployment_trigger.metadata.commit_hash // empty
             ')"
             if [ -n "$deployed_sha" ] && git cat-file -e "${deployed_sha}^{commit}" 2>/dev/null; then
               echo "Latest successful Preview SHA: $deployed_sha"
