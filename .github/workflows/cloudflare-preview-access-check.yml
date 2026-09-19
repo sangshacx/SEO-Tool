@@ -10,6 +10,7 @@ on:
       - seo-pro-v2
     paths:
       - .github/workflows/cloudflare-preview-access-check.yml
+      - .github/workflows/cloudflare-preview-deploy.yml
       - functions/api/v2/usage/summary.js
       - functions/api/v2/sites/index.js
       - functions/api/v2/dashboard/**
