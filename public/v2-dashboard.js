@@ -429,7 +429,7 @@ export function renderDashboard(root, payload, scope = {}, trendRange = 90) {
 
 export function createDashboardOverview() {
   const section = document.createElement("section"); section.className = "v2-dashboard panel"; section.dataset.v2View = "overview"; section.dataset.v2Dashboard = "";
-  section.innerHTML = '<div class="v2-dashboard-header"><div><div class="label">缓存数据总览</div><h1 id="v2DashboardSite">网站总览</h1><p class="lead" data-v2-dashboard-updated>正在准备总览…</p></div><div class="v2-dashboard-actions"><button type="button" data-v2-dashboard-refresh>更新总览数据</button><button type="button" data-v2-dashboard-retry hidden>重试读取总览</button></div></div><p class="v2-dashboard-status" data-v2-dashboard-status role="status"></p><p class="v2-dashboard-warning" data-v2-dashboard-warning role="alert" hidden></p><section class="v2-dashboard-decision" data-v2-dashboard-decision><div class="v2-dashboard-decision-head"><div><span>DECISION INTELLIGENCE · $0</span><h2>Next Best Action</h2></div><b data-v2-dashboard-decision-state>CHECKING</b></div><div class="v2-dashboard-decision-grid"><article><span>Action</span><b data-v2-dashboard-decision-action>—</b></article><article><span>Priority</span><b data-v2-dashboard-decision-score>—</b></article><article><span>Page</span><b data-v2-dashboard-decision-page>—</b></article><article><span>Recommended Query</span><b data-v2-dashboard-decision-query>—</b></article><article><span>Source</span><b data-v2-dashboard-decision-source>—</b></article><article><span>Workflow</span><b data-v2-dashboard-decision-workflow>—</b></article></div><div class="v2-dashboard-execution"><span><b data-v2-dashboard-execution-completed>—</b> Completed · 7d</span><span><b data-v2-dashboard-execution-progress>—</b> In Progress</span><span><b data-v2-dashboard-execution-snoozed>—</b> Snoozed</span></div><p data-v2-dashboard-decision-why>正在读取本地 Opportunity evidence…</p><div class="v2-dashboard-decision-actions"><button type="button" data-v2-dashboard-open-opportunity>Open Opportunity Center</button><button type="button" data-v2-dashboard-research-query disabled>Research Recommended Query</button></div></section><div data-v2-dashboard-body></div>';
+  section.innerHTML = '<div class="v2-dashboard-header"><div><div class="label">缓存数据总览</div><h1 id="v2DashboardSite">网站总览</h1><p class="lead" data-v2-dashboard-updated>正在准备总览…</p></div><div class="v2-dashboard-actions"><button type="button" data-v2-dashboard-refresh>更新总览数据</button><button type="button" data-v2-dashboard-retry hidden>重试读取总览</button></div></div><p class="v2-dashboard-status" data-v2-dashboard-status role="status"></p><p class="v2-dashboard-warning" data-v2-dashboard-warning role="alert" hidden></p><section class="v2-dashboard-decision" data-v2-dashboard-decision><div class="v2-dashboard-decision-head"><div><span>DECISION INTELLIGENCE · $0</span><h2>Next Best Action</h2></div><b data-v2-dashboard-decision-state>CHECKING</b></div><div class="v2-dashboard-decision-grid"><article><span>Action</span><b data-v2-dashboard-decision-action>—</b></article><article><span>Priority</span><b data-v2-dashboard-decision-score>—</b></article><article><span>Page</span><b data-v2-dashboard-decision-page>—</b></article><article><span>Recommended Query</span><b data-v2-dashboard-decision-query>—</b></article><article><span>Source</span><b data-v2-dashboard-decision-source>—</b></article><article><span>Workflow</span><b data-v2-dashboard-decision-workflow>—</b></article></div><div class="v2-dashboard-execution"><span><b data-v2-dashboard-execution-completed>—</b> Completed · 7d</span><span><b data-v2-dashboard-execution-progress>—</b> In Progress</span><span><b data-v2-dashboard-execution-snoozed>—</b> Snoozed</span></div><div class="v2-dashboard-outcomes"><span>OUTCOMES · observational</span><b data-v2-dashboard-outcome-ready>—</b><small>ready</small><b data-v2-dashboard-outcome-improved>—</b><small>improved</small><b data-v2-dashboard-outcome-waiting>—</b><small>waiting</small></div><p data-v2-dashboard-decision-why>正在读取本地 Opportunity evidence…</p><div class="v2-dashboard-decision-actions"><button type="button" data-v2-dashboard-open-opportunity>Open Opportunity Center</button><button type="button" data-v2-dashboard-research-query disabled>Research Recommended Query</button></div></section><div data-v2-dashboard-body></div>';
   return section;
 }
 
@@ -452,6 +452,9 @@ export function mountDashboardDecision({
   const completed7d = panel.querySelector("[data-v2-dashboard-execution-completed]");
   const inProgress = panel.querySelector("[data-v2-dashboard-execution-progress]");
   const snoozed = panel.querySelector("[data-v2-dashboard-execution-snoozed]");
+  const outcomeReady = panel.querySelector("[data-v2-dashboard-outcome-ready]");
+  const outcomeImproved = panel.querySelector("[data-v2-dashboard-outcome-improved]");
+  const outcomeWaiting = panel.querySelector("[data-v2-dashboard-outcome-waiting]");
   const why = panel.querySelector("[data-v2-dashboard-decision-why]");
   const openOpportunity = panel.querySelector("[data-v2-dashboard-open-opportunity]");
   const research = panel.querySelector("[data-v2-dashboard-research-query]");
@@ -471,6 +474,9 @@ export function mountDashboardDecision({
     text(completed7d, "—");
     text(inProgress, "—");
     text(snoozed, "—");
+    text(outcomeReady, "—");
+    text(outcomeImproved, "—");
+    text(outcomeWaiting, "—");
     text(why, message);
     research.disabled = true;
     research.dataset.v2DashboardResearchQuery = "";
@@ -481,6 +487,12 @@ export function mountDashboardDecision({
     text(completed7d, stats?.last_7_days?.completed ?? 0);
     text(inProgress, stats?.current?.in_progress ?? 0);
     text(snoozed, stats?.current?.snoozed ?? 0);
+    const outcomes=Array.isArray(data?.workflow_outcomes)?data.workflow_outcomes:[];
+    const ready=outcomes.filter((item)=>item?.status==="ready").length;
+    const improved=outcomes.filter((item)=>item?.status==="ready"&&item?.observed?.code==="improved").length;
+    text(outcomeReady, ready);
+    text(outcomeImproved, improved);
+    text(outcomeWaiting, outcomes.length-ready);
     const next = data?.next_best_action;
     if (!next?.page) {
       const hidden=Number(data?.workflow_summary?.suppressed??0);
