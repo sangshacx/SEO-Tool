@@ -95,3 +95,16 @@ test("Decision Queue distinguishes visible Top 5 from active candidates and hidd
   assert.match(opportunityUiSource,/workflow_summary\?\.active_candidates/);
   assert.match(opportunityUiSource,/workflow_summary\?\.suppressed/);
 });
+
+
+test("Opportunity Center renders recent D1 workflow activity without another external request", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/RECENT WORKFLOW ACTIVITY/);
+  assert.match(markup,/data-v2-workflow-activity-count/);
+  assert.match(markup,/data-v2-workflow-activity-body/);
+  assert.match(markup,/D1 only · \$0/);
+  assert.match(opportunityUiSource,/workflow_activity/);
+  assert.match(opportunityUiSource,/created →/);
+  assert.match(opportunityUiSource,/v2-workflow-transition/);
+  assert.match(opportunityUiSource,/events\.slice\(0,10\)/);
+});
