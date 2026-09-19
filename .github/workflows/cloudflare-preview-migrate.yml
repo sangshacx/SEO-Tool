@@ -134,6 +134,15 @@ jobs:
           node scripts/assert-d1-query-names.mjs \
           workflow_id tracker_id linked_at updated_at
 
+      - name: Verify Preview GSC search appearance capability table
+        shell: bash
+        run: |
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
+          --json \
+          --command "SELECT name FROM pragma_table_info('gsc_search_appearance_capabilities') ORDER BY cid;" |
+          node scripts/assert-d1-query-names.mjs \
+          id site_profile_id property appearance_value clicks impressions ctr position generative_ai_candidate selected_for_generative_ai start_date end_date discovered_at created_at updated_at
+
       - name: Verify Preview outreach intelligence columns
         shell: bash
         run: |
