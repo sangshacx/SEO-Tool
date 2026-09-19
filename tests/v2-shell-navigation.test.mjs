@@ -21,16 +21,18 @@ import {
 test("registers the approved navigation without promoting Content Brief", () => {
   assert.deepEqual(
     V2_VIEWS.map((view) => view.id),
-    ["overview", "website", "competitors", "keywords", "keyword-library", "backlinks", "opportunities", "more", "sites", "settings"],
+    ["overview", "website", "competitors", "ai-visibility", "keywords", "keyword-library", "backlinks", "opportunities", "more", "sites", "settings"],
   );
   assert.equal(V2_VIEWS.find((view) => view.id === "keywords")?.label, "关键词研究");
   assert.equal(V2_VIEWS.find((view) => view.id === "keyword-library")?.label, "关键词库");
+  assert.equal(V2_VIEWS.find((view) => view.id === "ai-visibility")?.label, "AI 可见度");
   assert.equal(V2_VIEWS.some((view) => /content brief/i.test(view.label)), false);
 });
 
 test("normalizes direct hashes and falls back to overview", () => {
   assert.equal(normalizeView("#backlinks"), "backlinks");
   assert.equal(normalizeView(" competitors "), "competitors");
+  assert.equal(normalizeView("#ai-visibility"), "ai-visibility");
   assert.equal(normalizeView("#not-a-view"), "overview");
   assert.equal(normalizeView(""), "overview");
   assert.equal(readHashView({ hash: "#website" }), "website");
