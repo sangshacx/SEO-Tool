@@ -814,3 +814,49 @@
 @media(max-width:440px){
   .v2-ai-tracker-summary{grid-template-columns:1fr}
 }
+
+.v2-ai-gsc-generative{
+  border-color:#244b43;
+  background:#091b1b;
+}
+.v2-ai-gsc-generative .v2-ai-panel-head{
+  border-bottom-color:#1d3e39;
+  background:#0d2523;
+}
+.v2-ai-gsc-generative .v2-ai-panel-head span{
+  color:#77cdb1;
+}
+.v2-ai-gsc-generative .v2-ai-panel-head h3{
+  color:#e2f4ee;
+}
+.v2-ai-gsc-note{
+  padding:11px 18px;
+  border-bottom:1px solid #1d3e39;
+  background:#0a201f;
+  color:#85a9a0;
+  font-size:10px;
+  line-height:1.55;
+}
+.v2-ai-gsc-generative .v2-ai-metrics{
+  background:#1d3e39;
+}
+.v2-ai-gsc-generative .v2-ai-metrics article{
+  background:#0b201f;
+}
+.v2-ai-gsc-generative .v2-ai-metrics span{
+  color:#739b91;
+}
+.v2-ai-gsc-generative .v2-ai-metrics b{
+  overflow:hidden;
+  color:#e1f3ee;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.v2-ai-gsc-generative .v2-ai-tablewrap{
+  border-top:1px solid #1d3e39;
+}
+.v2-ai-gsc-generative a{
+  color:#8bd8c1;
+  text-decoration:none;
+}
+.v2-ai-gsc-generative a:hover{text-decoration:underline}
