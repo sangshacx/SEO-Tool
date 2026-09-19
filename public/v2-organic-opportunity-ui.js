@@ -39,6 +39,7 @@ export function organicOpportunityPanelMarkup() {
         <article data-v2-opportunity-source="top_pages"><span>Top Pages</span><b>Not loaded</b><small>用于页面 Traffic、Top 10、Up/Down/Lost 风险</small><button type="button" data-v2-opportunity-go="pages">Open Top Pages</button></article>
         <article data-v2-opportunity-source="gsc_pages"><span>GSC Performance</span><b>Optional</b><small>用于真实 Impressions、CTR、Position 与 Clicks 变化</small><button type="button" data-v2-opportunity-go="gsc">Open GSC Performance</button></article>
         <article data-v2-opportunity-source="ai_visibility"><span>AI History</span><b>Optional</b><small>用于 Google AI Overview / ChatGPT 的 stored New/Lost mention recovery 信号</small><button type="button" data-v2-opportunity-ai-visibility>Open AI Visibility</button></article>
+        <article data-v2-opportunity-source="ai_prompt_tracker"><span>Prompt Tracker</span><b>Optional</b><small>用于 Saved Prompt 的 repeated mention / citation loss 信号</small><button type="button" data-v2-opportunity-ai-visibility>Open Prompt Tracker</button></article>
       </div>
 
       <div class="v2-organic-opportunity-metrics">
@@ -176,6 +177,7 @@ export function mountOrganicOpportunityTab({
     top_pages: section.querySelector('[data-v2-opportunity-source="top_pages"]'),
     gsc_pages: section.querySelector('[data-v2-opportunity-source="gsc_pages"]'),
     ai_visibility: section.querySelector('[data-v2-opportunity-source="ai_visibility"]'),
+    ai_prompt_tracker: section.querySelector('[data-v2-opportunity-source="ai_prompt_tracker"]'),
   };
   let loadedForKey = null;
 
@@ -185,7 +187,7 @@ export function mountOrganicOpportunityTab({
   };
 
   const renderSources = (data) => {
-    for (const source of ["organic_keywords","top_pages","gsc_pages","ai_visibility"]) {
+    for (const source of ["organic_keywords","top_pages","gsc_pages","ai_visibility","ai_prompt_tracker"]) {
       const card = sourceCards[source];
       const status = card?.querySelector("b");
       const evidence = data?.sources?.[source];
@@ -199,6 +201,10 @@ export function mountOrganicOpportunityTab({
         status.textContent = evidence?.available
           ? "Ready · D1 · " + ((evidence.platforms ?? []).join(" + ") || "stored")
           : "Optional · no D1 history";
+      } else if (source === "ai_prompt_tracker") {
+        status.textContent = evidence?.available
+          ? "Ready · D1 · " + (evidence.observed_prompts ?? 0) + "/" + (evidence.tracked_prompts ?? 0) + " observed"
+          : "Optional · no Prompt observations";
       } else {
         status.textContent = evidence?.available
           ? "Ready · depth " + (evidence.depth ?? "—")
@@ -583,6 +589,7 @@ export function mountOrganicOpportunityTab({
       missing.length ? "Missing primary: "+missing.join(", ") : "DataForSEO evidence ready",
       data?.sources?.gsc_pages ? "GSC reality ready" : "GSC optional · no stored page data",
       data?.sources?.ai_visibility ? "AI History ready · D1" : "AI History optional · no stored data",
+      data?.sources?.ai_prompt_tracker ? "Prompt Tracker ready · D1" : "Prompt Tracker optional · no observations",
       data?.workflow_summary ? "Workflow active "+(data.workflow_summary.active??0)+" · hidden "+(data.workflow_summary.suppressed??0) : null,
       data?.disclaimer,
     ].filter(Boolean).join(" · ");
