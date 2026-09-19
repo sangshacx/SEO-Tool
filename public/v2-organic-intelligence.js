@@ -4,6 +4,7 @@ const ENDPOINT = "/api/v2/organic/keywords";
 const PAGE_SIZE = 50;
 
 function finite(value) {
+  if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
