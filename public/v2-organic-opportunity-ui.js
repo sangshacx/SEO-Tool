@@ -297,6 +297,7 @@ export function mountOrganicOpportunityTab({
       button.dataset.v2WorkflowAction=typeof item.action==="string"?item.action:(item.action?.code||item.next_best_action?.action||"");
       button.dataset.v2WorkflowQuery=item.query||item.next_best_action?.query||"";
       button.dataset.v2WorkflowScore=String(item.priority_score??item.next_best_action?.priority_score??"");
+      button.dataset.v2WorkflowTrackerId=String(item?.evidence?.tracker_id??item?.next_best_action?.evidence?.tracker_id??"");
       wrap.append(button);
     };
     if(status==="new"){
@@ -337,6 +338,7 @@ export function mountOrganicOpportunityTab({
     save.dataset.v2WorkflowAction=typeof item.action==="string"?item.action:(item.action?.code||item.next_best_action?.action||"");
     save.dataset.v2WorkflowQuery=item.query||item.next_best_action?.query||"";
     save.dataset.v2WorkflowScore=String(item.priority_score??item.next_best_action?.priority_score??"");
+    save.dataset.v2WorkflowTrackerId=String(item?.evidence?.tracker_id??item?.next_best_action?.evidence?.tracker_id??"");
     save.dataset.v2WorkflowSnoozeUntil=item?.workflow?.snooze_until||"";
     const cancel=document.createElement("button");
     cancel.type="button";
@@ -638,6 +640,7 @@ export function mountOrganicOpportunityTab({
       status,
       priority_score:button.dataset.v2WorkflowScore===""?null:Number(button.dataset.v2WorkflowScore),
     };
+    if(button.dataset.v2WorkflowTrackerId)payload.tracker_id=Number(button.dataset.v2WorkflowTrackerId);
     if(Object.hasOwn(extra,"note"))payload.note=extra.note;
     if(status==="snoozed"){
       payload.snooze_until=Object.hasOwn(extra,"note")&&button.dataset.v2WorkflowSnoozeUntil
