@@ -186,9 +186,13 @@ test("Opportunity API joins stored GSC Query+Page rows with same-page DataForSEO
   assert.equal(payload.meta.actual_cost_usd,0);
   assert.equal(payload.meta.provider_requests,0);
   assert.equal(calls,0);
-  assert.equal(payload.data.formula.version,"organic-opportunity-v0.3");
+  assert.equal(payload.data.formula.version,"organic-opportunity-v0.4");
   assert.equal(payload.data.sources.gsc_pages.available,true);
   assert.equal(payload.data.sources.gsc_pages.query_page_rows,1);
+  assert.ok(Array.isArray(payload.data.action_queue));
+  assert.equal(payload.data.action_queue[0].page,"https://example.com/page/");
+  assert.equal(payload.data.action_queue[0].action,"ctr_opportunity");
+  assert.equal(payload.data.next_best_action.page,"https://example.com/page/");
 
   const page=payload.data.opportunities.find((row)=>row.url==="https://example.com/page/");
   assert.ok(page);
