@@ -21,7 +21,7 @@ async function workflowDb() {
       domain,label,location_code,location_name,country_iso_code,
       language_code,language_name,include_subdomains,competitors_json
     ) VALUES ('example.com','Example',2840,'United States','US','en','English',0,'[]')
-  `).run();
+  `).bind().run();
   return {raw,d1};
 }
 
