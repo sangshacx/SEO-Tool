@@ -143,6 +143,7 @@ test("GSC Generative AI selection is D1-only and only accepts a discovered raw a
 
   const {d1}=await dashboardDatabase();
   await seedProfile(d1,{domain:"example.com"});
+  await saveGscMapping(d1,{siteDomain:"example.com",property:"sc-domain:example.com",propertyType:"domain",permissionLevel:"siteOwner"});
   const site=await d1.prepare("SELECT id FROM site_profiles WHERE domain = ?").bind("example.com").first();
   await replaceGscSearchAppearanceCapabilities(d1,{
     siteProfileId:site.id,
@@ -211,4 +212,30 @@ test("GSC Generative AI capability GET reads only D1 and discovery refuses an un
   assert.equal(discover.status,409);
   assert.equal((await discover.json()).error.code,"GSC_SITE_NOT_MAPPED");
   assert.equal(calls,0);
+});
+
+
+test("GSC Generative AI selection rejects a discovery from an older property mapping",async()=>{
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const site=await d1.prepare("SELECT id FROM site_profiles WHERE domain = ?").bind("example.com").first();
+  await replaceGscSearchAppearanceCapabilities(d1,{
+    siteProfileId:site.id,
+    property:"sc-domain:old-example.com",
+    startDate:"2026-08-20",
+    endDate:"2026-09-16",
+    appearances:[{appearance:"AI_OVERVIEW",impressions:500,generative_ai_candidate:true}],
+  });
+  await saveGscMapping(d1,{siteDomain:"example.com",property:"sc-domain:example.com",propertyType:"domain",permissionLevel:"siteOwner"});
+
+  const response=await onRequestPost({
+    request:post({site_domain:"example.com",action:"select",appearance:"AI_OVERVIEW"}),
+    env:{DB:d1},
+  });
+  const payload=await response.json();
+  assert.equal(response.status,409);
+  assert.equal(payload.error.code,"GSC_SEARCH_APPEARANCE_PROPERTY_MISMATCH");
+
+  const state=await readGscSearchAppearanceCapabilities(d1,"example.com");
+  assert.equal(state.selected_appearance,null);
 });
