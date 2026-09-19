@@ -14,6 +14,7 @@ const MIGRATIONS = [
   "0016_seo_action_workflow.sql",
   "0017_seo_action_workflow_events.sql",
   "0018_ai_visibility_history.sql",
+  "0019_ai_prompt_tracker.sql",
 ];
 
 export function d1For(database, { before, after } = {}) {
