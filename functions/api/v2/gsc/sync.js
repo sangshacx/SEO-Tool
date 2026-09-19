@@ -1,7 +1,8 @@
 import { queryGscSearchAnalytics } from "../../../../src/v2/providers/google-search-console.js";
 import { getGscAccessToken } from "../../../../src/v2/gsc/connection-service.js";
-import { GSC_DIMENSION_SETS, normalizeGscSyncRequest } from "../../../../src/v2/gsc/sync-plan.js";
+import { GSC_DIMENSION_SETS, gscSyncDates, normalizeGscSyncRequest } from "../../../../src/v2/gsc/sync-plan.js";
 import {
+  completedGscSyncDates,
   getGscSiteMapping,
   latestGscSyncRun,
   recordGscSyncRun,
@@ -84,6 +85,53 @@ export async function onRequestPost({ request, env }) {
     return gscMappedError(error, "GSC_SYNC_VALIDATION_FAILED");
   }
 
+  const requestedDates = gscSyncDates(plan.target_date, plan.backfill_days);
+  let completedDates;
+  try {
+    completedDates = await completedGscSyncDates(env.DB, {
+      siteProfileId: mapping.site_profile_id,
+      dates: requestedDates,
+      dimensionSets: plan.dimension_sets,
+      minimumRowLimit: plan.row_limit_per_set,
+    });
+  } catch (error) {
+    return gscMappedError(error, "GSC_SYNC_HISTORY_CHECK_FAILED");
+  }
+  const datesToSync = requestedDates.filter((date) => !completedDates.has(date));
+  const skippedDates = requestedDates.filter((date) => completedDates.has(date));
+
+  if (!datesToSync.length) {
+    const completedAt = new Date().toISOString();
+    return gscJson({
+      ok: true,
+      data: {
+        site_domain: siteDomain,
+        property: mapping.property,
+        target_date: plan.target_date,
+        backfill_days: plan.backfill_days,
+        requested_dates: requestedDates,
+        synced_dates: [],
+        skipped_dates: skippedDates,
+        dimension_sets: plan.dimension_sets,
+        row_limit_per_set: plan.row_limit_per_set,
+        status: "success",
+        results: [],
+        errors: [],
+        truncated_sets: [],
+        truncated_partitions: [],
+        rows_received: 0,
+        rows_written: 0,
+        disclaimer: "All requested dates already have successful sync runs at an equal or deeper row cap, so no Google request was made.",
+      },
+      meta: {
+        actual_cost_usd: 0,
+        provider_requests: 0,
+        started_at: startedAt,
+        completed_at: completedAt,
+      },
+    });
+  }
+
   let token;
   try {
     token = await getGscAccessToken(env);
@@ -93,52 +141,107 @@ export async function onRequestPost({ request, env }) {
 
   const results = [];
   const errors = [];
-  const truncatedSets = [];
+  const truncatedSets = new Set();
+  const truncatedPartitions = [];
+  const syncedDates = [];
   let providerRequests = 0;
   let rowsReceived = 0;
   let rowsWritten = 0;
 
-  for (const dimensionSet of plan.dimension_sets) {
+  for (const targetDate of datesToSync) {
+    const dateStartedAt = new Date().toISOString();
+    const dateResults = [];
+    const dateErrors = [];
+    const dateTruncatedSets = [];
+    let dateProviderRequests = 0;
+    let dateRowsReceived = 0;
+    let dateRowsWritten = 0;
+
+    for (const dimensionSet of plan.dimension_sets) {
+      try {
+        providerRequests += 1;
+        dateProviderRequests += 1;
+        const response = await queryGscSearchAnalytics({
+          accessToken: token.accessToken,
+          property: mapping.property,
+          startDate: targetDate,
+          endDate: targetDate,
+          dimensions: GSC_DIMENSION_SETS[dimensionSet],
+          rowLimit: plan.row_limit_per_set,
+          startRow: 0,
+          searchType: "web",
+          dataState: "final",
+        });
+
+        const truncated = response.has_more === true;
+        if (truncated) {
+          truncatedSets.add(dimensionSet);
+          dateTruncatedSets.push(dimensionSet);
+          truncatedPartitions.push({ date: targetDate, dimension_set: dimensionSet });
+        }
+        rowsReceived += response.rows.length;
+        dateRowsReceived += response.rows.length;
+
+        const saved = await replaceGscAnalyticsPartition(env.DB, {
+          siteProfileId: mapping.site_profile_id,
+          property: mapping.property,
+          date: targetDate,
+          dimensionSet,
+          rows: response.rows,
+        });
+        rowsWritten += saved.rows_written;
+        dateRowsWritten += saved.rows_written;
+
+        const result = {
+          target_date: targetDate,
+          dimension_set: dimensionSet,
+          dimensions: GSC_DIMENSION_SETS[dimensionSet],
+          rows_received: response.rows.length,
+          rows_written: saved.rows_written,
+          truncated,
+        };
+        dateResults.push(result);
+        results.push(result);
+      } catch (error) {
+        const failure = {
+          target_date: targetDate,
+          dimension_set: dimensionSet,
+          code: error?.code || "GSC_SYNC_DIMENSION_FAILED",
+          message: error?.message || "Sync failed.",
+        };
+        dateErrors.push(failure);
+        errors.push(failure);
+      }
+    }
+
+    const dateCompletedAt = new Date().toISOString();
+    const dateStatus = dateErrors.length
+      ? dateResults.length ? "partial" : "error"
+      : "success";
+    if (dateResults.length) syncedDates.push(targetDate);
+
     try {
-      providerRequests += 1;
-      const response = await queryGscSearchAnalytics({
-        accessToken: token.accessToken,
+      await recordGscSyncRun(env.DB, {
+        site_profile_id: mapping.site_profile_id,
         property: mapping.property,
-        startDate: plan.target_date,
-        endDate: plan.target_date,
-        dimensions: GSC_DIMENSION_SETS[dimensionSet],
-        rowLimit: plan.row_limit_per_set,
-        startRow: 0,
-        searchType: "web",
-        dataState: "final",
-      });
-
-      const truncated = response.has_more === true;
-      if (truncated) truncatedSets.push(dimensionSet);
-      rowsReceived += response.rows.length;
-
-      const saved = await replaceGscAnalyticsPartition(env.DB, {
-        siteProfileId: mapping.site_profile_id,
-        property: mapping.property,
-        date: plan.target_date,
-        dimensionSet,
-        rows: response.rows,
-      });
-      rowsWritten += saved.rows_written;
-
-      results.push({
-        dimension_set: dimensionSet,
-        dimensions: GSC_DIMENSION_SETS[dimensionSet],
-        rows_received: response.rows.length,
-        rows_written: saved.rows_written,
-        truncated,
+        target_date: targetDate,
+        dimension_sets: plan.dimension_sets,
+        row_limit_per_set: plan.row_limit_per_set,
+        provider_requests: dateProviderRequests,
+        rows_received: dateRowsReceived,
+        rows_written: dateRowsWritten,
+        truncated_sets: dateTruncatedSets,
+        status: dateStatus,
+        error_code: dateErrors[0]?.code ?? null,
+        started_at: dateStartedAt,
+        completed_at: dateCompletedAt,
       });
     } catch (error) {
-      errors.push({
-        dimension_set: dimensionSet,
-        code: error?.code || "GSC_SYNC_DIMENSION_FAILED",
-        message: error?.message || "Sync failed.",
-      });
+      console.error(JSON.stringify({
+        message: "GSC sync run logging failed",
+        target_date: targetDate,
+        error: error instanceof Error ? error.message : String(error),
+      }));
     }
   }
 
@@ -146,30 +249,6 @@ export async function onRequestPost({ request, env }) {
   const status = errors.length
     ? results.length ? "partial" : "error"
     : "success";
-  const firstError = errors[0]?.code ?? null;
-
-  try {
-    await recordGscSyncRun(env.DB, {
-      site_profile_id: mapping.site_profile_id,
-      property: mapping.property,
-      target_date: plan.target_date,
-      dimension_sets: plan.dimension_sets,
-      row_limit_per_set: plan.row_limit_per_set,
-      provider_requests: providerRequests,
-      rows_received: rowsReceived,
-      rows_written: rowsWritten,
-      truncated_sets: truncatedSets,
-      status,
-      error_code: firstError,
-      started_at: startedAt,
-      completed_at: completedAt,
-    });
-  } catch (error) {
-    console.error(JSON.stringify({
-      message: "GSC sync run logging failed",
-      error: error instanceof Error ? error.message : String(error),
-    }));
-  }
 
   if (!results.length && errors.length) {
     const error = new Error(errors[0].message);
@@ -184,16 +263,21 @@ export async function onRequestPost({ request, env }) {
       site_domain: siteDomain,
       property: mapping.property,
       target_date: plan.target_date,
+      backfill_days: plan.backfill_days,
+      requested_dates: requestedDates,
+      synced_dates: syncedDates,
+      skipped_dates: skippedDates,
       dimension_sets: plan.dimension_sets,
       row_limit_per_set: plan.row_limit_per_set,
       status,
       results,
       errors,
-      truncated_sets: truncatedSets,
+      truncated_sets: [...truncatedSets],
+      truncated_partitions: truncatedPartitions,
       rows_received: rowsReceived,
       rows_written: rowsWritten,
-      disclaimer: truncatedSets.length
-        ? "At least one dimension set reached the configured row cap; stored data for that set is intentionally partial."
+      disclaimer: truncatedPartitions.length
+        ? "At least one date/dimension partition reached the configured row cap; stored data for that partition is intentionally partial."
         : "Search Console may still omit some query/page rows because the Search Analytics API exposes top rows under internal limits.",
     },
     meta: {
