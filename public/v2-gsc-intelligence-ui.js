@@ -78,11 +78,11 @@ export function gscPerformancePanelMarkup() {
       </div>
 
       <div class="v2-gsc-performance-metrics">
-        <article><span>Clicks</span><b data-v2-gsc-performance-metric="clicks">—</b></article>
-        <article><span>Impressions</span><b data-v2-gsc-performance-metric="impressions">—</b></article>
-        <article><span>CTR</span><b data-v2-gsc-performance-metric="ctr">—</b></article>
-        <article><span>Avg Position</span><b data-v2-gsc-performance-metric="position">—</b></article>
-        <article class="coverage"><span>Stored Coverage</span><b data-v2-gsc-performance-metric="coverage">—</b><small data-v2-gsc-performance-comparison>—</small></article>
+        <article><span data-v2-gsc-performance-label="clicks">Clicks</span><b data-v2-gsc-performance-metric="clicks">—</b></article>
+        <article><span data-v2-gsc-performance-label="impressions">Impressions</span><b data-v2-gsc-performance-metric="impressions">—</b></article>
+        <article><span data-v2-gsc-performance-label="ctr">CTR</span><b data-v2-gsc-performance-metric="ctr">—</b></article>
+        <article><span data-v2-gsc-performance-label="position">Avg Position</span><b data-v2-gsc-performance-metric="position">—</b></article>
+        <article class="coverage"><span data-v2-gsc-performance-label="coverage">Stored Coverage</span><b data-v2-gsc-performance-metric="coverage">—</b><small data-v2-gsc-performance-comparison>—</small></article>
       </div>
 
       <div class="v2-gsc-performance-note" data-v2-gsc-performance-note>
@@ -188,21 +188,53 @@ export function mountGscPerformanceTab({
 
   const renderMetrics = (data) => {
     const summary = data?.summary ?? {};
-    const values = {
-      clicks: number(summary.clicks),
-      impressions: number(summary.impressions),
-      ctr: percent(summary.ctr),
-      position: number(summary.position, 2),
-      coverage: Number(summary.current_days ?? 0) + " / " + Number(summary.requested_days ?? 0),
-    };
+    const rows = Array.isArray(data?.rows) ? data.rows : [];
+    const overlapView = activeView === "cannibalization";
+    const labels = overlapView
+      ? {
+          clicks: "Candidates",
+          impressions: "High Overlap",
+          ctr: "Moderate",
+          position: "Candidate Impressions",
+          coverage: "Stored Coverage",
+        }
+      : {
+          clicks: "Clicks",
+          impressions: "Impressions",
+          ctr: "CTR",
+          position: "Avg Position",
+          coverage: "Stored Coverage",
+        };
+    Object.entries(labels).forEach(([key, value]) => {
+      const node = section.querySelector('[data-v2-gsc-performance-label="' + key + '"]');
+      if (node) node.textContent = value;
+    });
+
+    const values = overlapView
+      ? {
+          clicks: number(rows.length),
+          impressions: number(rows.filter((item) => item.severity === "high_overlap").length),
+          ctr: number(rows.filter((item) => item.severity === "moderate_overlap").length),
+          position: number(rows.reduce((sum, item) => sum + (finite(item.total_impressions) ?? 0), 0)),
+          coverage: Number(summary.current_days ?? 0) + " / " + Number(summary.requested_days ?? 0),
+        }
+      : {
+          clicks: number(summary.clicks),
+          impressions: number(summary.impressions),
+          ctr: percent(summary.ctr),
+          position: number(summary.position, 2),
+          coverage: Number(summary.current_days ?? 0) + " / " + Number(summary.requested_days ?? 0),
+        };
     Object.entries(values).forEach(([key, value]) => {
       const node = section.querySelector('[data-v2-gsc-performance-metric="' + key + '"]');
       if (node) node.textContent = value;
     });
     const comparison = section.querySelector("[data-v2-gsc-performance-comparison]");
-    comparison.textContent = summary.comparison_complete
-      ? "Full comparison available"
-      : gscCoverageLabel(data?.coverage);
+    comparison.textContent = overlapView
+      ? "Current-window overlap review · " + gscCoverageLabel(data?.coverage)
+      : summary.comparison_complete
+        ? "Full comparison available"
+        : gscCoverageLabel(data?.coverage);
   };
 
   const renderRows = (data) => {
