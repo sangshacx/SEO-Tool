@@ -355,8 +355,16 @@ export function mountOrganicOpportunityTab({
       const workflow=document.createElement("td");workflow.className="v2-workflow-cell";workflow.append(workflowBadge(item),workflowControls(item));
       const why=document.createElement("td");why.className="v2-action-queue-why";why.textContent=item.why_now||"—";why.title=item.why_now||"";
       const next=document.createElement("td"),actions=document.createElement("div");actions.className="v2-organic-competitor-actions";
-      const pageButton=document.createElement("button");pageButton.type="button";pageButton.dataset.v2OpportunityPage=item.page;pageButton.textContent="Page";
-      actions.append(pageButton);
+      if(item.action==="review_cannibalization"){
+        const overlap=document.createElement("button");
+        overlap.type="button";
+        overlap.dataset.v2OpportunityGscOverlap=item.query||"";
+        overlap.textContent="Open GSC Overlap";
+        actions.append(overlap);
+      }else{
+        const pageButton=document.createElement("button");pageButton.type="button";pageButton.dataset.v2OpportunityPage=item.page;pageButton.textContent="Page";
+        actions.append(pageButton);
+      }
       if(item.query){
         const research=document.createElement("button");research.type="button";research.dataset.v2OpportunityKeyword=item.query;research.textContent="Research";actions.append(research);
       }
@@ -657,6 +665,12 @@ export function mountOrganicOpportunityTab({
     }
     const workflowButton=event.target.closest("[data-v2-workflow-status]");
     if(workflowButton){saveWorkflow(workflowButton);return;}
+    const overlapButton=event.target.closest("[data-v2-opportunity-gsc-overlap]");
+    if(overlapButton){
+      activateTab?.(section,"gsc");
+      section.querySelector('[data-v2-gsc-performance-view="cannibalization"]')?.click?.();
+      return;
+    }
     const pageButton=event.target.closest("[data-v2-opportunity-page]");
     if(pageButton){openPageKeywords(pageButton.dataset.v2OpportunityPage);return;}
     const keywordButton=event.target.closest("[data-v2-opportunity-keyword]");
