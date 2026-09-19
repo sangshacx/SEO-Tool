@@ -214,3 +214,27 @@ test("workflow API requires and persists the Saved Prompt tracker link for AI re
   ).bind(payload.data.id).first();
   assert.equal(Number(link.tracker_id),tracker.id);
 });
+
+
+test("workflow API accepts GSC Generative recovery as a D1-only action without a tracker id", async () => {
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  const response=await onRequestPost({
+    request:post({
+      site_domain:"example.com",
+      page_url:"https://example.com/",
+      action_code:"gsc_generative_recovery",
+      query:"GSC Generative · AI_OVERVIEW",
+      status:"in_progress",
+      priority_score:84,
+      note:"Review property-global first-party filtered visibility.",
+    }),
+    env:{DB:d1},
+  });
+  const payload=await response.json();
+  assert.equal(response.status,200);
+  assert.equal(payload.data.action_code,"gsc_generative_recovery");
+  assert.equal(payload.data.status,"in_progress");
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+});
