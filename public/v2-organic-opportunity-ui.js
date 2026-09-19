@@ -297,6 +297,7 @@ export function mountOrganicOpportunityTab({
     save.dataset.v2WorkflowAction=typeof item.action==="string"?item.action:(item.action?.code||item.next_best_action?.action||"");
     save.dataset.v2WorkflowQuery=item.query||item.next_best_action?.query||"";
     save.dataset.v2WorkflowScore=String(item.priority_score??item.next_best_action?.priority_score??"");
+    save.dataset.v2WorkflowSnoozeUntil=item?.workflow?.snooze_until||"";
     const cancel=document.createElement("button");
     cancel.type="button";
     cancel.textContent="Cancel";
@@ -510,7 +511,11 @@ export function mountOrganicOpportunityTab({
       priority_score:button.dataset.v2WorkflowScore===""?null:Number(button.dataset.v2WorkflowScore),
     };
     if(Object.hasOwn(extra,"note"))payload.note=extra.note;
-    if(status==="snoozed")payload.snooze_until=new Date(Date.now()+7*86400000).toISOString();
+    if(status==="snoozed"){
+      payload.snooze_until=Object.hasOwn(extra,"note")&&button.dataset.v2WorkflowSnoozeUntil
+        ? button.dataset.v2WorkflowSnoozeUntil
+        : new Date(Date.now()+7*86400000).toISOString();
+    }
     button.disabled=true;
     setStatus?.("正在更新 SEO Action Workflow；只写 D1，本次费用 $0…","info");
     try{
