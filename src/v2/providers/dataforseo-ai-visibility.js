@@ -211,7 +211,7 @@ export async function fetchAiVisibilityTargetMetrics({
   };
 }
 
-function normalizeComparisonDomains(values) {
+export function normalizeAiVisibilityComparisonDomains(values) {
   const domains = [];
   const seen = new Set();
   for (const value of Array.isArray(values) ? values : []) {
@@ -243,7 +243,7 @@ export async function fetchAiVisibilityMultiTargetMetrics({
   locationCode,
   languageCode,
 }) {
-  const domains = normalizeComparisonDomains(targets);
+  const domains = normalizeAiVisibilityComparisonDomains(targets);
   const market = normalizeAiVisibilityMarket({ platform, locationCode, languageCode });
   const task = {
     targets: domains.map((domain) => ({
