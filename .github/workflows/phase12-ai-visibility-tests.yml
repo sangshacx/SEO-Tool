@@ -13,6 +13,7 @@ on:
       - src/v2/storage/ai-prompt-tracker.js
       - src/v2/intelligence/ai-visibility-actions.js
       - src/v2/intelligence/ai-prompt-trends.js
+      - src/v2/intelligence/ai-prompt-actions.js
       - migrations/0018_ai_visibility_history.sql
       - migrations/0019_ai_prompt_tracker.sql
       - functions/api/v2/ai/visibility.js
@@ -36,6 +37,7 @@ on:
       - tests/ai-prompt-tracker-api.test.mjs
       - tests/ai-prompt-tracker-storage.test.mjs
       - tests/ai-prompt-trends.test.mjs
+      - tests/ai-prompt-actions.test.mjs
       - tests/ai-prompt-tracker-management-api.test.mjs
       - tests/ai-visibility-api.test.mjs
       - tests/ai-visibility-secondary-api.test.mjs
@@ -65,4 +67,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 12 AI visibility provider tests
-        run: node --test tests/dataforseo-ai-visibility.test.mjs tests/dataforseo-llm-responses.test.mjs tests/ai-prompt-tracker-api.test.mjs tests/ai-prompt-tracker-storage.test.mjs tests/ai-prompt-trends.test.mjs tests/ai-prompt-tracker-management-api.test.mjs tests/ai-visibility-api.test.mjs tests/ai-visibility-secondary-api.test.mjs tests/ai-visibility-storage.test.mjs tests/ai-visibility-history-api.test.mjs tests/ai-visibility-ui.test.mjs tests/v2-shell-navigation.test.mjs tests/ai-visibility-actions.test.mjs tests/organic-opportunities-api.test.mjs tests/seo-action-workflow-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/v2-dashboard-view.test.mjs
+        run: node --test tests/dataforseo-ai-visibility.test.mjs tests/dataforseo-llm-responses.test.mjs tests/ai-prompt-tracker-api.test.mjs tests/ai-prompt-tracker-storage.test.mjs tests/ai-prompt-trends.test.mjs tests/ai-prompt-actions.test.mjs tests/ai-prompt-tracker-management-api.test.mjs tests/ai-visibility-api.test.mjs tests/ai-visibility-secondary-api.test.mjs tests/ai-visibility-storage.test.mjs tests/ai-visibility-history-api.test.mjs tests/ai-visibility-ui.test.mjs tests/v2-shell-navigation.test.mjs tests/ai-visibility-actions.test.mjs tests/organic-opportunities-api.test.mjs tests/seo-action-workflow-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/v2-dashboard-view.test.mjs
