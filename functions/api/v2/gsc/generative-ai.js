@@ -76,7 +76,11 @@ export async function onRequestGet({ request, env }) {
         property: mapping?.property ?? null,
         mapped: Boolean(mapping),
         ...capability,
-        sync_enabled: Boolean(mapping && capability.selected_appearance),
+        sync_enabled: Boolean(
+          mapping?.property &&
+          capability.selected?.property === mapping.property &&
+          capability.selected_appearance
+        ),
       },
       meta: { actual_cost_usd: 0, provider_requests: 0, source: "d1" },
     });
@@ -96,18 +100,39 @@ export async function onRequestPost({ request, env }) {
     const action = String(body.action ?? "discover").trim().toLowerCase();
 
     if (action === "select" || action === "clear") {
-      const selection = await selectGscGenerativeAiAppearance(env.DB, {
+      const mapping = await getGscSiteMapping(env.DB, domain);
+      if (action === "select" && !mapping?.property) {
+        const error = new Error("Map a Search Console property before selecting a Generative AI search appearance.");
+        error.code = "GSC_SITE_NOT_MAPPED";
+        error.httpStatus = 409;
+        throw error;
+      }
+      await selectGscGenerativeAiAppearance(env.DB, {
         siteDomain: domain,
         appearance: action === "clear" ? null : body.appearance,
       });
       const capability = await readGscSearchAppearanceCapabilities(env.DB, domain);
+      if (
+        action === "select" &&
+        capability.selected?.property !== mapping?.property
+      ) {
+        await selectGscGenerativeAiAppearance(env.DB, { siteDomain: domain, appearance: null });
+        const error = new Error("The selected search appearance belongs to an older property mapping. Run discovery again for the current property.");
+        error.code = "GSC_SEARCH_APPEARANCE_PROPERTY_MISMATCH";
+        error.httpStatus = 409;
+        throw error;
+      }
       return gscJson({
         ok: true,
         data: {
           site_domain: domain,
+          property: mapping?.property ?? null,
           ...capability,
-          ...selection,
-          sync_enabled: Boolean(capability.selected_appearance),
+          sync_enabled: Boolean(
+            mapping?.property &&
+            capability.selected?.property === mapping.property &&
+            capability.selected_appearance
+          ),
         },
         meta: { actual_cost_usd: 0, provider_requests: 0, source: "d1" },
       });
@@ -156,7 +181,10 @@ export async function onRequestPost({ request, env }) {
         candidate_count: discovered.candidate_count,
         disclaimer: discovered.disclaimer,
         ...capability,
-        sync_enabled: Boolean(capability.selected_appearance),
+        sync_enabled: Boolean(
+          capability.selected?.property === mapping.property &&
+          capability.selected_appearance
+        ),
       },
       meta: { actual_cost_usd: 0, provider_requests: 1, source: "google_search_console" },
     });
