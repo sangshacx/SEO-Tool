@@ -7,6 +7,7 @@ import { buildOrganicPagesCacheKey } from "../src/v2/organic/organic-pages-cache
 import { dashboardDatabase, memoryCache, seedProfile } from "./dashboard-test-helpers.mjs";
 import { replaceGscAnalyticsPartition } from "../src/v2/storage/gsc-search-analytics.js";
 import { upsertSeoActionWorkflow } from "../src/v2/storage/seo-action-workflow.js";
+import { persistAiVisibilityHistorical, persistAiVisibilityNewLost } from "../src/v2/storage/ai-visibility.js";
 
 function request(body){
   return new Request("https://preview.example/api/v2/organic/opportunities",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
@@ -378,4 +379,97 @@ test("Opportunity API adds Potential Cannibalization as a separate zero-cost arc
   assert.equal(architecture.query,"waterproof membrane");
   assert.equal(architecture.evidence.competing_page,"https://example.com/b/");
   assert.match(payload.data.supplemental_signals.cannibalization.disclaimer,/not proof/);
+});
+
+
+test("Opportunity API adds stored AI mention losses as a zero-cost recovery action without provider calls", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let calls=0;
+  globalThis.fetch=async()=>{calls+=1;throw new Error("provider must not execute");};
+
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  await persistAiVisibilityHistorical({
+    db:d1,
+    target:"example.com",
+    platform:"google",
+    locationCode:2840,
+    languageCode:"en",
+    providerFetchedAt:"2026-09-19T07:00:00.000Z",
+    points:[
+      {period:"2026-08",mentions:20,ai_search_volume:400},
+      {period:"2026-09",mentions:12,ai_search_volume:300},
+    ],
+  });
+  await persistAiVisibilityNewLost({
+    db:d1,
+    target:"example.com",
+    platform:"google",
+    locationCode:2840,
+    languageCode:"en",
+    providerFetchedAt:"2026-09-19T07:00:00.000Z",
+    points:[{
+      date:"2026-09-01",
+      new_mentions:4,
+      lost_mentions:12,
+      new_ai_search_volume:100,
+      lost_ai_search_volume:260,
+    }],
+  });
+
+  const response=await onRequestPost({
+    request:request({target:"example.com",location_code:2840,language_code:"en"}),
+    env:{DB:d1,CACHE:memoryCache()},
+  });
+  const payload=await response.json();
+
+  assert.equal(response.status,200);
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+  assert.equal(calls,0);
+  assert.equal(payload.data.sources.ai_visibility.available,true);
+  assert.equal(payload.data.ai_visibility_summary.candidate_count,1);
+  assert.equal(payload.data.ai_visibility_summary.source,"d1");
+  const ai=payload.data.action_queue.find((item)=>item.action==="ai_visibility_recovery");
+  assert.ok(ai);
+  assert.equal(ai.page,"https://example.com/");
+  assert.equal(ai.query,"AI visibility · google");
+  assert.equal(ai.query_source,"dataforseo_ai_history");
+  assert.equal(ai.evidence.net_mentions,-8);
+  assert.match(payload.data.supplemental_signals.ai_visibility.disclaimer,/does not prove/);
+});
+
+test("Opportunity API keeps positive AI visibility history descriptive and does not create an AI task", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  globalThis.fetch=async()=>{throw new Error("provider must not execute");};
+
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  await persistAiVisibilityHistorical({
+    db:d1,target:"example.com",platform:"google",locationCode:2840,languageCode:"en",
+    points:[
+      {period:"2026-08",mentions:10,ai_search_volume:200},
+      {period:"2026-09",mentions:16,ai_search_volume:320},
+    ],
+  });
+  await persistAiVisibilityNewLost({
+    db:d1,target:"example.com",platform:"google",locationCode:2840,languageCode:"en",
+    points:[{
+      date:"2026-09-01",new_mentions:9,lost_mentions:3,
+      new_ai_search_volume:220,lost_ai_search_volume:80,
+    }],
+  });
+
+  const response=await onRequestPost({
+    request:request({target:"example.com",location_code:2840,language_code:"en"}),
+    env:{DB:d1,CACHE:memoryCache()},
+  });
+  const payload=await response.json();
+
+  assert.equal(response.status,200);
+  assert.equal(payload.data.sources.ai_visibility.available,true);
+  assert.equal(payload.data.ai_visibility_summary.candidate_count,0);
+  assert.equal(payload.data.action_queue.some((item)=>item.action==="ai_visibility_recovery"),false);
 });
