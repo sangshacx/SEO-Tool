@@ -1,0 +1,29 @@
+name: Phase 09 Organic Intelligence Tests
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - src/v2/providers/dataforseo-ranked-keywords.js
+      - src/v2/organic/organic-keywords-cache.js
+      - functions/api/v2/organic/keywords.js
+      - tests/dataforseo-ranked-keywords.test.mjs
+      - tests/organic-keywords-cache.test.mjs
+      - tests/organic-keywords-api.test.mjs
+      - .github/workflows/phase09-organic-intelligence-tests.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test-organic-intelligence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Phase 09 Organic Intelligence tests
+        run: node --test tests/dataforseo-ranked-keywords.test.mjs tests/organic-keywords-cache.test.mjs tests/organic-keywords-api.test.mjs
