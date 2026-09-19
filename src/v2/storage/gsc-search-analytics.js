@@ -241,3 +241,33 @@ export async function readGscIntelligence(db, {
     rows: rowsResult.results ?? [],
   };
 }
+
+
+export async function completedGscSyncDates(db, {
+  siteProfileId,
+  dates,
+  dimensionSets,
+  minimumRowLimit,
+}) {
+  const requestedDates = [...new Set((Array.isArray(dates) ? dates : []).filter(Boolean))];
+  if (!requestedDates.length) return new Set();
+  const placeholders = requestedDates.map(() => "?").join(",");
+  const result = await db.prepare(
+    "SELECT target_date, dimension_sets_json, row_limit_per_set, status " +
+    "FROM gsc_sync_runs WHERE site_profile_id = ? AND target_date IN (" + placeholders + ") " +
+    "AND status = 'success' ORDER BY id DESC",
+  ).bind(siteProfileId, ...requestedDates).all();
+
+  const completed = new Set();
+  const required = new Set(dimensionSets ?? []);
+  for (const row of result.results ?? []) {
+    if (completed.has(row.target_date)) continue;
+    if (Number(row.row_limit_per_set ?? 0) < Number(minimumRowLimit ?? 0)) continue;
+    let sets = [];
+    try { sets = JSON.parse(row.dimension_sets_json); } catch { sets = []; }
+    if (!Array.isArray(sets)) continue;
+    const available = new Set(sets);
+    if ([...required].every((set) => available.has(set))) completed.add(row.target_date);
+  }
+  return completed;
+}
