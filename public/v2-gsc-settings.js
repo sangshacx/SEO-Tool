@@ -3,6 +3,7 @@ const PROPERTIES_ENDPOINT="/api/v2/gsc/properties";
 const MAPPINGS_ENDPOINT="/api/v2/gsc/mappings";
 const DISCONNECT_ENDPOINT="/api/v2/gsc/disconnect";
 const GENERATIVE_AI_ENDPOINT="/api/v2/gsc/generative-ai";
+const GENERATIVE_AI_SYNC_ENDPOINT="/api/v2/gsc/generative-ai-sync";
 
 export function gscPropertiesForDomain(properties, domain) {
   const normalized=String(domain||"").trim().toLowerCase().replace(/^www\./,"");
@@ -57,6 +58,21 @@ export function createGscSettingsWorkspace(documentLike=document) {
         <button type="button" class="secondary" data-v2-gsc-ai-clear>Clear</button>
       </div>
       <div class="v2-gsc-ai-note" data-v2-gsc-ai-note>需要先连接并映射 Search Console Property。Discovery 会发 1 次 Google Search Console API 请求，费用 $0。</div>
+      <div class="v2-gsc-ai-syncbar">
+        <select data-v2-gsc-ai-backfill aria-label="Generative AI Backfill">
+          <option value="1">Latest finalized day</option>
+          <option value="3">Backfill 3 days</option>
+          <option value="7">Backfill 7 days</option>
+        </select>
+        <button type="button" data-v2-gsc-ai-sync>Sync Selected Appearance · $0</button>
+        <small data-v2-gsc-ai-sync-state>选择 raw value 后才允许同步。</small>
+      </div>
+      <div class="v2-gsc-ai-metrics">
+        <article><span>Filtered Impressions · 28d</span><b data-v2-gsc-ai-impressions>—</b></article>
+        <article><span>Filtered Clicks · 28d</span><b data-v2-gsc-ai-clicks>—</b></article>
+        <article><span>Coverage</span><b data-v2-gsc-ai-coverage>—</b></article>
+        <article><span>Top Page</span><b data-v2-gsc-ai-top-page>—</b></article>
+      </div>
     </div>
     <div class="v2-gsc-meta" data-v2-gsc-meta>OAuth state 10 min · refresh token AES-GCM · Google API cost $0</div>
   `;
@@ -92,13 +108,43 @@ export function mountGscSettings({root,context,fetchImpl=globalThis.fetch,locati
   const aiClear=section.querySelector("[data-v2-gsc-ai-clear]");
   const aiState=section.querySelector("[data-v2-gsc-ai-state]");
   const aiNote=section.querySelector("[data-v2-gsc-ai-note]");
+  const aiBackfill=section.querySelector("[data-v2-gsc-ai-backfill]");
+  const aiSyncButton=section.querySelector("[data-v2-gsc-ai-sync]");
+  const aiSyncState=section.querySelector("[data-v2-gsc-ai-sync-state]");
+  const aiImpressions=section.querySelector("[data-v2-gsc-ai-impressions]");
+  const aiClicks=section.querySelector("[data-v2-gsc-ai-clicks]");
+  const aiCoverage=section.querySelector("[data-v2-gsc-ai-coverage]");
+  const aiTopPage=section.querySelector("[data-v2-gsc-ai-top-page]");
   let connection={connected:false,mappings:[],oauth_configured:false};
   let properties=[];
   let aiCapability={items:[],selected_appearance:null,discovered:false,mapped:false,sync_enabled:false};
+  let aiSync={sync_enabled:false,selected_appearance:null,latest_sync:null,summary:null};
 
   const currentDomain=()=>String(context?.get?.()?.domain||"").trim().toLowerCase();
   const currentMapping=()=>connection.mappings?.find((item)=>item.site_domain===currentDomain())||null;
   const setStatus=(message,state="info")=>{status.textContent=message;status.dataset.state=state;};
+
+  const metric=(value)=>Number.isFinite(Number(value))?Number(value).toLocaleString("en-US",{maximumFractionDigits:2}):"—";
+
+  const renderAiSync=()=>{
+    const summary=aiSync?.summary;
+    const enabled=Boolean(aiCapability?.sync_enabled&&aiSync?.sync_enabled!==false);
+    aiSyncButton.disabled=!enabled;
+    aiBackfill.disabled=!enabled;
+    aiImpressions.textContent=summary?metric(summary?.metrics?.impressions):"—";
+    aiClicks.textContent=summary?metric(summary?.metrics?.clicks):"—";
+    aiCoverage.textContent=summary?.window
+      ?(summary.coverage_days??0)+"/"+(summary.window.days??28)+" days"
+      :"—";
+    const topPage=summary?.pages?.[0];
+    aiTopPage.textContent=topPage?.key||"—";
+    aiTopPage.title=topPage?.key||"";
+    aiSyncState.textContent=!aiCapability?.selected_appearance
+      ?"选择 raw value 后才允许同步。"
+      :!aiSync?.latest_sync
+        ?"已选择 "+aiCapability.selected_appearance+"；尚未同步 filtered Search Analytics。"
+        :"Last sync "+(aiSync.latest_sync.target_date||"—")+" · "+(aiSync.latest_sync.status||"—")+" · raw "+(aiSync.selected_appearance||aiCapability.selected_appearance);
+  };
 
   const renderAiCapability=()=>{
     const mapping=currentMapping();
@@ -138,8 +184,9 @@ export function mountGscSettings({root,context,fetchImpl=globalThis.fetch,locati
       :!rows.length
         ?"尚未发现 searchAppearance。点击 Discover 会发 1 次 Google API 请求，费用 $0。"
         :selected
-          ?"已选择 raw value: "+selected+"。Generative AI 同步门已就绪，但本阶段不会自动抓取明细。"
+          ?"已选择 raw value: "+selected+"。只有手工点击 Sync 才会抓取 filtered Search Analytics。"
           :"已发现 "+rows.length+" 个 searchAppearance；请选择一个 raw value。candidate hint 只是提示，不会自动启用。";
+    renderAiSync();
   };
 
   const render=()=>{
@@ -205,6 +252,54 @@ export function mountGscSettings({root,context,fetchImpl=globalThis.fetch,locati
     }
   };
 
+  const loadAiSync=async()=>{
+    const domain=currentDomain();
+    if(!domain){aiSync={sync_enabled:false,selected_appearance:null,latest_sync:null,summary:null};renderAiSync();return;}
+    try{
+      const payload=await jsonFetch(fetchImpl,GENERATIVE_AI_SYNC_ENDPOINT+"?site_domain="+encodeURIComponent(domain)+"&days=28&limit=20");
+      aiSync=payload.data||aiSync;
+      renderAiSync();
+    }catch(error){
+      aiSync={sync_enabled:false,selected_appearance:null,latest_sync:null,summary:null};
+      renderAiSync();
+      if(error.status!==404)setStatus(error.message||"Generative AI sync 状态读取失败","error");
+    }
+  };
+
+  const syncAiAppearance=async()=>{
+    const domain=currentDomain();
+    if(!domain||!aiCapability?.selected_appearance)return;
+    aiSyncButton.disabled=true;
+    setStatus("正在同步 selected searchAppearance 的 filtered Search Analytics；Google API 费用 $0…","info");
+    try{
+      const payload=await jsonFetch(fetchImpl,GENERATIVE_AI_SYNC_ENDPOINT,{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({
+          site_domain:domain,
+          backfill_days:Number(aiBackfill.value||1),
+          row_limit_per_set:1000,
+          dimension_sets:["property","page","country","device"],
+        }),
+      });
+      aiSync={
+        sync_enabled:true,
+        selected_appearance:payload.data?.appearance||aiCapability.selected_appearance,
+        latest_sync:{
+          target_date:payload.data?.target_date,
+          status:payload.data?.status,
+        },
+        summary:payload.data?.summary||null,
+      };
+      renderAiSync();
+      setStatus(
+        "Generative AI filtered sync 完成："+(payload.data?.rows_written??0)+" rows · "+(payload.meta?.provider_requests??0)+" Google requests · $0。",
+        "success"
+      );
+    }catch(error){setStatus(error.message||"Generative AI filtered sync 失败","error");}
+    finally{renderAiSync();}
+  };
+
   const discoverAiCapability=async()=>{
     const domain=currentDomain();if(!domain||!currentMapping())return;
     aiDiscover.disabled=true;setStatus("正在按 searchAppearance 发现当前 Property 的能力；Google API 费用 $0…","info");
@@ -215,6 +310,7 @@ export function mountGscSettings({root,context,fetchImpl=globalThis.fetch,locati
         body:JSON.stringify({site_domain:domain,action:"discover",days:90}),
       });
       aiCapability=payload.data||aiCapability;
+      aiSync={sync_enabled:Boolean(aiCapability.sync_enabled),selected_appearance:aiCapability.selected_appearance,latest_sync:null,summary:null};
       renderAiCapability();
       setStatus(
         "Search Appearance Discovery 完成：发现 "+(aiCapability.items?.length??0)+" 个值，候选提示 "+(payload.data?.candidate_count??0)+" 个；请手工确认 raw value。",
@@ -236,7 +332,9 @@ export function mountGscSettings({root,context,fetchImpl=globalThis.fetch,locati
         body:JSON.stringify({site_domain:domain,action,...(action==="select"?{appearance}:{})}),
       });
       aiCapability=payload.data||aiCapability;
+      aiSync={sync_enabled:Boolean(aiCapability.sync_enabled),selected_appearance:aiCapability.selected_appearance,latest_sync:null,summary:null};
       renderAiCapability();
+      if(aiCapability.sync_enabled)await loadAiSync();
       setStatus(
         action==="clear"
           ?"Generative AI raw filter 已清除，本次费用 $0。"
@@ -272,7 +370,8 @@ export function mountGscSettings({root,context,fetchImpl=globalThis.fetch,locati
   aiAppearance.addEventListener("change",renderAiCapability,{signal});
   aiSelect.addEventListener("click",()=>selectAiCapability("select"),{signal});
   aiClear.addEventListener("click",()=>selectAiCapability("clear"),{signal});
-  const unsubscribe=context?.subscribe?.(()=>{renderProperties();loadAiCapability();})??(()=>{});
-  loadStatus().then?.(()=>loadAiCapability());
+  aiSyncButton.addEventListener("click",syncAiAppearance,{signal});
+  const unsubscribe=context?.subscribe?.(()=>{renderProperties();loadAiCapability().then?.(()=>loadAiSync());})??(()=>{});
+  loadStatus().then?.(()=>loadAiCapability().then?.(()=>loadAiSync()));
   return()=>{unsubscribe();controller.abort();};
 }
