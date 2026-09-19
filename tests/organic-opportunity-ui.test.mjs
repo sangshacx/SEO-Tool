@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { organicOpportunityPanelMarkup, summarizeOpportunityCounts } from "../public/v2-organic-opportunity-ui.js";
+
+const opportunityUiSource = await readFile(new URL("../public/v2-organic-opportunity-ui.js", import.meta.url), "utf8");
 
 test("Opportunity Center UI keeps the decision layer explicitly cache-only", () => {
   const markup=organicOpportunityPanelMarkup();
@@ -25,4 +28,15 @@ test("Opportunity Center surfaces optional GSC evidence and its score adjustment
   assert.match(markup,/Open GSC Performance/);
   assert.match(markup,/GSC Reality/);
   assert.match(markup,/没有 GSC 时保持原基础分/);
+});
+
+
+test("Opportunity Center distinguishes DataForSEO and real GSC query quick wins", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/GSC Performance/);
+  assert.match(opportunityUiSource,/DFS /);
+  assert.match(opportunityUiSource,/GSC /);
+  assert.match(opportunityUiSource,/gsc_query_opportunities/);
+  assert.match(opportunityUiSource,/provider_match/);
+  assert.match(opportunityUiSource,/Research QW/);
 });
