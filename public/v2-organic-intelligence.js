@@ -2,6 +2,7 @@ import { classifyOrganicKeywordAction } from "../src/v2/intelligence/organic-key
 import { classifyOrganicPageAction } from "../src/v2/intelligence/organic-page-actions.js";
 import { classifyOrganicPositionChange } from "../src/v2/organic/organic-position-changes.js";
 import { mountOrganicHistoryTab, organicHistoryPanelMarkup } from "./v2-organic-history-ui.js";
+import { mountOrganicOpportunityTab, organicOpportunityPanelMarkup } from "./v2-organic-opportunity-ui.js";
 
 const ENDPOINT = "/api/v2/organic/keywords";
 const PAGES_ENDPOINT = "/api/v2/organic/pages";
@@ -156,6 +157,7 @@ export function createOrganicIntelligenceWorkspace(documentLike = document) {
       <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="pages">Top Pages</button>
       <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="changes">Position Changes</button>
       <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="competitors">Organic Competitors</button>
+      <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="opportunities">Opportunities</button>
       <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="history">Organic History</button>
     </div>
     <div class="v2-organic-panel active" data-v2-organic-panel="overview">
@@ -258,6 +260,7 @@ export function createOrganicIntelligenceWorkspace(documentLike = document) {
       </div>
       <div class="v2-organic-pager"><span data-v2-organic-competitors-count>0 rows</span><div><button type="button" data-v2-organic-competitors-prev>Previous</button><span data-v2-organic-competitors-page>Page 1</span><button type="button" data-v2-organic-competitors-next>Next</button></div></div>
     </div>
+    ${organicOpportunityPanelMarkup()}
     ${organicHistoryPanelMarkup()}
   `;
   return section;
@@ -567,6 +570,16 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
     finally { run.disabled = false; }
   };
 
+  const opportunityCleanup = mountOrganicOpportunityTab({
+    section,
+    target,
+    context,
+    fetchImpl,
+    signal,
+    activateTab,
+    setStatus: (message, state) => setStatus(section, message, state),
+  });
+
   const historyCleanup = mountOrganicHistoryTab({
     section,
     target,
@@ -611,5 +624,5 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
   renderPages();
   renderChanges();
   renderCompetitors();
-  return ()=>{historyCleanup();unsubscribe();controller.abort();};
+  return ()=>{opportunityCleanup();historyCleanup();unsubscribe();controller.abort();};
 }
