@@ -43,6 +43,8 @@ jobs:
     steps:
       - name: Check out seo-pro-v2
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Verify required secrets exist
         shell: bash
@@ -58,7 +60,7 @@ jobs:
           curl --fail --silent --show-error             --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             "$project_url" |
           jq --exit-status '.success == true and .result.name == "seo-tool"'
 
-      - name: Verify latest deployable code reached the seo-pro-v2 Preview
+      - name: Verify Preview contains the latest deployable code
         shell: bash
         run: |
           set -euo pipefail
@@ -69,22 +71,30 @@ jobs:
           found="false"
           for attempt in {1..24}; do
             json="$(curl --fail --silent --show-error               --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"               "$deployments_url")"
-            if echo "$json" | jq --exit-status --arg sha "$deploy_sha" '
-              .success == true
-              and any(.result[]?;
-                .source.config.branch == "seo-pro-v2"
-                and .source.config.commit_hash == $sha
-                and .latest_stage.name == "deploy"
-                and .latest_stage.status == "success"
-              )
-            ' >/dev/null; then
-              found="true"
-              break
+            deployed_sha="$(echo "$json" | jq --raw-output '
+              [
+                .result[]?
+                | select(
+                    .source.config.branch == "seo-pro-v2"
+                    and .latest_stage.name == "deploy"
+                    and .latest_stage.status == "success"
+                  )
+              ]
+              | sort_by(.created_on)
+              | last
+              | .source.config.commit_hash // empty
+            ')"
+            if [ -n "$deployed_sha" ] && git cat-file -e "${deployed_sha}^{commit}" 2>/dev/null; then
+              echo "Latest successful Preview SHA: $deployed_sha"
+              if git merge-base --is-ancestor "$deploy_sha" "$deployed_sha"; then
+                found="true"
+                break
+              fi
             fi
             sleep 10
           done
           test "$found" = "true" || {
-            echo "Cloudflare Pages did not report a successful seo-pro-v2 deployment for deployable code $deploy_sha."
+            echo "Latest successful seo-pro-v2 Preview does not yet contain deployable code $deploy_sha."
             exit 1
           }
 
