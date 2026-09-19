@@ -193,5 +193,14 @@ jobs:
       - name: Check Preview D1 database
         run: npx --yes wrangler@4 d1 info seo-pro-v2-preview
 
-      - name: Check KV namespaces
-        run: npx --yes wrangler@4 kv namespace list
+      - name: Verify Preview CACHE binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/seo-tool"
+          curl --fail --silent --show-error             --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             "$project_url" |
+          jq --exit-status '
+            .success == true
+            and (.result.deployment_configs.preview.kv_namespaces.CACHE.namespace_id | type == "string")
+            and (.result.deployment_configs.preview.kv_namespaces.CACHE.namespace_id | length > 0)
+          '
