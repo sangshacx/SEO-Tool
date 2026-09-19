@@ -477,3 +477,204 @@
     flex-direction:column;
   }
 }
+
+.v2-ai-prompt-free-label{
+  padding:6px 9px;
+  border:1px solid #28594e;
+  border-radius:999px;
+  background:#102724;
+  color:#91d7bd;
+  font-size:10px;
+  font-weight:800;
+}
+.v2-ai-prompt-form{
+  display:grid;
+  grid-template-columns:minmax(150px,.7fr) minmax(220px,1.3fr) minmax(220px,1fr);
+  gap:12px;
+  padding:16px 18px 0;
+}
+.v2-ai-prompt-form label{
+  display:grid;
+  gap:6px;
+  color:#8198b7;
+  font-size:10px;
+  font-weight:750;
+}
+.v2-ai-prompt-form select,
+.v2-ai-prompt-form textarea{
+  border:1px solid #27415f;
+  background:#091624;
+  color:#e2ebf7;
+}
+.v2-ai-prompt-input{
+  grid-column:1/-1;
+}
+.v2-ai-prompt-input textarea{
+  min-height:92px;
+  resize:vertical;
+}
+.v2-ai-prompt-input small,
+.v2-ai-prompt-web small{
+  color:#6f86a4;
+  font-weight:500;
+  line-height:1.45;
+}
+.v2-ai-prompt-toggle{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  min-height:38px;
+  padding:0 10px;
+  border:1px solid #213b59;
+  border-radius:7px;
+  background:#0d1b2e;
+  color:#a5b8cf;
+  font-size:10px;
+  font-weight:650;
+}
+.v2-ai-prompt-toggle input{
+  width:15px;
+  height:15px;
+  accent-color:var(--amber);
+}
+.v2-ai-prompt-buttons{
+  grid-column:1/-1;
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+}
+.v2-ai-prompt-buttons button{
+  min-height:34px;
+  padding:0 12px;
+}
+.v2-ai-prompt-buttons .secondary-action{
+  border:1px solid #294a70;
+  background:#10253e;
+  color:#afc7e8;
+}
+.v2-ai-prompt-guidance{
+  margin:12px 18px 0;
+  padding:10px 12px;
+  border:1px solid #5b4828;
+  border-radius:8px;
+  background:#261f13;
+  color:#d5ba82;
+  font-size:10px;
+  line-height:1.55;
+}
+.v2-ai-prompt-result{
+  margin-top:14px;
+  border-top:1px solid #172e49;
+}
+.v2-ai-prompt-metrics{
+  display:grid;
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:1px;
+  background:#172e49;
+}
+.v2-ai-prompt-metrics article{
+  min-width:0;
+  padding:12px;
+  background:#0b1829;
+}
+.v2-ai-prompt-metrics span{
+  display:block;
+  color:#7188a9;
+  font-size:8px;
+  font-weight:750;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+.v2-ai-prompt-metrics b{
+  display:block;
+  margin-top:5px;
+  overflow:hidden;
+  color:#e7f0fc;
+  font-size:12px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.v2-ai-prompt-output{
+  display:grid;
+  grid-template-columns:minmax(0,1.5fr) minmax(280px,.8fr);
+  gap:16px;
+  padding:16px 18px 8px;
+}
+.v2-ai-prompt-output pre{
+  max-height:330px;
+  overflow:auto;
+  margin:8px 0 0;
+  padding:12px;
+  border:1px solid #1b3552;
+  border-radius:8px;
+  background:#08141f;
+  color:#b8c9dc;
+  font:11px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+}
+.v2-ai-prompt-output ul{
+  display:grid;
+  gap:6px;
+  margin:8px 0 0;
+  padding:0;
+  list-style:none;
+}
+.v2-ai-prompt-output li{
+  padding:9px 10px;
+  border:1px solid #1a314b;
+  border-radius:8px;
+  background:#08131f;
+}
+.v2-ai-prompt-output li>a,
+.v2-ai-prompt-output li>span{
+  color:#94bfff;
+  font-size:11px;
+  font-weight:700;
+  text-decoration:none;
+}
+.v2-ai-prompt-output li>small{
+  display:block;
+  margin-top:3px;
+  color:#6e85a2;
+  font-size:9px;
+}
+.v2-ai-prompt-output li>p{
+  margin:5px 0 0;
+  color:#788fa9;
+  font-size:10px;
+  line-height:1.45;
+}
+.v2-ai-prompt-fanout{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  padding:0 18px 10px;
+}
+.v2-ai-prompt-fanout span{
+  padding:5px 7px;
+  border:1px solid #27425f;
+  border-radius:999px;
+  background:#0e1f33;
+  color:#84a1c4;
+  font-size:9px;
+}
+.v2-ai-prompt-disclaimer{
+  margin:0;
+  padding:8px 18px 16px;
+  color:#7187a2;
+  font-size:9px;
+  line-height:1.5;
+}
+@media(max-width:1100px){
+  .v2-ai-prompt-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:800px){
+  .v2-ai-prompt-form{grid-template-columns:1fr}
+  .v2-ai-prompt-input,.v2-ai-prompt-buttons{grid-column:auto}
+  .v2-ai-prompt-output{grid-template-columns:1fr}
+}
+@media(max-width:520px){
+  .v2-ai-prompt-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .v2-ai-prompt-buttons{align-items:stretch;flex-direction:column}
+}
