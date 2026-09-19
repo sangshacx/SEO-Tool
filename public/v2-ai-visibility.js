@@ -6,6 +6,7 @@ const ENDPOINTS = Object.freeze({
   mentions: "/api/v2/ai/mentions",
   promptModels: "/api/v2/ai/prompt-models",
   promptTest: "/api/v2/ai/prompt-test",
+  promptTracker: "/api/v2/ai/prompt-tracker",
 });
 
 function cleanDomain(value) {
@@ -424,6 +425,109 @@ function renderPromptTestResult(section, data = null, meta = {}) {
   fanOut.hidden = queries.length === 0;
 }
 
+function trackerBool(value) {
+  return value === true ? "Yes" : value === false ? "No" : "—";
+}
+
+function renderSavedPromptTrackers(body, items = [], currentTrackerId = null) {
+  body.replaceChildren();
+  const rows = Array.isArray(items) ? items : [];
+  if (!rows.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 10;
+    cell.className = "v2-ai-empty";
+    cell.textContent = "当前网站与市场还没有 Saved Prompts。保存 Prompt 本身不产生外部 API 费用。";
+    row.append(cell);
+    body.append(row);
+    return;
+  }
+
+  rows.forEach((item) => {
+    const row = document.createElement("tr");
+    if (Number(item.id) === Number(currentTrackerId)) row.dataset.current = "true";
+
+    const name = document.createElement("td");
+    name.textContent = item.name || "Untitled";
+    const platform = document.createElement("td");
+    platform.textContent = item.platform;
+    const model = document.createElement("td");
+    model.textContent = item.model_name;
+    const prompt = document.createElement("td");
+    prompt.className = "v2-ai-tracker-prompt";
+    prompt.textContent = item.prompt;
+    prompt.title = item.prompt;
+    const status = document.createElement("td");
+    status.textContent = item.status;
+    status.dataset.status = item.status;
+    const runs = document.createElement("td");
+    runs.textContent = numberLabel(item.observation_count);
+    const mentioned = document.createElement("td");
+    mentioned.textContent = trackerBool(item?.latest_observation?.target_domain_mentioned);
+    const cited = document.createElement("td");
+    cited.textContent = trackerBool(item?.latest_observation?.target_domain_cited);
+    const cost = document.createElement("td");
+    cost.textContent = item?.latest_observation?.actual_cost_usd == null
+      ? "—"
+      : usdLabel(item.latest_observation.actual_cost_usd);
+    const actions = document.createElement("td");
+    const wrap = document.createElement("div");
+    wrap.className = "v2-ai-tracker-actions";
+
+    const load = document.createElement("button");
+    load.type = "button";
+    load.textContent = "Load";
+    load.dataset.v2AiTrackerLoad = String(item.id);
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.textContent = item.status === "paused" ? "Resume" : "Pause";
+    toggle.dataset.v2AiTrackerStatus = String(item.id);
+    toggle.dataset.nextStatus = item.status === "paused" ? "active" : "paused";
+    const history = document.createElement("button");
+    history.type = "button";
+    history.textContent = "History";
+    history.dataset.v2AiTrackerHistory = String(item.id);
+    wrap.append(load, toggle, history);
+    actions.append(wrap);
+
+    row.append(name, platform, model, prompt, status, runs, mentioned, cited, cost, actions);
+    body.append(row);
+  });
+}
+
+function renderPromptObservationHistory(body, rows = []) {
+  body.replaceChildren();
+  const items = Array.isArray(rows) ? rows : [];
+  if (!items.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 8;
+    cell.className = "v2-ai-empty";
+    cell.textContent = "还没有真实 Prompt Test observation。缓存读取不会生成 observation。";
+    row.append(cell);
+    body.append(row);
+    return;
+  }
+  items.forEach((item) => {
+    const row = document.createElement("tr");
+    [
+      dateLabel(item.observed_at),
+      item.model_name || "—",
+      trackerBool(item.target_domain_mentioned),
+      trackerBool(item.target_domain_cited),
+      numberLabel(item.citation_count),
+      numberLabel(item.input_tokens) + " / " + numberLabel(item.output_tokens),
+      item.actual_cost_usd == null ? "—" : usdLabel(item.actual_cost_usd),
+      (item.citation_domains || []).slice(0, 5).join(" · ") || "—",
+    ].forEach((value) => {
+      const cell = document.createElement("td");
+      cell.textContent = value;
+      row.append(cell);
+    });
+    body.append(row);
+  });
+}
+
 async function getJson(fetchImpl, endpoint, params) {
   const query = new URLSearchParams(params);
   const response = await fetchImpl(endpoint + "?" + query.toString(), {
@@ -558,6 +662,9 @@ export function createAiVisibilityWorkspace() {
         <div class="v2-ai-prompt-free-label">Models list · $0</div>
       </div>
       <div class="v2-ai-prompt-form">
+        <label>Tracker 名称
+          <input type="text" maxlength="120" data-v2-ai-prompt-name placeholder="例如：Supplier recommendation">
+        </label>
         <label>AI 平台
           <select data-v2-ai-prompt-platform>
             <option value="chat_gpt">ChatGPT</option>
@@ -581,12 +688,35 @@ export function createAiVisibilityWorkspace() {
           <small><span data-v2-ai-prompt-count>0</span>/500 · Prompt 使用你输入的语言；当前市场用于可支持模型的 web-search 国家定位。</small>
         </label>
         <div class="v2-ai-prompt-buttons">
+          <span class="v2-ai-current-tracker" data-v2-ai-current-tracker>Not saved</span>
+          <button type="button" class="secondary-action" data-v2-ai-prompt-save>Save Tracker · $0</button>
           <button type="button" class="secondary-action" data-v2-ai-prompt-read-cache>读取相同 Prompt 缓存 · $0</button>
           <button type="button" data-v2-ai-prompt-run>运行 Prompt Test · 付费</button>
         </div>
       </div>
       <div class="v2-ai-prompt-guidance">
         第一版只运行单个 Prompt，不自动批量或定时执行。模型列表免费；真实 Prompt Test 使用 LLM Responses Live，成本取决于模型与 token 使用。
+      </div>
+      <div class="v2-ai-tracker-head">
+        <div><span>SAVED PROMPTS · D1</span><b>Tracked Prompts</b></div>
+        <button type="button" class="secondary-action" data-v2-ai-prompt-refresh-trackers>Refresh Saved · $0</button>
+      </div>
+      <div class="v2-ai-tablewrap v2-ai-tracker-tablewrap">
+        <table>
+          <thead><tr><th>Name</th><th>Platform</th><th>Model</th><th>Prompt</th><th>Status</th><th>Runs</th><th>Mentioned</th><th>Cited</th><th>Last Cost</th><th>Actions</th></tr></thead>
+          <tbody data-v2-ai-prompt-trackers></tbody>
+        </table>
+      </div>
+      <div class="v2-ai-tracker-history" data-v2-ai-tracker-history hidden>
+        <div class="v2-ai-tracker-head">
+          <div><span>OBSERVATION HISTORY · D1</span><b data-v2-ai-tracker-history-title>Prompt History</b></div>
+        </div>
+        <div class="v2-ai-tablewrap v2-ai-tracker-tablewrap">
+          <table>
+            <thead><tr><th>Observed</th><th>Model</th><th>Mentioned</th><th>Cited</th><th>Citations</th><th>Tokens In / Out</th><th>Cost</th><th>Citation Domains</th></tr></thead>
+            <tbody data-v2-ai-prompt-history-body></tbody>
+          </table>
+        </div>
       </div>
       <div class="v2-ai-prompt-result" data-v2-ai-prompt-result hidden>
         <div class="v2-ai-prompt-metrics">
@@ -686,9 +816,17 @@ export function mountAiVisibility({
   const promptCount = section.querySelector("[data-v2-ai-prompt-count]");
   const promptWebSearch = section.querySelector("[data-v2-ai-prompt-web-search]");
   const promptWebNote = section.querySelector("[data-v2-ai-prompt-web-note]");
+  const promptName = section.querySelector("[data-v2-ai-prompt-name]");
+  const currentTracker = section.querySelector("[data-v2-ai-current-tracker]");
+  const trackerBody = section.querySelector("[data-v2-ai-prompt-trackers]");
+  const trackerHistory = section.querySelector("[data-v2-ai-tracker-history]");
+  const trackerHistoryTitle = section.querySelector("[data-v2-ai-tracker-history-title]");
+  const trackerHistoryBody = section.querySelector("[data-v2-ai-prompt-history-body]");
   let scope = context.get?.() ?? {};
   let requestId = 0;
   let destroyed = false;
+  let savedTrackers = [];
+  let currentTrackerId = null;
 
   const buttons = [...section.querySelectorAll("button")];
   const busy = (value) => buttons.forEach((button) => { button.disabled = value; });
@@ -876,7 +1014,10 @@ export function mountAiVisibility({
       }
       if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Citation Explorer 读取失败。");
       renderCitationExplorer(mentionsList, payload.data?.items);
-      if (live) paid.checked = false;
+      if (live) {
+        paid.checked = false;
+        if (payload.meta?.observation_recorded) await loadSavedTrackers();
+      }
       setStatus(
         payload.meta?.cached
           ? "已读取 Citation Explorer 缓存，本次费用 $0。"
@@ -888,6 +1029,138 @@ export function mountAiVisibility({
     } finally {
       busy(false);
     }
+  };
+
+  const clearCurrentTracker = () => {
+    currentTrackerId = null;
+    currentTracker.textContent = "Not saved";
+    renderSavedPromptTrackers(trackerBody, savedTrackers, currentTrackerId);
+  };
+
+  const loadSavedTrackers = async () => {
+    if (!scope?.domain || !scope?.location_code || !scope?.language_code) return;
+    try {
+      const { response, payload } = await getJson(fetchImpl, ENDPOINTS.promptTracker, {
+        target: scope.domain,
+        location_code: String(scope.location_code),
+        language_code: scope.language_code,
+      });
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Saved Prompts 读取失败。");
+      savedTrackers = Array.isArray(payload.data?.items) ? payload.data.items : [];
+      renderSavedPromptTrackers(trackerBody, savedTrackers, currentTrackerId);
+    } catch (error) {
+      renderSavedPromptTrackers(trackerBody, [], currentTrackerId);
+      setStatus(error?.message || "Saved Prompts 读取失败。", "error");
+    }
+  };
+
+  const saveCurrentTracker = async () => {
+    const prompt = String(promptText.value || "").trim();
+    if (!prompt || !promptModel.value) {
+      setStatus("先填写 Prompt 并选择模型，再保存 Tracker。", "warning");
+      return;
+    }
+    busy(true);
+    setStatus("正在保存 Prompt Tracker 到 D1，本次费用 $0…", "loading");
+    try {
+      const { response, payload } = await post(fetchImpl, ENDPOINTS.promptTracker, {
+        action: "save",
+        target: scope.domain,
+        location_code: scope.location_code,
+        language_code: scope.language_code,
+        name: promptName.value,
+        platform: promptPlatform.value,
+        model_name: promptModel.value,
+        prompt,
+        web_search: promptWebSearch.checked,
+      });
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Prompt Tracker 保存失败。");
+      currentTrackerId = payload.data.id;
+      currentTracker.textContent = "Tracker #" + currentTrackerId;
+      await loadSavedTrackers();
+      setStatus("Prompt Tracker 已保存到 D1，本次费用 $0。", "success");
+    } catch (error) {
+      setStatus(error?.message || "Prompt Tracker 保存失败。", "error");
+    } finally {
+      busy(false);
+    }
+  };
+
+  const loadTrackerIntoForm = async (trackerId) => {
+    const item = savedTrackers.find((row) => Number(row.id) === Number(trackerId));
+    if (!item) return;
+    promptName.value = item.name || "";
+    promptPlatform.value = item.platform;
+    await loadPromptModels();
+    promptModel.value = item.model_name;
+    promptText.value = item.prompt;
+    promptCount.textContent = String(promptText.value.length);
+    promptWebSearch.checked = item.web_search !== false;
+    syncPromptModelCapability();
+    currentTrackerId = item.id;
+    currentTracker.textContent = "Tracker #" + item.id + (item.status === "paused" ? " · paused" : "");
+    renderSavedPromptTrackers(trackerBody, savedTrackers, currentTrackerId);
+    renderPromptTestResult(section, null);
+    setStatus("已加载 Saved Prompt；读取缓存仍为 $0，真实运行需要 Cost Guard。", "success");
+  };
+
+  const updateTrackerStatus = async (trackerId, statusValue) => {
+    busy(true);
+    try {
+      const { response, payload } = await post(fetchImpl, ENDPOINTS.promptTracker, {
+        action: "status",
+        target: scope.domain,
+        location_code: scope.location_code,
+        language_code: scope.language_code,
+        tracker_id: Number(trackerId),
+        status: statusValue,
+      });
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Tracker 状态更新失败。");
+      if (Number(currentTrackerId) === Number(trackerId)) {
+        currentTracker.textContent = "Tracker #" + trackerId + (statusValue === "paused" ? " · paused" : "");
+      }
+      await loadSavedTrackers();
+      setStatus("Tracker 状态已更新，本次费用 $0。", "success");
+    } catch (error) {
+      setStatus(error?.message || "Tracker 状态更新失败。", "error");
+    } finally {
+      busy(false);
+    }
+  };
+
+  const loadTrackerHistory = async (trackerId) => {
+    const item = savedTrackers.find((row) => Number(row.id) === Number(trackerId));
+    busy(true);
+    try {
+      const { response, payload } = await getJson(fetchImpl, ENDPOINTS.promptTracker, {
+        target: scope.domain,
+        location_code: String(scope.location_code),
+        language_code: scope.language_code,
+        tracker_id: String(trackerId),
+        limit: "30",
+      });
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Observation History 读取失败。");
+      trackerHistory.hidden = false;
+      trackerHistoryTitle.textContent = (item?.name || "Prompt") + " · #" + trackerId;
+      renderPromptObservationHistory(trackerHistoryBody, payload.data?.observations);
+      setStatus("已从 D1 读取 observation history，本次费用 $0。", "success");
+    } catch (error) {
+      setStatus(error?.message || "Observation History 读取失败。", "error");
+    } finally {
+      busy(false);
+    }
+  };
+
+  const handleTrackerClick = (event) => {
+    const load = event.target.closest?.("[data-v2-ai-tracker-load]");
+    if (load) return loadTrackerIntoForm(load.dataset.v2AiTrackerLoad);
+    const statusButton = event.target.closest?.("[data-v2-ai-tracker-status]");
+    if (statusButton) return updateTrackerStatus(
+      statusButton.dataset.v2AiTrackerStatus,
+      statusButton.dataset.nextStatus,
+    );
+    const history = event.target.closest?.("[data-v2-ai-tracker-history]");
+    if (history) return loadTrackerHistory(history.dataset.v2AiTrackerHistory);
   };
 
   const syncPromptModelCapability = () => {
@@ -967,6 +1240,7 @@ export function mountAiVisibility({
         model_name: promptModel.value,
         prompt,
         web_search: promptWebSearch.checked,
+        ...(currentTrackerId ? { tracker_id: currentTrackerId } : {}),
         ...(live ? { allow_live_request: true, force_refresh: true } : {}),
       });
       if (response.status === 409 && payload?.error?.code === "LIVE_REQUEST_CONFIRMATION_REQUIRED") {
@@ -1001,14 +1275,23 @@ export function mountAiVisibility({
     [section.querySelector("[data-v2-ai-refresh-new-lost]"), "click", () => refreshHistorySeries("new_lost")],
     [section.querySelector("[data-v2-ai-read-mentions]"), "click", () => loadMentions()],
     [section.querySelector("[data-v2-ai-refresh-mentions]"), "click", () => loadMentions({ live: true })],
+    [section.querySelector("[data-v2-ai-prompt-save]"), "click", () => saveCurrentTracker()],
+    [section.querySelector("[data-v2-ai-prompt-refresh-trackers]"), "click", () => loadSavedTrackers()],
+    [trackerBody, "click", (event) => handleTrackerClick(event)],
     [section.querySelector("[data-v2-ai-prompt-read-cache]"), "click", () => loadPromptTest()],
     [section.querySelector("[data-v2-ai-prompt-run]"), "click", () => loadPromptTest({ live: true })],
     [promptPlatform, "change", () => {
+      clearCurrentTracker();
       renderPromptTestResult(section, null);
       loadPromptModels();
     }],
-    [promptModel, "change", () => syncPromptModelCapability()],
+    [promptModel, "change", () => {
+      clearCurrentTracker();
+      syncPromptModelCapability();
+    }],
+    [promptWebSearch, "change", () => clearCurrentTracker()],
     [promptText, "input", () => {
+      clearCurrentTracker();
       promptCount.textContent = String(promptText.value.length);
       renderPromptTestResult(section, null);
     }],
@@ -1017,6 +1300,8 @@ export function mountAiVisibility({
       renderPages(pagesBody, []);
       renderCitationExplorer(mentionsList, []);
   renderPromptTestResult(section, null);
+  renderSavedPromptTrackers(trackerBody, [], currentTrackerId);
+  renderPromptObservationHistory(trackerHistoryBody, []);
   loadPromptModels();
       syncScope();
       loadOverview();
@@ -1027,9 +1312,12 @@ export function mountAiVisibility({
 
   const unsubscribe = context.subscribe((next) => {
     scope = next;
+    clearCurrentTracker();
+    trackerHistory.hidden = true;
     syncScope();
     loadOverview();
     loadStoredHistory();
+    loadSavedTrackers();
   });
 
   emptyList(section.querySelector("[data-v2-ai-sources]"), "先读取当前网站的 AI Visibility 缓存。");
