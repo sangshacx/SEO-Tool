@@ -1,6 +1,7 @@
 import { classifyOrganicKeywordAction } from "../src/v2/intelligence/organic-keyword-actions.js";
 import { classifyOrganicPageAction } from "../src/v2/intelligence/organic-page-actions.js";
 import { classifyOrganicPositionChange } from "../src/v2/organic/organic-position-changes.js";
+import { mountOrganicHistoryTab, organicHistoryPanelMarkup } from "./v2-organic-history-ui.js";
 
 const ENDPOINT = "/api/v2/organic/keywords";
 const PAGES_ENDPOINT = "/api/v2/organic/pages";
@@ -155,6 +156,7 @@ export function createOrganicIntelligenceWorkspace(documentLike = document) {
       <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="pages">Top Pages</button>
       <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="changes">Position Changes</button>
       <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="competitors">Organic Competitors</button>
+      <button type="button" role="tab" aria-selected="false" data-v2-organic-tab="history">Organic History</button>
     </div>
     <div class="v2-organic-panel active" data-v2-organic-panel="overview">
       <div class="v2-organic-metrics">
@@ -256,6 +258,7 @@ export function createOrganicIntelligenceWorkspace(documentLike = document) {
       </div>
       <div class="v2-organic-pager"><span data-v2-organic-competitors-count>0 rows</span><div><button type="button" data-v2-organic-competitors-prev>Previous</button><span data-v2-organic-competitors-page>Page 1</span><button type="button" data-v2-organic-competitors-next>Next</button></div></div>
     </div>
+    ${organicHistoryPanelMarkup()}
   `;
   return section;
 }
@@ -564,6 +567,17 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
     finally { run.disabled = false; }
   };
 
+  const historyCleanup = mountOrganicHistoryTab({
+    section,
+    target,
+    allowPaid,
+    context,
+    fetchImpl,
+    signal,
+    activateTab,
+    setStatus: (message, state) => setStatus(section, message, state),
+  });
+
   form.addEventListener("submit",(event)=>{event.preventDefault();load();},{signal});
   target.addEventListener("input",()=>{targetDirty=true;syncMode();},{signal});
   section.querySelectorAll("[data-v2-organic-tab]").forEach((button)=>button.addEventListener("click",()=>activateTab(section,button.dataset.v2OrganicTab),{signal}));
@@ -597,5 +611,5 @@ export function mountOrganicIntelligence({ root, context, fetchImpl = globalThis
   renderPages();
   renderChanges();
   renderCompetitors();
-  return ()=>{unsubscribe();controller.abort();};
+  return ()=>{historyCleanup();unsubscribe();controller.abort();};
 }
