@@ -7,6 +7,8 @@ import { readGscCannibalizationCandidates, readGscIntelligence } from "../../../
 import { enrichGscIntelligenceRows } from "../../../../src/v2/gsc/intelligence.js";
 import { applyDecisionWorkflow } from "../../../../src/v2/intelligence/decision-workflow.js";
 import { mergeCannibalizationActions } from "../../../../src/v2/intelligence/cannibalization-actions.js";
+import { buildAiVisibilityRecoveryAction, mergeAiVisibilityActions } from "../../../../src/v2/intelligence/ai-visibility-actions.js";
+import { readAiVisibilityHistorical, readAiVisibilityNewLost } from "../../../../src/v2/storage/ai-visibility.js";
 import { getSeoActionWorkflowStats, listSeoActionWorkflow, listSeoActionWorkflowEvents, readSeoActionOutcomes } from "../../../../src/v2/storage/seo-action-workflow.js";
 
 const JSON_HEADERS = {
@@ -130,6 +132,50 @@ export async function onRequestPost({ request, env }) {
     }));
   }
 
+  const aiPlatforms = [
+    "google",
+    ...(Number(locationCode) === 2840 && String(languageCode).toLowerCase() === "en" ? ["chat_gpt"] : []),
+  ];
+  let aiVisibilityEvidence = [];
+  try {
+    aiVisibilityEvidence = await Promise.all(aiPlatforms.map(async (platform) => {
+      const [historical, newLost] = await Promise.all([
+        readAiVisibilityHistorical(env.DB, {
+          target: domain,
+          platform,
+          locationCode,
+          languageCode,
+          limit: 24,
+        }),
+        readAiVisibilityNewLost(env.DB, {
+          target: domain,
+          platform,
+          locationCode,
+          languageCode,
+          limit: 24,
+        }),
+      ]);
+      return {
+        platform,
+        historical,
+        new_lost: newLost,
+        action: buildAiVisibilityRecoveryAction({
+          target: domain,
+          platform,
+          historical,
+          newLost,
+        }),
+      };
+    }));
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "Opportunity Center AI visibility evidence read failed",
+      request_id: requestId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    aiVisibilityEvidence = [];
+  }
+
   const sources = {
     organic_keywords: keywords ? { available: true, depth: keywords.depth, cached_at: keywords.cached_at } : null,
     top_pages: pages ? { available: true, depth: pages.depth, cached_at: pages.cached_at } : null,
@@ -140,6 +186,13 @@ export async function onRequestPost({ request, env }) {
       stored_rows: gscRows.length,
       query_page_rows: gscQueryPageRows.length,
     } : null,
+    ai_visibility: aiVisibilityEvidence.some((item) => item.historical.length || item.new_lost.length) ? {
+      available: true,
+      source: "d1",
+      platforms: aiVisibilityEvidence
+        .filter((item) => item.historical.length || item.new_lost.length)
+        .map((item) => item.platform),
+    } : null,
   };
   const baseData = buildOrganicOpportunities({
     target: domain,
@@ -149,9 +202,13 @@ export async function onRequestPost({ request, env }) {
     gscQueryPageRows,
     sources,
   });
-  const rawData = mergeCannibalizationActions(
-    baseData,
-    gscCannibalizationStored?.rows ?? [],
+  const rawData = mergeAiVisibilityActions(
+    mergeCannibalizationActions(
+      baseData,
+      gscCannibalizationStored?.rows ?? [],
+      { limit: 25 },
+    ),
+    aiVisibilityEvidence.map((item) => item.action).filter(Boolean),
     { limit: 25 },
   );
 
@@ -187,6 +244,18 @@ export async function onRequestPost({ request, env }) {
     model: "gsc-query-overlap-v0.1",
     actual_cost_usd: 0,
   };
+  data.ai_visibility_summary = {
+    candidate_count: aiVisibilityEvidence.filter((item) => item.action).length,
+    platforms: aiVisibilityEvidence.map((item) => ({
+      platform: item.platform,
+      historical_points: item.historical.length,
+      new_lost_points: item.new_lost.length,
+      recovery_candidate: Boolean(item.action),
+    })),
+    model: "ai-visibility-recovery-v0.1",
+    source: "d1",
+    actual_cost_usd: 0,
+  };
   data.workflow_stats = workflowStats;
   data.workflow_activity = workflowEvents;
   data.workflow_outcomes = workflowOutcomes;
@@ -199,7 +268,10 @@ export async function onRequestPost({ request, env }) {
     data: {
       ...data,
       missing_sources: missing,
-      optional_missing_sources: sources.gsc_pages ? [] : ["gsc_pages"],
+      optional_missing_sources: [
+        ...(!sources.gsc_pages ? ["gsc_pages"] : []),
+        ...(!sources.ai_visibility ? ["ai_visibility_history"] : []),
+      ],
     },
     meta: {
       request_id: requestId,
