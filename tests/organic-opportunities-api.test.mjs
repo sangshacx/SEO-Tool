@@ -264,3 +264,57 @@ test("Opportunity API returns recent D1 workflow activity without any provider r
   assert.equal(payload.data.workflow_stats.last_7_days.completed,1);
   assert.equal(payload.data.workflow_stats.last_30_days.completed,1);
 });
+
+
+test("Opportunity API returns ready post-completion GSC outcomes from D1 at zero provider cost", async (context) => {
+  const originalFetch=globalThis.fetch;
+  context.after(()=>{globalThis.fetch=originalFetch;});
+  let calls=0;
+  globalThis.fetch=async()=>{calls+=1;throw new Error("provider must not execute");};
+
+  const {raw,d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+  await upsertSeoActionWorkflow(d1,{
+    site_domain:"example.com",
+    page_url:"https://example.com/outcome/",
+    action_code:"optimize",
+    query:"waterproof membrane",
+    status:"done",
+    note:"implemented",
+    snooze_until:null,
+    priority_score:80,
+  });
+  raw.prepare("UPDATE seo_action_workflow_events SET created_at = '2026-09-10 12:00:00' WHERE to_status = 'done'").run();
+
+  const insert=raw.prepare(`
+    INSERT INTO gsc_search_analytics_daily (
+      site_profile_id,property,date,dimension_set,query_text,page_url,country,device,
+      clicks,impressions,ctr,position,synced_at
+    ) VALUES (1,'sc-domain:example.com',?,'query_page','waterproof membrane','https://example.com/outcome/','','',?,?,?,?,?)
+  `);
+  for(let day=3;day<=9;day++){
+    insert.run("2026-09-"+String(day).padStart(2,"0"),1,10,0.1,10,"2026-09-19T00:00:00.000Z");
+  }
+  for(let day=11;day<=17;day++){
+    insert.run("2026-09-"+String(day).padStart(2,"0"),2,15,2/15,7,"2026-09-19T00:00:00.000Z");
+  }
+
+  const response=await onRequestPost({
+    request:request({target:"example.com",location_code:2840,language_code:"en"}),
+    env:{DB:d1,CACHE:memoryCache()},
+  });
+  const payload=await response.json();
+  assert.equal(response.status,200);
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+  assert.equal(calls,0);
+  assert.equal(payload.data.workflow_outcomes.length,1);
+  const outcome=payload.data.workflow_outcomes[0];
+  assert.equal(outcome.status,"ready");
+  assert.equal(outcome.scope,"query_page");
+  assert.equal(outcome.observed.code,"improved");
+  assert.equal(outcome.coverage.before_days,7);
+  assert.equal(outcome.coverage.after_days,7);
+  assert.equal(outcome.change.position_improvement,3);
+  assert.match(outcome.disclaimer,/not proof/);
+});
