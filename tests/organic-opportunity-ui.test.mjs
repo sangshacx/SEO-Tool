@@ -192,7 +192,7 @@ test("AI recovery tasks route to AI Visibility instead of pretending the workflo
   assert.match(opportunityUiSource,/v2OpportunityAiVisibility/);
   assert.match(opportunityUiSource,/Open AI Visibility/);
   assert.match(opportunityUiSource,/globalThis\.location\.hash="ai-visibility"/);
-  assert.match(opportunityUiSource,/item\.query_source!=="dataforseo_ai_history"/);
+  assert.match(opportunityUiSource,/\["dataforseo_ai_history","ai_prompt_tracker_d1"\]\.includes\(item\.query_source\)|\["dataforseo_ai_history", "ai_prompt_tracker_d1"\]\.includes\(item\.query_source\)/);
   assert.match(opportunityUiSource,/nextBestOpenPage\.hidden = aiHistory/);
 });
 
