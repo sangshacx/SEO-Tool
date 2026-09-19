@@ -429,13 +429,38 @@ function trackerBool(value) {
   return value === true ? "Yes" : value === false ? "No" : "—";
 }
 
+function promptRateLabel(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(1).replace(/\.0$/, "") + "%" : "—";
+}
+
+function renderPromptTrackerSummary(section, items = []) {
+  const rows = Array.isArray(items) ? items : [];
+  const totalRuns = rows.reduce((sum, item) => sum + (Number(item?.trend?.observation_count) || 0), 0);
+  const mentionRuns = rows.reduce((sum, item) => sum + (Number(item?.trend?.mention_observation_count) || 0), 0);
+  const citationRuns = rows.reduce((sum, item) => sum + (Number(item?.trend?.citation_observation_count) || 0), 0);
+  const spend = rows.reduce((sum, item) => sum + (Number(item?.trend?.total_actual_cost_usd) || 0), 0);
+  const active = rows.filter((item) => item?.status === "active").length;
+  setText(section.querySelector("[data-v2-ai-tracker-summary-active]"), numberLabel(active));
+  setText(section.querySelector("[data-v2-ai-tracker-summary-runs]"), numberLabel(totalRuns));
+  setText(
+    section.querySelector("[data-v2-ai-tracker-summary-mention-rate]"),
+    totalRuns > 0 ? promptRateLabel((mentionRuns / totalRuns) * 100) : "—",
+  );
+  setText(
+    section.querySelector("[data-v2-ai-tracker-summary-citation-rate]"),
+    totalRuns > 0 ? promptRateLabel((citationRuns / totalRuns) * 100) : "—",
+  );
+  setText(section.querySelector("[data-v2-ai-tracker-summary-spend]"), usdLabel(spend));
+}
+
 function renderSavedPromptTrackers(body, items = [], currentTrackerId = null) {
   body.replaceChildren();
   const rows = Array.isArray(items) ? items : [];
   if (!rows.length) {
     const row = document.createElement("tr");
     const cell = document.createElement("td");
-    cell.colSpan = 10;
+    cell.colSpan = 11;
     cell.className = "v2-ai-empty";
     cell.textContent = "当前网站与市场还没有 Saved Prompts。保存 Prompt 本身不产生外部 API 费用。";
     row.append(cell);
@@ -460,16 +485,19 @@ function renderSavedPromptTrackers(body, items = [], currentTrackerId = null) {
     const status = document.createElement("td");
     status.textContent = item.status;
     status.dataset.status = item.status;
+    const trend = item?.trend ?? {};
     const runs = document.createElement("td");
-    runs.textContent = numberLabel(item.observation_count);
-    const mentioned = document.createElement("td");
-    mentioned.textContent = trackerBool(item?.latest_observation?.target_domain_mentioned);
-    const cited = document.createElement("td");
-    cited.textContent = trackerBool(item?.latest_observation?.target_domain_cited);
+    runs.textContent = numberLabel(trend.observation_count ?? item.observation_count);
+    const mentionRate = document.createElement("td");
+    mentionRate.textContent = promptRateLabel(trend.mention_rate_percent);
+    const citationRate = document.createElement("td");
+    citationRate.textContent = promptRateLabel(trend.citation_rate_percent);
+    const change = document.createElement("td");
+    change.textContent = trend?.change?.label ?? "No observations";
+    change.dataset.kind = trend?.change?.kind ?? "neutral";
+    change.title = trend?.disclaimer ?? "";
     const cost = document.createElement("td");
-    cost.textContent = item?.latest_observation?.actual_cost_usd == null
-      ? "—"
-      : usdLabel(item.latest_observation.actual_cost_usd);
+    cost.textContent = usdLabel(trend.total_actual_cost_usd ?? 0);
     const actions = document.createElement("td");
     const wrap = document.createElement("div");
     wrap.className = "v2-ai-tracker-actions";
@@ -490,7 +518,7 @@ function renderSavedPromptTrackers(body, items = [], currentTrackerId = null) {
     wrap.append(load, toggle, history);
     actions.append(wrap);
 
-    row.append(name, platform, model, prompt, status, runs, mentioned, cited, cost, actions);
+    row.append(name, platform, model, prompt, status, runs, mentionRate, citationRate, change, cost, actions);
     body.append(row);
   });
 }
@@ -701,9 +729,16 @@ export function createAiVisibilityWorkspace() {
         <div><span>SAVED PROMPTS · D1</span><b>Tracked Prompts</b></div>
         <button type="button" class="secondary-action" data-v2-ai-prompt-refresh-trackers>Refresh Saved · $0</button>
       </div>
+      <div class="v2-ai-tracker-summary">
+        <article><span>Active Prompts</span><b data-v2-ai-tracker-summary-active>0</b></article>
+        <article><span>Observations</span><b data-v2-ai-tracker-summary-runs>0</b></article>
+        <article><span>Mention Rate</span><b data-v2-ai-tracker-summary-mention-rate>—</b></article>
+        <article><span>Citation Rate</span><b data-v2-ai-tracker-summary-citation-rate>—</b></article>
+        <article><span>Total Spend</span><b data-v2-ai-tracker-summary-spend>$0</b></article>
+      </div>
       <div class="v2-ai-tablewrap v2-ai-tracker-tablewrap">
         <table>
-          <thead><tr><th>Name</th><th>Platform</th><th>Model</th><th>Prompt</th><th>Status</th><th>Runs</th><th>Mentioned</th><th>Cited</th><th>Last Cost</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Name</th><th>Platform</th><th>Model</th><th>Prompt</th><th>Status</th><th>Runs</th><th>Mention Rate</th><th>Citation Rate</th><th>Latest Change</th><th>Total Spend</th><th>Actions</th></tr></thead>
           <tbody data-v2-ai-prompt-trackers></tbody>
         </table>
       </div>
@@ -1014,10 +1049,7 @@ export function mountAiVisibility({
       }
       if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Citation Explorer 读取失败。");
       renderCitationExplorer(mentionsList, payload.data?.items);
-      if (live) {
-        paid.checked = false;
-        if (payload.meta?.observation_recorded) await loadSavedTrackers();
-      }
+      if (live) paid.checked = false;
       setStatus(
         payload.meta?.cached
           ? "已读取 Citation Explorer 缓存，本次费用 $0。"
@@ -1048,8 +1080,10 @@ export function mountAiVisibility({
       if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Saved Prompts 读取失败。");
       savedTrackers = Array.isArray(payload.data?.items) ? payload.data.items : [];
       renderSavedPromptTrackers(trackerBody, savedTrackers, currentTrackerId);
+      renderPromptTrackerSummary(section, savedTrackers);
     } catch (error) {
       renderSavedPromptTrackers(trackerBody, [], currentTrackerId);
+      renderPromptTrackerSummary(section, []);
       setStatus(error?.message || "Saved Prompts 读取失败。", "error");
     }
   };
@@ -1249,7 +1283,10 @@ export function mountAiVisibility({
       }
       if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Prompt Test 失败。");
       renderPromptTestResult(section, payload.data, payload.meta);
-      if (live) paid.checked = false;
+      if (live) {
+        paid.checked = false;
+        if (payload.meta?.observation_recorded) await loadSavedTrackers();
+      }
       setStatus(
         payload.meta?.cached
           ? "已读取相同 Prompt 的 7 天缓存，本次费用 $0。"
@@ -1299,16 +1336,18 @@ export function mountAiVisibility({
       renderComparison(compareBody, []);
       renderPages(pagesBody, []);
       renderCitationExplorer(mentionsList, []);
-  renderPromptTestResult(section, null);
-  renderSavedPromptTrackers(trackerBody, [], currentTrackerId);
-  renderPromptObservationHistory(trackerHistoryBody, []);
-  loadPromptModels();
       syncScope();
       loadOverview();
       loadStoredHistory();
     }],
   ];
   listeners.forEach(([node, type, handler]) => node?.addEventListener(type, handler));
+
+  renderPromptTestResult(section, null);
+  renderSavedPromptTrackers(trackerBody, [], currentTrackerId);
+  renderPromptObservationHistory(trackerHistoryBody, []);
+  renderPromptTrackerSummary(section, []);
+  loadPromptModels();
 
   const unsubscribe = context.subscribe((next) => {
     scope = next;
