@@ -440,7 +440,7 @@ export function buildOrganicOpportunities({
 
   const counts = {};
   for (const item of opportunities) counts[item.action.code] = (counts[item.action.code] ?? 0) + 1;
-  const actionQueue = buildActionQueue(opportunities, 5);
+  const actionQueue = buildActionQueue(opportunities, 25);
   const fallbackNextBestAction = opportunities[0]?.next_best_action ?? null;
 
   return {
