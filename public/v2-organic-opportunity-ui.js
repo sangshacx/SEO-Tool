@@ -147,17 +147,33 @@ export function mountOrganicOpportunityTab({
       action.className="v2-organic-action";action.dataset.action=item.action?.code||"monitor";action.textContent=item.action?.label||"Monitor";action.title=item.action?.reason||"";actionCell.append(action);
 
       const traffic=document.createElement("td");traffic.textContent=num(item.metrics?.organic_traffic);
-      const quickWins=document.createElement("td");quickWins.textContent=num(item.metrics?.quick_win_keywords);
+      const quickWins=document.createElement("td");
+      const dfsQuickWins=item.metrics?.quick_win_keywords??0;
+      const gscQuickWins=item.metrics?.gsc_query_opportunities??0;
+      quickWins.textContent="DFS "+num(dfsQuickWins)+" · GSC "+num(gscQuickWins);
+      const quickWinDetails=[];
       if(item.quick_win_keywords?.length){
-        quickWins.title=item.quick_win_keywords.slice(0,5).map((kw)=>kw.keyword+" (#"+kw.position+", vol "+(kw.search_volume??"—")+")").join("\n");
+        quickWinDetails.push(...item.quick_win_keywords.slice(0,4).map((kw)=>"DFS · "+kw.keyword+" (#"+kw.position+", vol "+(kw.search_volume??"—")+")"));
       }
+      if(item.gsc_query_opportunities?.length){
+        quickWinDetails.push(...item.gsc_query_opportunities.slice(0,4).map((kw)=>"GSC · "+kw.keyword+" (#"+(kw.position??"—")+", imp "+(kw.impressions??"—")+", vol "+(kw.search_volume??"—")+")"));
+      }
+      if(quickWinDetails.length)quickWins.title=quickWinDetails.join("\n");
       const risk=document.createElement("td");risk.textContent=num(item.metrics?.declining_keywords)+" / "+num(item.metrics?.lost_keywords);
       const commercial=document.createElement("td");commercial.textContent=num(item.metrics?.commercial_quick_wins);
       const gsc=document.createElement("td");gsc.className="v2-opportunity-gsc";
-      gsc.textContent=item.evidence?.gsc_pages
-        ? "Clicks "+num(item.metrics?.gsc_clicks)+" · Imp "+num(item.metrics?.gsc_impressions)+" · Pos "+num(item.metrics?.gsc_position)
-        : "—";
-      if(item.evidence?.gsc_pages)gsc.title="CTR "+(finite(item.metrics?.gsc_ctr)===null?"—":(item.metrics.gsc_ctr*100).toFixed(2)+"%")+" · Clicks change "+num(item.metrics?.gsc_clicks_change_percent)+"%";
+      if(item.evidence?.gsc_pages){
+        const hasPageMetrics=finite(item.metrics?.gsc_impressions)!==null;
+        gsc.textContent=hasPageMetrics
+          ? "Clicks "+num(item.metrics?.gsc_clicks)+" · Imp "+num(item.metrics?.gsc_impressions)+" · Pos "+num(item.metrics?.gsc_position)
+          : "Query signals "+num(item.metrics?.gsc_query_opportunities);
+        const details=[];
+        if(hasPageMetrics)details.push("Page CTR "+(finite(item.metrics?.gsc_ctr)===null?"—":(item.metrics.gsc_ctr*100).toFixed(2)+"%")+" · Clicks change "+num(item.metrics?.gsc_clicks_change_percent)+"%");
+        if(item.gsc_query_opportunities?.length)details.push(...item.gsc_query_opportunities.slice(0,5).map((kw)=>kw.keyword+" · imp "+(kw.impressions??"—")+" · pos "+(kw.position??"—")+" · DFS match "+(kw.provider_match?"yes":"no")));
+        gsc.title=details.join("\n");
+      }else{
+        gsc.textContent="—";
+      }
       const breakdown=document.createElement("td");breakdown.className="v2-opportunity-breakdown";
       breakdown.textContent="Base "+num(item.components?.base_score)+" · Risk "+num(item.components?.risk_points)+" · QW "+num(item.components?.quick_win_points)+" · Traffic "+num(item.components?.traffic_points)+" · Intent "+num(item.components?.business_intent_points)+" · GSC +"+num(item.components?.gsc_reality_points);
       const confidence=document.createElement("td");confidence.textContent=item.confidence||"—";
@@ -165,8 +181,9 @@ export function mountOrganicOpportunityTab({
       const next=document.createElement("td"),actions=document.createElement("div");actions.className="v2-organic-competitor-actions";
       const pageKeywords=document.createElement("button");pageKeywords.type="button";pageKeywords.dataset.v2OpportunityPage=item.url;pageKeywords.textContent="Page Keywords";
       actions.append(pageKeywords);
-      if(item.quick_win_keywords?.[0]?.keyword){
-        const research=document.createElement("button");research.type="button";research.dataset.v2OpportunityKeyword=item.quick_win_keywords[0].keyword;research.textContent="Research QW";actions.append(research);
+      const researchKeyword=item.quick_win_keywords?.[0]?.keyword||item.gsc_query_opportunities?.[0]?.keyword;
+      if(researchKeyword){
+        const research=document.createElement("button");research.type="button";research.dataset.v2OpportunityKeyword=researchKeyword;research.textContent="Research QW";actions.append(research);
       }
       next.append(actions);
       row.append(priority,page,actionCell,traffic,quickWins,risk,commercial,gsc,breakdown,confidence,next);body.append(row);
