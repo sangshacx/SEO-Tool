@@ -90,3 +90,5 @@
 @media(max-width:720px){.v2-workflow-outcomes-head{flex-direction:column}}
 
 .v2-gsc-performance-table .v2-organic-action[data-action="review_cannibalization"]{border-color:#574b26;background:#2a2412;color:#e0c579}.v2-gsc-performance-table .v2-organic-action[data-severity="high_overlap"]{border-color:#6a3340;background:#2b1720;color:#e5a0b0}.v2-gsc-performance-table .v2-organic-action[data-severity="moderate_overlap"]{border-color:#574b26;background:#2a2412;color:#e0c579}.v2-gsc-performance-tabs button[data-v2-gsc-performance-view="cannibalization"].active{border-color:#574b26;background:#2a2412;color:#e0c579}
+
+.v2-organic-action[data-action="review_cannibalization"]{border-color:#574b26;background:#2a2412;color:#e0c579}.v2-action-queue-workstream[data-workstream="architecture"]{color:#d6b96c}.v2-workflow-status[data-status="new"]+ .v2-workflow-controls button[data-v2-workflow-status="in_progress"]{border-color:#31547d}
