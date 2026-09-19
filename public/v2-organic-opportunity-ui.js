@@ -38,6 +38,7 @@ export function organicOpportunityPanelMarkup() {
         <article data-v2-opportunity-source="organic_keywords"><span>Organic Keywords</span><b>Not loaded</b><small>用于 4–20 位 Quick Wins、KD、Volume、Intent</small><button type="button" data-v2-opportunity-go="keywords">Open Organic Keywords</button></article>
         <article data-v2-opportunity-source="top_pages"><span>Top Pages</span><b>Not loaded</b><small>用于页面 Traffic、Top 10、Up/Down/Lost 风险</small><button type="button" data-v2-opportunity-go="pages">Open Top Pages</button></article>
         <article data-v2-opportunity-source="gsc_pages"><span>GSC Performance</span><b>Optional</b><small>用于真实 Impressions、CTR、Position 与 Clicks 变化</small><button type="button" data-v2-opportunity-go="gsc">Open GSC Performance</button></article>
+        <article data-v2-opportunity-source="ai_visibility"><span>AI History</span><b>Optional</b><small>用于 Google AI Overview / ChatGPT 的 stored New/Lost mention recovery 信号</small><button type="button" data-v2-opportunity-ai-visibility>Open AI Visibility</button></article>
       </div>
 
       <div class="v2-organic-opportunity-metrics">
@@ -174,6 +175,7 @@ export function mountOrganicOpportunityTab({
     organic_keywords: section.querySelector('[data-v2-opportunity-source="organic_keywords"]'),
     top_pages: section.querySelector('[data-v2-opportunity-source="top_pages"]'),
     gsc_pages: section.querySelector('[data-v2-opportunity-source="gsc_pages"]'),
+    ai_visibility: section.querySelector('[data-v2-opportunity-source="ai_visibility"]'),
   };
   let loadedForKey = null;
 
@@ -183,7 +185,7 @@ export function mountOrganicOpportunityTab({
   };
 
   const renderSources = (data) => {
-    for (const source of ["organic_keywords","top_pages","gsc_pages"]) {
+    for (const source of ["organic_keywords","top_pages","gsc_pages","ai_visibility"]) {
       const card = sourceCards[source];
       const status = card?.querySelector("b");
       const evidence = data?.sources?.[source];
@@ -193,6 +195,10 @@ export function mountOrganicOpportunityTab({
         status.textContent = evidence?.available
           ? "Ready · " + (evidence.latest_date ?? "stored") + " · " + (evidence.coverage?.current_days ?? 0) + "/" + (evidence.coverage?.requested_days ?? 28) + " days"
           : "Optional · no D1 data";
+      } else if (source === "ai_visibility") {
+        status.textContent = evidence?.available
+          ? "Ready · D1 · " + ((evidence.platforms ?? []).join(" + ") || "stored")
+          : "Optional · no D1 history";
       } else {
         status.textContent = evidence?.available
           ? "Ready · depth " + (evidence.depth ?? "—")
@@ -229,7 +235,10 @@ export function mountOrganicOpportunityTab({
     if (!next?.page) {
       nextBestCard.hidden = true;
       nextBestOpenPage.dataset.v2OpportunityPage = "";
+      nextBestOpenPage.hidden = false;
       nextBestResearch.dataset.v2OpportunityKeyword = "";
+      nextBestResearch.dataset.v2OpportunityAiVisibility = "";
+      nextBestResearch.textContent = "Research Recommended Query";
       return;
     }
     nextBestCard.hidden = false;
@@ -241,14 +250,20 @@ export function mountOrganicOpportunityTab({
     nextBestPage.title = next.page;
     nextBestQuery.textContent = next.query || "No single query selected";
     nextBestQuery.title = next.query || "";
+    const aiHistory = next.query_source === "dataforseo_ai_history";
     nextBestSource.textContent = next.query_source === "gsc_query_page"
       ? "GSC Query+Page"
       : next.query_source === "dataforseo_cache"
         ? "DataForSEO cache"
-        : "Page-level evidence";
+        : aiHistory
+          ? "AI History · D1"
+          : "Page-level evidence";
     nextBestOpenPage.dataset.v2OpportunityPage = next.page;
-    nextBestResearch.dataset.v2OpportunityKeyword = next.query || "";
-    nextBestResearch.disabled = !next.query;
+    nextBestOpenPage.hidden = aiHistory;
+    nextBestResearch.dataset.v2OpportunityKeyword = aiHistory ? "" : next.query || "";
+    nextBestResearch.dataset.v2OpportunityAiVisibility = aiHistory ? "true" : "";
+    nextBestResearch.textContent = aiHistory ? "Open AI Visibility" : "Research Recommended Query";
+    nextBestResearch.disabled = aiHistory ? false : !next.query;
   };
 
   const workflowBadge = (item) => {
@@ -349,7 +364,11 @@ export function mountOrganicOpportunityTab({
       const page=document.createElement("td"),link=document.createElement("a");
       link.href=item.page;link.target="_blank";link.rel="noopener noreferrer";link.className="v2-organic-url v2-opportunity-page";link.textContent=item.page;page.append(link);
       const query=document.createElement("td");query.className="v2-action-queue-query";query.textContent=item.query||"—";
-      if(item.query_source)query.title=item.query_source==="gsc_query_page"?"GSC Query+Page":"DataForSEO cache";
+      if(item.query_source)query.title=item.query_source==="gsc_query_page"
+        ?"GSC Query+Page"
+        :item.query_source==="dataforseo_ai_history"
+          ?"AI History · D1"
+          :"DataForSEO cache";
       const score=document.createElement("td");score.textContent=num(item.priority_score);
       const confidence=document.createElement("td");confidence.textContent=item.confidence||"—";
       const workflow=document.createElement("td");workflow.className="v2-workflow-cell";workflow.append(workflowBadge(item),workflowControls(item));
@@ -361,11 +380,17 @@ export function mountOrganicOpportunityTab({
         overlap.dataset.v2OpportunityGscOverlap=item.query||"";
         overlap.textContent="Open GSC Overlap";
         actions.append(overlap);
+      }else if(item.action==="ai_visibility_recovery"||item.query_source==="dataforseo_ai_history"){
+        const ai=document.createElement("button");
+        ai.type="button";
+        ai.dataset.v2OpportunityAiVisibility="true";
+        ai.textContent="Open AI Visibility";
+        actions.append(ai);
       }else{
         const pageButton=document.createElement("button");pageButton.type="button";pageButton.dataset.v2OpportunityPage=item.page;pageButton.textContent="Page";
         actions.append(pageButton);
       }
-      if(item.query){
+      if(item.query&&item.query_source!=="dataforseo_ai_history"){
         const research=document.createElement("button");research.type="button";research.dataset.v2OpportunityKeyword=item.query;research.textContent="Research";actions.append(research);
       }
       next.append(actions);
@@ -553,6 +578,7 @@ export function mountOrganicOpportunityTab({
       "Cache only · $0",
       missing.length ? "Missing primary: "+missing.join(", ") : "DataForSEO evidence ready",
       data?.sources?.gsc_pages ? "GSC reality ready" : "GSC optional · no stored page data",
+      data?.sources?.ai_visibility ? "AI History ready · D1" : "AI History optional · no stored data",
       data?.workflow_summary ? "Workflow active "+(data.workflow_summary.active??0)+" · hidden "+(data.workflow_summary.suppressed??0) : null,
       data?.disclaimer,
     ].filter(Boolean).join(" · ");
@@ -588,6 +614,7 @@ export function mountOrganicOpportunityTab({
     if(loadedForKey!==scopeKey())load();
   },{signal});
   section.querySelectorAll("[data-v2-opportunity-go]").forEach((button)=>button.addEventListener("click",()=>activateTab?.(section,button.dataset.v2OpportunityGo),{signal}));
+  section.querySelectorAll("[data-v2-opportunity-ai-visibility]").forEach((button)=>button.addEventListener("click",()=>{if(globalThis.location)globalThis.location.hash="ai-visibility";},{signal}));
   const saveWorkflow = async (button, extra = {}) => {
     const siteDomain=hostname(target.value);
     const status=button.dataset.v2WorkflowStatus;
@@ -640,6 +667,9 @@ export function mountOrganicOpportunityTab({
     if(input){input.value=value;input.dispatchEvent(new Event("input",{bubbles:true}));}
     if(globalThis.location)globalThis.location.hash="keywords";
   };
+  const openAiVisibility = () => {
+    if(globalThis.location)globalThis.location.hash="ai-visibility";
+  };
 
   const handleOpportunityActionClick = (event) => {
     const noteEdit=event.target.closest("[data-v2-workflow-note-edit]");
@@ -671,6 +701,8 @@ export function mountOrganicOpportunityTab({
       section.querySelector('[data-v2-gsc-performance-view="cannibalization"]')?.click?.();
       return;
     }
+    const aiButton=event.target.closest("[data-v2-opportunity-ai-visibility]");
+    if(aiButton){openAiVisibility();return;}
     const pageButton=event.target.closest("[data-v2-opportunity-page]");
     if(pageButton){openPageKeywords(pageButton.dataset.v2OpportunityPage);return;}
     const keywordButton=event.target.closest("[data-v2-opportunity-keyword]");
@@ -679,7 +711,10 @@ export function mountOrganicOpportunityTab({
   body.addEventListener("click",handleOpportunityActionClick,{signal});
   actionQueueBody.addEventListener("click",handleOpportunityActionClick,{signal});
   nextBestOpenPage.addEventListener("click",()=>openPageKeywords(nextBestOpenPage.dataset.v2OpportunityPage),{signal});
-  nextBestResearch.addEventListener("click",()=>researchKeyword(nextBestResearch.dataset.v2OpportunityKeyword),{signal});
+  nextBestResearch.addEventListener("click",()=>{
+    if(nextBestResearch.dataset.v2OpportunityAiVisibility==="true"){openAiVisibility();return;}
+    researchKeyword(nextBestResearch.dataset.v2OpportunityKeyword);
+  },{signal});
 
   const reset=()=>{loadedForKey=null;};
   target.addEventListener("input",reset,{signal});
