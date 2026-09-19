@@ -18,6 +18,8 @@ on:
       - functions/api/v2/organic/action-workflow.js
       - public/v2-ai-visibility.js
       - public/v2-ai-visibility.css
+      - public/v2-organic-opportunity-ui.js
+      - public/v2-organic-intelligence.css
       - public/v2-shell.js
       - public/v2.html
       - tests/dataforseo-ai-visibility.test.mjs
@@ -30,6 +32,8 @@ on:
       - tests/seo-action-workflow-api.test.mjs
       - tests/dashboard-test-helpers.mjs
       - tests/ai-visibility-ui.test.mjs
+      - tests/organic-opportunity-ui.test.mjs
+      - tests/v2-dashboard-view.test.mjs
       - tests/v2-shell-navigation.test.mjs
       - docs/phase12-ai-search-visibility.md
       - .github/workflows/phase12-ai-visibility-tests.yml
@@ -47,4 +51,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 12 AI visibility provider tests
-        run: node --test tests/dataforseo-ai-visibility.test.mjs tests/ai-visibility-api.test.mjs tests/ai-visibility-secondary-api.test.mjs tests/ai-visibility-storage.test.mjs tests/ai-visibility-history-api.test.mjs tests/ai-visibility-ui.test.mjs tests/v2-shell-navigation.test.mjs tests/ai-visibility-actions.test.mjs tests/organic-opportunities-api.test.mjs tests/seo-action-workflow-api.test.mjs
+        run: node --test tests/dataforseo-ai-visibility.test.mjs tests/ai-visibility-api.test.mjs tests/ai-visibility-secondary-api.test.mjs tests/ai-visibility-storage.test.mjs tests/ai-visibility-history-api.test.mjs tests/ai-visibility-ui.test.mjs tests/v2-shell-navigation.test.mjs tests/ai-visibility-actions.test.mjs tests/organic-opportunities-api.test.mjs tests/seo-action-workflow-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/v2-dashboard-view.test.mjs
