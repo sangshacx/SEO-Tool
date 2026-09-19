@@ -2,10 +2,15 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  AI_VISIBILITY_HISTORY_ENDPOINT,
   AI_VISIBILITY_MULTI_TARGET_METRICS_ENDPOINT,
+  AI_VISIBILITY_NEW_LOST_ENDPOINT,
   AI_VISIBILITY_TARGET_METRICS_ENDPOINT,
   AI_VISIBILITY_TOP_PAGES_ENDPOINT,
+  aiVisibilityHistoryDateRange,
+  fetchAiVisibilityHistorical,
   fetchAiVisibilityMultiTargetMetrics,
+  fetchAiVisibilityNewLost,
   fetchAiVisibilityTargetMetrics,
   fetchAiVisibilityTopMentionedPages,
 } from "../src/v2/providers/dataforseo-ai-visibility.js";
@@ -233,4 +238,104 @@ test("AI Visibility surfaces provider errors with actual spend metadata", async 
       error?.providerStatus === 40501 &&
       error?.actualCostUsd === 0.1,
   );
+});
+
+
+test("AI Visibility History clamps the requested date range to DataForSEO history availability", () => {
+  assert.deepEqual(
+    aiVisibilityHistoryDateRange(12, new Date("2026-09-19T00:00:00Z")),
+    { dateFrom: "2025-10-01", dateTo: "2026-09-19" },
+  );
+  assert.deepEqual(
+    aiVisibilityHistoryDateRange(0, new Date("2026-09-19T00:00:00Z")),
+    { dateFrom: "2025-08-01", dateTo: "2026-09-19" },
+  );
+});
+
+test("AI Visibility Historical returns normalized monthly mention and AI search-volume changes", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => { globalThis.fetch = originalFetch; });
+  let captured;
+  globalThis.fetch = async (url, options) => {
+    captured = { url, options };
+    return okResponse({
+      items_count: 3,
+      items: [
+        { year: 2026, month: 7, metrics: { mentions: 10, ai_search_volume: 200 } },
+        { year: 2026, month: 8, metrics: { mentions: 15, ai_search_volume: 260 } },
+        { year: 2026, month: 9, metrics: { mentions: 12, ai_search_volume: 300 } },
+      ],
+    }, { cost: 0.103, resultCount: 1 });
+  };
+
+  const result = await fetchAiVisibilityHistorical({
+    login: "login",
+    password: "password",
+    target: "example.com",
+    platform: "google",
+    locationCode: 2840,
+    languageCode: "en",
+    months: 12,
+    now: new Date("2026-09-19T00:00:00Z"),
+  });
+
+  assert.equal(captured.url, AI_VISIBILITY_HISTORY_ENDPOINT);
+  const task=JSON.parse(captured.options.body)[0];
+  assert.equal(task.date_from, "2025-10-01");
+  assert.equal(task.date_to, "2026-09-19");
+  assert.equal(task.platform, "google");
+  assert.equal(result.data.points.length, 3);
+  assert.equal(result.data.points[1].change.mentions_percent, 50);
+  assert.equal(result.data.points[1].change.ai_search_volume_percent, 30);
+  assert.equal(result.data.points[2].change.mentions_percent, -20);
+});
+
+test("AI Visibility New/Lost returns net monthly visibility changes for Decision Intelligence evidence", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => { globalThis.fetch = originalFetch; });
+  let captured;
+  globalThis.fetch = async (url, options) => {
+    captured = { url, options };
+    return okResponse({
+      items_count: 2,
+      date_from: "2026-08-01",
+      date_to: "2026-09-19",
+      group_range: "month",
+      items: [
+        {
+          date: "2026-08-01",
+          new_mentions: 12,
+          lost_mentions: 4,
+          new_ai_search_volume: 300,
+          lost_ai_search_volume: 80,
+        },
+        {
+          date: "2026-09-01",
+          new_mentions: 5,
+          lost_mentions: 11,
+          new_ai_search_volume: 120,
+          lost_ai_search_volume: 260,
+        },
+      ],
+    }, { cost: 0.102, resultCount: 1 });
+  };
+
+  const result = await fetchAiVisibilityNewLost({
+    login: "login",
+    password: "password",
+    target: "example.com",
+    platform: "google",
+    locationCode: 2840,
+    languageCode: "en",
+    months: 6,
+    now: new Date("2026-09-19T00:00:00Z"),
+  });
+
+  assert.equal(captured.url, AI_VISIBILITY_NEW_LOST_ENDPOINT);
+  const task=JSON.parse(captured.options.body)[0];
+  assert.equal(task.group_range, "month");
+  assert.equal(result.data.points[0].net_mentions, 8);
+  assert.equal(result.data.points[0].net_ai_search_volume, 220);
+  assert.equal(result.data.points[1].net_mentions, -6);
+  assert.equal(result.data.points[1].net_ai_search_volume, -140);
 });
