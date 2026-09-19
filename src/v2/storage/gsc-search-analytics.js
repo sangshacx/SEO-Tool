@@ -1,3 +1,5 @@
+import { buildGscCannibalizationCandidates } from "../gsc/cannibalization.js";
+
 const INSERT_CHUNK_SIZE = 250;
 
 function analyticsRow(row = {}) {
@@ -270,4 +272,124 @@ export async function completedGscSyncDates(db, {
     if ([...required].every((set) => available.has(set))) completed.add(row.target_date);
   }
   return completed;
+}
+
+
+export async function readGscCannibalizationCandidates(db, {
+  siteDomain,
+  days = 28,
+  limit = 50,
+} = {}) {
+  const requestedDays = Number(days);
+  if (![7, 28, 90].includes(requestedDays)) throw new TypeError("Choose a 7, 28, or 90 day GSC window.");
+  const rowLimit = Math.max(1, Math.min(100, Number(limit) || 50));
+
+  const site = await db.prepare(
+    "SELECT id FROM site_profiles WHERE domain = ? LIMIT 1",
+  ).bind(siteDomain).first();
+  if (!site?.id) {
+    const error = new Error("SITE_PROFILE_NOT_FOUND");
+    error.code = "SITE_PROFILE_NOT_FOUND";
+    error.httpStatus = 404;
+    throw error;
+  }
+
+  const latest = await db.prepare(
+    "SELECT MAX(date) AS latest_date FROM gsc_search_analytics_daily " +
+    "WHERE site_profile_id = ? AND dimension_set = 'query_page'",
+  ).bind(site.id).first();
+
+  if (!latest?.latest_date) {
+    return {
+      site_profile_id: site.id,
+      latest_date: null,
+      window: null,
+      coverage: { current_days: 0, previous_days: 0, requested_days: requestedDays },
+      metrics: { clicks: 0, impressions: 0, ctr: 0, position: null },
+      rows: [],
+    };
+  }
+
+  const window = gscWindow(latest.latest_date, requestedDays);
+  const candidatePoolLimit = Math.min(500, Math.max(100, rowLimit * 5));
+
+  const rowsResult = await db.prepare(
+    "WITH query_totals AS (" +
+    " SELECT query_text, SUM(impressions) AS total_impressions" +
+    " FROM gsc_search_analytics_daily" +
+    " WHERE site_profile_id = ? AND dimension_set = 'query_page'" +
+    " AND date BETWEEN ? AND ? AND query_text <> '' AND page_url <> ''" +
+    " GROUP BY query_text" +
+    " HAVING SUM(impressions) >= 100" +
+    " ORDER BY total_impressions DESC" +
+    " LIMIT ?" +
+    "), page_rows AS (" +
+    " SELECT d.query_text, d.page_url," +
+    " SUM(d.clicks) AS clicks, SUM(d.impressions) AS impressions," +
+    " CASE WHEN SUM(d.impressions) > 0" +
+    " THEN SUM(d.position * d.impressions) / SUM(d.impressions) ELSE NULL END AS position" +
+    " FROM gsc_search_analytics_daily d" +
+    " JOIN query_totals q ON q.query_text = d.query_text" +
+    " WHERE d.site_profile_id = ? AND d.dimension_set = 'query_page'" +
+    " AND d.date BETWEEN ? AND ? AND d.page_url <> ''" +
+    " GROUP BY d.query_text, d.page_url" +
+    ")" +
+    " SELECT query_text, page_url, clicks, impressions, position" +
+    " FROM page_rows" +
+    " ORDER BY query_text ASC, impressions DESC, position ASC",
+  ).bind(
+    site.id,
+    window.current_start,
+    window.current_end,
+    candidatePoolLimit,
+    site.id,
+    window.current_start,
+    window.current_end,
+  ).all();
+
+  const coverage = await db.prepare(
+    "SELECT " +
+    "COUNT(DISTINCT CASE WHEN date BETWEEN ? AND ? THEN date END) AS current_days, " +
+    "COUNT(DISTINCT CASE WHEN date BETWEEN ? AND ? THEN date END) AS previous_days, " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN clicks ELSE 0 END) AS clicks, " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) AS impressions, " +
+    "CASE WHEN SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) > 0 " +
+    "THEN SUM(CASE WHEN date BETWEEN ? AND ? THEN position * impressions ELSE 0 END) / " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) ELSE NULL END AS position " +
+    "FROM gsc_search_analytics_daily " +
+    "WHERE site_profile_id = ? AND dimension_set = 'query_page' AND date BETWEEN ? AND ?",
+  ).bind(
+    window.current_start, window.current_end,
+    window.previous_start, window.previous_end,
+    window.current_start, window.current_end,
+    window.current_start, window.current_end,
+    window.current_start, window.current_end,
+    window.current_start, window.current_end,
+    window.current_start, window.current_end,
+    site.id,
+    window.previous_start,
+    window.current_end,
+  ).first();
+
+  const rows = buildGscCannibalizationCandidates(rowsResult?.results ?? [], { limit: rowLimit });
+  const clicks = Number(coverage?.clicks ?? 0);
+  const impressions = Number(coverage?.impressions ?? 0);
+
+  return {
+    site_profile_id: site.id,
+    latest_date: latest.latest_date,
+    window,
+    coverage: {
+      current_days: Number(coverage?.current_days ?? 0),
+      previous_days: Number(coverage?.previous_days ?? 0),
+      requested_days: requestedDays,
+    },
+    metrics: {
+      clicks,
+      impressions,
+      ctr: impressions > 0 ? clicks / impressions : 0,
+      position: coverage?.position == null ? null : Number(coverage.position),
+    },
+    rows,
+  };
 }
