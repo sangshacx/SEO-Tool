@@ -197,3 +197,50 @@ test("Next Best Action falls back to the strongest DataForSEO quick win when no 
   assert.equal(page.next_best_action.evidence.keyword_difficulty,20);
   assert.match(page.next_best_action.why_now,/volume 1000/);
 });
+
+
+test("specific GSC low-CTR Top-10 evidence outranks generic Optimize when no recovery signal exists", () => {
+  const data=buildOrganicOpportunities({
+    target:"example.com",
+    sources:{
+      organic_keywords:{available:true},
+      top_pages:{available:true},
+      gsc_pages:{available:true},
+    },
+    pageRows:[
+      {url:"https://example.com/ctr/",organic_traffic:120,organic_keywords:10,positions:{top_10:4},changes:{up:0,down:0,lost:0}},
+    ],
+    keywordRows:[
+      {
+        keyword:"ctr target",
+        ranking_url:"https://example.com/ctr/",
+        position:8,
+        search_volume:500,
+        keyword_difficulty:25,
+        estimated_traffic:12,
+        intent:{primary:"commercial"},
+      },
+    ],
+    gscQueryPageRows:[
+      {
+        primary_key:"ctr target",
+        secondary_key:"https://example.com/ctr/",
+        clicks:10,
+        impressions:1000,
+        position:5,
+        previous_clicks:10,
+        previous_impressions:900,
+        change:{clicks_percent:0},
+      },
+    ],
+  });
+
+  const page=data.opportunities[0];
+  assert.equal(page.action.code,"ctr_opportunity");
+  assert.equal(page.action.label,"Improve CTR");
+  assert.equal(page.metrics.gsc_query_ctr_opportunities,1);
+  assert.equal(page.next_best_action.action,"ctr_opportunity");
+  assert.equal(page.next_best_action.query,"ctr target");
+  assert.equal(page.next_best_action.query_source,"gsc_query_page");
+  assert.match(page.next_best_action.why_now,/CTR below 3%/);
+});
