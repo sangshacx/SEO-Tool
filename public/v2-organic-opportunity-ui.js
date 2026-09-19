@@ -97,8 +97,8 @@ export function organicOpportunityPanelMarkup() {
         </div>
         <div class="v2-organic-table-shell">
           <table class="v2-organic-table v2-workflow-activity-table">
-            <thead><tr><th>Time</th><th>Transition</th><th>Action</th><th>Page</th><th>Query</th><th>Priority</th></tr></thead>
-            <tbody data-v2-workflow-activity-body><tr><td colspan="6" class="v2-organic-empty">Workflow 状态发生变化后会记录在这里。</td></tr></tbody>
+            <thead><tr><th>Time</th><th>Transition</th><th>Action</th><th>Page</th><th>Query</th><th>Note</th><th>Priority</th></tr></thead>
+            <tbody data-v2-workflow-activity-body><tr><td colspan="7" class="v2-organic-empty">Workflow 状态或备注发生变化后会记录在这里。</td></tr></tbody>
           </table>
         </div>
       </section>
@@ -270,6 +270,40 @@ export function mountOrganicOpportunityTab({
     }else{
       add("Reopen","new");
     }
+
+    const noteButton=document.createElement("button");
+    noteButton.type="button";
+    noteButton.textContent=item?.workflow?.note?"Edit Note":"Add Note";
+    noteButton.dataset.v2WorkflowNoteEdit="true";
+    wrap.append(noteButton);
+
+    const editor=document.createElement("div");
+    editor.className="v2-workflow-note-editor";
+    editor.hidden=true;
+    const input=document.createElement("textarea");
+    input.maxLength=2000;
+    input.rows=2;
+    input.value=item?.workflow?.note||"";
+    input.placeholder="记录已做的修改、待验证事项或后续计划…";
+    input.dataset.v2WorkflowNoteInput="true";
+    const actions=document.createElement("div");
+    actions.className="v2-workflow-note-actions";
+    const save=document.createElement("button");
+    save.type="button";
+    save.textContent="Save Note";
+    save.dataset.v2WorkflowNoteSave="true";
+    save.dataset.v2WorkflowStatus=status;
+    save.dataset.v2WorkflowPage=item.page||item.url||"";
+    save.dataset.v2WorkflowAction=typeof item.action==="string"?item.action:(item.action?.code||item.next_best_action?.action||"");
+    save.dataset.v2WorkflowQuery=item.query||item.next_best_action?.query||"";
+    save.dataset.v2WorkflowScore=String(item.priority_score??item.next_best_action?.priority_score??"");
+    const cancel=document.createElement("button");
+    cancel.type="button";
+    cancel.textContent="Cancel";
+    cancel.dataset.v2WorkflowNoteCancel="true";
+    actions.append(save,cancel);
+    editor.append(input,actions);
+    wrap.append(editor);
     return wrap;
   };
 
@@ -320,7 +354,7 @@ export function mountOrganicOpportunityTab({
     workflowActivityBody.replaceChildren();
     if(!events.length){
       const row=document.createElement("tr"),cell=document.createElement("td");
-      cell.colSpan=6;cell.className="v2-organic-empty";
+      cell.colSpan=7;cell.className="v2-organic-empty";
       cell.textContent="还没有 Workflow Activity。点击 Start / Done / Snooze 后会自动记录。";
       row.append(cell);workflowActivityBody.append(row);return;
     }
@@ -335,13 +369,14 @@ export function mountOrganicOpportunityTab({
       badge.dataset.toStatus=event.to_status||"new";
       const from=event.from_status?event.from_status.replace("_"," "):"created";
       const to=(event.to_status||"new").replace("_"," ");
-      badge.textContent=from+" → "+to;transition.append(badge);
+      badge.textContent=event.from_status&&event.from_status===event.to_status?"note updated":from+" → "+to;transition.append(badge);
       const action=document.createElement("td");action.textContent=(event.action_code||"—").replaceAll("_"," ");
       const page=document.createElement("td"),link=document.createElement("a");
       link.href=event.page_url||"#";link.target="_blank";link.rel="noopener noreferrer";link.className="v2-organic-url";link.textContent=event.page_url||"—";page.append(link);
       const query=document.createElement("td");query.className="v2-workflow-activity-query";query.textContent=event.query||"—";query.title=event.query||"";
+      const note=document.createElement("td");note.className="v2-workflow-activity-note";note.textContent=event.note||"—";note.title=event.note||"";
       const score=document.createElement("td");score.textContent=num(event.priority_score);
-      row.append(time,transition,action,page,query,score);workflowActivityBody.append(row);
+      row.append(time,transition,action,page,query,note,score);workflowActivityBody.append(row);
     });
   };
 
@@ -462,7 +497,7 @@ export function mountOrganicOpportunityTab({
     if(loadedForKey!==scopeKey())load();
   },{signal});
   section.querySelectorAll("[data-v2-opportunity-go]").forEach((button)=>button.addEventListener("click",()=>activateTab?.(section,button.dataset.v2OpportunityGo),{signal}));
-  const saveWorkflow = async (button) => {
+  const saveWorkflow = async (button, extra = {}) => {
     const siteDomain=hostname(target.value);
     const status=button.dataset.v2WorkflowStatus;
     if(!siteDomain||!status)return;
@@ -474,6 +509,7 @@ export function mountOrganicOpportunityTab({
       status,
       priority_score:button.dataset.v2WorkflowScore===""?null:Number(button.dataset.v2WorkflowScore),
     };
+    if(Object.hasOwn(extra,"note"))payload.note=extra.note;
     if(status==="snoozed")payload.snooze_until=new Date(Date.now()+7*86400000).toISOString();
     button.disabled=true;
     setStatus?.("正在更新 SEO Action Workflow；只写 D1，本次费用 $0…","info");
@@ -511,6 +547,27 @@ export function mountOrganicOpportunityTab({
   };
 
   const handleOpportunityActionClick = (event) => {
+    const noteEdit=event.target.closest("[data-v2-workflow-note-edit]");
+    if(noteEdit){
+      const controls=noteEdit.closest(".v2-workflow-controls");
+      const editor=controls?.querySelector(".v2-workflow-note-editor");
+      if(editor)editor.hidden=false;
+      controls?.querySelector("[data-v2-workflow-note-input]")?.focus?.();
+      return;
+    }
+    const noteCancel=event.target.closest("[data-v2-workflow-note-cancel]");
+    if(noteCancel){
+      const editor=noteCancel.closest(".v2-workflow-note-editor");
+      if(editor)editor.hidden=true;
+      return;
+    }
+    const noteSave=event.target.closest("[data-v2-workflow-note-save]");
+    if(noteSave){
+      const editor=noteSave.closest(".v2-workflow-note-editor");
+      const input=editor?.querySelector("[data-v2-workflow-note-input]");
+      saveWorkflow(noteSave,{note:input?.value??""});
+      return;
+    }
     const workflowButton=event.target.closest("[data-v2-workflow-status]");
     if(workflowButton){saveWorkflow(workflowButton);return;}
     const pageButton=event.target.closest("[data-v2-opportunity-page]");
