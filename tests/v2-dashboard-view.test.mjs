@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   DASHBOARD_EMPTY_TREND_COPY,
+  buildDashboardDecisionRequest,
   buildDashboardRequestUrl,
   createDashboardLoader,
   dashboardDetailRoute,
@@ -12,6 +13,7 @@ import {
   formatDashboardScope,
   limitDashboardRows,
   mountDashboard,
+  mountDashboardDecision,
   renderDashboard,
   selectDashboardTrendPoints,
   trendState,
@@ -280,11 +282,23 @@ function dashboardHarness() {
   const retry = new FakeElement("button");
   retry.dataset.v2DashboardRetry = "";
   retry.hidden = true;
+  const decision = new FakeElement("section");
+  decision.dataset.v2DashboardDecision = "";
+  const decisionState = new FakeElement("b"); decisionState.dataset.v2DashboardDecisionState = "";
+  const decisionAction = new FakeElement("b"); decisionAction.dataset.v2DashboardDecisionAction = "";
+  const decisionScore = new FakeElement("b"); decisionScore.dataset.v2DashboardDecisionScore = "";
+  const decisionPage = new FakeElement("b"); decisionPage.dataset.v2DashboardDecisionPage = "";
+  const decisionQuery = new FakeElement("b"); decisionQuery.dataset.v2DashboardDecisionQuery = "";
+  const decisionSource = new FakeElement("b"); decisionSource.dataset.v2DashboardDecisionSource = "";
+  const decisionWhy = new FakeElement("p"); decisionWhy.dataset.v2DashboardDecisionWhy = "";
+  const decisionOpen = new FakeElement("button"); decisionOpen.dataset.v2DashboardOpenOpportunity = "";
+  const decisionResearch = new FakeElement("button"); decisionResearch.dataset.v2DashboardResearchQuery = "";
+  decision.append(decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWhy, decisionOpen, decisionResearch);
   const body = new FakeElement("div");
   body.dataset.v2DashboardBody = "";
-  dashboard.append(title, updated, status, warning, refresh, retry, body);
+  dashboard.append(title, updated, status, warning, refresh, retry, decision, body);
   root.append(dashboard);
-  return { root, dashboard, title, updated, status, warning, refresh, retry, body };
+  return { root, dashboard, title, updated, status, warning, refresh, retry, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWhy, decisionOpen, decisionResearch, body };
 }
 
 test("distinguishes unavailable metrics from an explicitly sourced zero", () => {
@@ -324,6 +338,14 @@ test("routes dashboard details to existing V2 views and builds only a relative z
   assert.equal(dashboardDetailRoute("referring_domains"), "#backlinks");
   const request = buildDashboardRequestUrl({ domain: "example.com", location_code: 2840, language_code: "en" });
   assert.equal(request, "/api/v2/dashboard?site=example.com&location_code=2840&language_code=en");
+});
+
+test("builds Dashboard Decision Intelligence from the same managed site and market scope", () => {
+  assert.deepEqual(buildDashboardDecisionRequest(dashboardScope()), {
+    target: "example.com",
+    location_code: 2840,
+    language_code: "en",
+  });
 });
 
 test("reloads only the current market scope, discards stale responses, and retains prior data on failure", async () => {
@@ -675,5 +697,70 @@ test("mountDashboard cleanup suppresses late loader callbacks from the old mount
     await new Promise((resolve) => setTimeout(resolve, 0));
     assert.ok(body.children.length > 0);
     secondCleanup();
+  });
+});
+
+
+test("Dashboard Decision Intelligence reads only the internal Opportunity API and supports Keyword Explorer handoff", async () => {
+  await withFakeDocument(async () => {
+    const { root, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWhy, decisionResearch } = dashboardHarness();
+    const keywordInput = new FakeElement("input");
+    keywordInput.id = "keyword";
+    root.append(keywordInput);
+    const calls = [];
+    const fetchImpl = async (url, options = {}) => {
+      calls.push({ url, options });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          ok: true,
+          data: {
+            ready: true,
+            next_best_action: {
+              page: "https://example.com/page/",
+              action: "optimize",
+              action_label: "Optimize",
+              priority_score: 77.5,
+              query: "waterproof membrane supplier",
+              query_source: "gsc_query_page",
+              why_now: "Real GSC impressions show a striking-distance query.",
+            },
+          },
+          meta: { actual_cost_usd: 0, provider_requests: 0 },
+        }),
+      };
+    };
+    const context = {
+      subscribe(handler) {
+        handler(dashboardScope());
+        return () => {};
+      },
+    };
+    const locationLike = { hash: "" };
+    const cleanup = mountDashboardDecision({ root, context, fetchImpl, locationLike });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, "/api/v2/organic/opportunities");
+    assert.equal(calls[0].options.method, "POST");
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      target: "example.com",
+      location_code: 2840,
+      language_code: "en",
+    });
+    assert.equal(decisionState.textContent, "READY");
+    assert.equal(decisionAction.textContent, "Optimize");
+    assert.equal(decisionScore.textContent, "77.5");
+    assert.equal(decisionPage.textContent, "https://example.com/page/");
+    assert.equal(decisionQuery.textContent, "waterproof membrane supplier");
+    assert.equal(decisionSource.textContent, "GSC Query+Page");
+    assert.match(decisionWhy.textContent, /GSC impressions/);
+    assert.equal(decisionResearch.disabled, false);
+
+    decision.dispatchEvent({ type: "click", target: decisionResearch });
+    assert.equal(keywordInput.value, "waterproof membrane supplier");
+    assert.equal(locationLike.hash, "keywords");
+    cleanup();
   });
 });
