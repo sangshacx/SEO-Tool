@@ -27,3 +27,12 @@ test("Organic Intelligence exposes Top Pages and reuses page URLs for keyword dr
   assert.match(organic, /target\.value=button\.dataset\.v2OrganicPageUrl/);
   assert.match(organic, /activateTab\(section,"keywords"\);load\(\)/);
 });
+
+
+test("Organic Intelligence exposes Latest Position Changes with explicit cost guard", () => {
+  assert.match(organic, /\/api\/v2\/organic\/changes/);
+  assert.match(organic, /data-v2-organic-tab="changes"/);
+  assert.match(organic, /Latest Position Changes/);
+  assert.match(organic, /latest_provider_update|Provider update/);
+  assert.match(organic, /LIVE_REQUEST_CONFIRMATION_REQUIRED/);
+});
