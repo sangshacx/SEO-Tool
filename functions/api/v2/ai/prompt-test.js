@@ -50,14 +50,14 @@ async function logUsage(env,values,platform){
 
 async function modelsFor(env,platform){
   const cached=await readPromptModelsCache(env.CACHE,platform);
-  if(cached)return cached.data?.models??[];
+  if(cached)return {models:cached.data?.models??[],providerRequests:0};
   const provider=await fetchLlmResponseModels({
     login:env.DATAFORSEO_LOGIN,
     password:env.DATAFORSEO_PASSWORD,
     platform,
   });
   await writePromptModelsCache(env.CACHE,platform,provider.data);
-  return provider.data.models??[];
+  return {models:provider.data.models??[],providerRequests:1};
 }
 
 function validate(body){
@@ -181,20 +181,20 @@ export async function onRequestPost({request,env}){
   }
 
   try{
-    const models=await modelsFor(env,scope.platform);
-    const selected=models.find((item)=>item.model_name===scope.modelName);
+    const modelLookup=await modelsFor(env,scope.platform);
+    const selected=modelLookup.models.find((item)=>item.model_name===scope.modelName);
     if(!selected){
       return json({
         ok:false,
         error:{code:"LLM_MODEL_NOT_AVAILABLE",message:"The selected model is no longer available. Refresh the free model list."},
-        meta:{request_id:requestId,actual_cost_usd:0,provider_requests:0},
+        meta:{request_id:requestId,actual_cost_usd:0,provider_requests:modelLookup.providerRequests},
       },400);
     }
     if(scope.webSearch&&selected.web_search_supported!==true&&scope.platform!=="perplexity"){
       return json({
         ok:false,
         error:{code:"MODEL_WEB_SEARCH_UNSUPPORTED",message:"The selected model does not support web search. Choose another model or disable web search."},
-        meta:{request_id:requestId,actual_cost_usd:0,provider_requests:0},
+        meta:{request_id:requestId,actual_cost_usd:0,provider_requests:modelLookup.providerRequests},
       },400);
     }
 
@@ -231,7 +231,9 @@ export async function onRequestPost({request,env}){
         cached:false,
         cached_at:cachedAt,
         actual_cost_usd:provider.actualCostUsd,
-        provider_requests:1,
+        provider_requests:1+modelLookup.providerRequests,
+        paid_provider_requests:1,
+        free_model_provider_requests:modelLookup.providerRequests,
         max_output_tokens:MAX_OUTPUT_TOKENS,
         model_list_cache_hours:PROMPT_MODELS_CACHE_TTL_SECONDS/3600,
         cache_ttl_days:PROMPT_RESULT_CACHE_TTL_SECONDS/86400,
