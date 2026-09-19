@@ -40,7 +40,7 @@ test("SEO action workflow API upserts status at zero provider cost", async () =>
     priority_score:77.5,
   };
   const first=await onRequestPost({
-    request:post({...base,status:"in_progress"}),
+    request:post({...base,status:"in_progress",note:"Updated title and intro copy"}),
     env:{DB:d1},
   });
   assert.equal(first.status,200);
@@ -59,6 +59,7 @@ test("SEO action workflow API upserts status at zero provider cost", async () =>
   assert.equal(secondPayload.data.id,firstPayload.data.id);
   assert.equal(secondPayload.data.status,"done");
   assert.equal(secondPayload.data.last_priority_score,82);
+  assert.equal(secondPayload.data.note,"Updated title and intro copy");
 
   const list=await onRequestGet({
     request:new Request("https://preview.example/api/v2/organic/action-workflow?site_domain=example.com",{headers:ACCESS}),
@@ -68,6 +69,7 @@ test("SEO action workflow API upserts status at zero provider cost", async () =>
   assert.equal(list.status,200);
   assert.equal(listPayload.data.items.length,1);
   assert.equal(listPayload.data.items[0].status,"done");
+  assert.equal(listPayload.data.items[0].note,"Updated title and intro copy");
   assert.equal(listPayload.meta.actual_cost_usd,0);
   assert.equal(listPayload.meta.provider_requests,0);
 });
