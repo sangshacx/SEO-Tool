@@ -34,3 +34,18 @@ test("GSC settings exposes explicit Generative AI searchAppearance discovery wit
   assert.doesNotMatch(section.innerHTML,/AI_OVERVIEW/);
   assert.doesNotMatch(section.innerHTML,/AI_MODE/);
 });
+
+
+test("GSC settings keeps Generative AI sync manual and labels metrics as filtered Search Analytics",()=>{
+  const fake={createElement(){return {className:"",dataset:{},innerHTML:""};}};
+  const section=createGscSettingsWorkspace(fake);
+  assert.match(section.innerHTML,/Sync Selected Appearance · \$0/);
+  assert.match(section.innerHTML,/Latest finalized day/);
+  assert.match(section.innerHTML,/Backfill 3 days/);
+  assert.match(section.innerHTML,/Backfill 7 days/);
+  assert.match(section.innerHTML,/Filtered Impressions · 28d/);
+  assert.match(section.innerHTML,/Filtered Clicks · 28d/);
+  assert.match(section.innerHTML,/Coverage/);
+  assert.match(section.innerHTML,/Top Page/);
+  assert.doesNotMatch(section.innerHTML,/Auto Sync|Automatic Sync/i);
+});
