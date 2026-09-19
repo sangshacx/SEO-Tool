@@ -173,3 +173,25 @@ test("architecture overlap tasks hand off directly to the GSC Potential Cannibal
   assert.match(opportunityUiSource,/data-v2-gsc-performance-view="cannibalization"/);
   assert.match(opportunityUiSource,/review_cannibalization/);
 });
+
+
+test("Opportunity Center exposes AI History as optional zero-cost D1 evidence", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/data-v2-opportunity-source="ai_visibility"/);
+  assert.match(markup,/AI History/);
+  assert.match(markup,/Open AI Visibility/);
+  assert.match(opportunityUiSource,/source === "ai_visibility"/);
+  assert.match(opportunityUiSource,/Ready · D1/);
+  assert.match(opportunityUiSource,/AI History ready · D1/);
+});
+
+test("AI recovery tasks route to AI Visibility instead of pretending the workflow label is a keyword", () => {
+  assert.match(opportunityUiSource,/dataforseo_ai_history/);
+  assert.match(opportunityUiSource,/AI History · D1/);
+  assert.match(opportunityUiSource,/ai_visibility_recovery/);
+  assert.match(opportunityUiSource,/v2OpportunityAiVisibility/);
+  assert.match(opportunityUiSource,/Open AI Visibility/);
+  assert.match(opportunityUiSource,/globalThis\.location\.hash="ai-visibility"/);
+  assert.match(opportunityUiSource,/item\.query_source!=="dataforseo_ai_history"/);
+  assert.match(opportunityUiSource,/nextBestOpenPage\.hidden = aiHistory/);
+});
