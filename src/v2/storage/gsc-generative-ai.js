@@ -1,4 +1,5 @@
 import { summarizeGscGenerativeAiTrend } from "../intelligence/gsc-generative-ai-trends.js";
+import { summarizeGscGenerativeWorkflowOutcome } from "../intelligence/gsc-generative-ai-outcomes.js";
 
 const INSERT_CHUNK_SIZE=250;
 
@@ -236,4 +237,153 @@ export async function readGscGenerativeAiSummary(db,{
     disclaimer:
       "This view is Search Analytics filtered by the manually selected discovered searchAppearance value. It is not a reverse-engineered Google Generative AI score and does not infer unavailable traffic.",
   };
+}
+
+
+function dateOffset(value,days){
+  if(!value)return null;
+  const date=new Date(String(value).slice(0,10)+"T00:00:00Z");
+  if(Number.isNaN(date.getTime()))return null;
+  date.setUTCDate(date.getUTCDate()+days);
+  return date.toISOString().slice(0,10);
+}
+
+export async function linkGscGenerativeWorkflow(db,{
+  siteDomain,
+  workflowId,
+  appearance,
+}={}){
+  const site=await db.prepare("SELECT id FROM site_profiles WHERE domain = ? LIMIT 1")
+    .bind(siteDomain).first();
+  if(!site?.id){
+    const error=new Error("GSC Generative workflow link requires a saved own-site profile.");
+    error.code="MANAGED_SITE_REQUIRED";
+    error.httpStatus=409;
+    throw error;
+  }
+
+  const workflow=await db.prepare(
+    "SELECT id, action_code FROM seo_action_workflow WHERE id = ? AND site_profile_id = ? LIMIT 1"
+  ).bind(Number(workflowId),site.id).first();
+  if(!workflow?.id||workflow.action_code!=="gsc_generative_recovery"){
+    const error=new Error("GSC Generative link requires a matching recovery workflow.");
+    error.code="INVALID_GSC_GENERATIVE_WORKFLOW";
+    error.httpStatus=400;
+    throw error;
+  }
+
+  const value=String(appearance??"").trim();
+  const selected=await db.prepare(
+    "SELECT property, appearance_value FROM gsc_search_appearance_capabilities "+
+    "WHERE site_profile_id = ? AND appearance_value = ? AND selected_for_generative_ai = 1 LIMIT 1"
+  ).bind(site.id,value).first();
+  if(!selected?.appearance_value){
+    const error=new Error("The workflow searchAppearance must be the currently selected discovered value.");
+    error.code="GSC_GENERATIVE_APPEARANCE_NOT_SELECTED";
+    error.httpStatus=409;
+    throw error;
+  }
+
+  await db.prepare(
+    "INSERT INTO gsc_generative_workflow_links (workflow_id, site_profile_id, property, appearance_value) "+
+    "VALUES (?, ?, ?, ?) ON CONFLICT(workflow_id) DO UPDATE SET "+
+    "property = excluded.property, appearance_value = excluded.appearance_value, updated_at = CURRENT_TIMESTAMP"
+  ).bind(workflow.id,site.id,selected.property,selected.appearance_value).run();
+
+  return {
+    workflow_id:Number(workflow.id),
+    site_profile_id:Number(site.id),
+    property:selected.property,
+    appearance_value:selected.appearance_value,
+  };
+}
+
+async function gscGenerativeOutcomeWindow(db,{
+  siteProfileId,
+  appearance,
+  startDate,
+  endDate,
+}={}){
+  const row=await db.prepare(
+    "SELECT COUNT(DISTINCT date) AS days, COALESCE(SUM(clicks),0) AS clicks, "+
+    "COALESCE(SUM(impressions),0) AS impressions FROM gsc_generative_ai_daily "+
+    "WHERE site_profile_id = ? AND appearance_value = ? AND dimension_set = 'property' "+
+    "AND date BETWEEN ? AND ?"
+  ).bind(siteProfileId,appearance,startDate,endDate).first();
+  return {
+    days:Number(row?.days??0),
+    clicks:Number(row?.clicks??0),
+    impressions:Number(row?.impressions??0),
+  };
+}
+
+export async function readGscGenerativeWorkflowOutcomes(db,{
+  siteDomain,
+  limit=10,
+  windowDays=7,
+}={}){
+  const site=await db.prepare("SELECT id FROM site_profiles WHERE domain = ? LIMIT 1")
+    .bind(siteDomain).first();
+  if(!site?.id)return [];
+
+  const boundedLimit=Math.max(1,Math.min(25,Number(limit)||10));
+  const days=Math.max(3,Math.min(14,Number(windowDays)||7));
+  const done=await db.prepare(`
+    SELECT
+      e.id AS event_id,
+      e.workflow_id,
+      e.page_url,
+      e.action_code,
+      e.created_at,
+      l.property,
+      l.appearance_value
+    FROM seo_action_workflow_events e
+    JOIN (
+      SELECT workflow_id, MAX(id) AS event_id
+      FROM seo_action_workflow_events
+      WHERE to_status = 'done' AND action_code = 'gsc_generative_recovery'
+      GROUP BY workflow_id
+    ) latest ON latest.event_id = e.id
+    JOIN gsc_generative_workflow_links l ON l.workflow_id = e.workflow_id
+    WHERE e.site_profile_id = ?
+    ORDER BY e.id DESC
+    LIMIT ?
+  `).bind(site.id,boundedLimit).all();
+
+  const outcomes=[];
+  for(const event of done?.results??[]){
+    const completed=String(event.created_at??"").slice(0,10);
+    const preStart=dateOffset(completed,-days);
+    const preEnd=dateOffset(completed,-1);
+    const postStart=dateOffset(completed,1);
+    const postEnd=dateOffset(completed,days);
+    if(!preStart||!preEnd||!postStart||!postEnd)continue;
+
+    const [pre,post]=await Promise.all([
+      gscGenerativeOutcomeWindow(db,{
+        siteProfileId:site.id,
+        appearance:event.appearance_value,
+        startDate:preStart,
+        endDate:preEnd,
+      }),
+      gscGenerativeOutcomeWindow(db,{
+        siteProfileId:site.id,
+        appearance:event.appearance_value,
+        startDate:postStart,
+        endDate:postEnd,
+      }),
+    ]);
+
+    outcomes.push(summarizeGscGenerativeWorkflowOutcome({
+      event,
+      link:{
+        property:event.property,
+        appearance_value:event.appearance_value,
+      },
+      pre,
+      post,
+      windowDays:days,
+    }));
+  }
+  return outcomes;
 }
