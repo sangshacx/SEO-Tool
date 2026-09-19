@@ -3,7 +3,7 @@ import { readBoundedJson } from "./bounded-json.js";
 export const GSC_SITES_ENDPOINT = "https://www.googleapis.com/webmasters/v3/sites";
 export const GSC_SEARCH_ANALYTICS_BASE = "https://www.googleapis.com/webmasters/v3/sites";
 export const GSC_MAX_ROWS = 25000;
-export const GSC_DIMENSIONS = Object.freeze(["date", "query", "page", "country", "device"]);
+export const GSC_DIMENSIONS = Object.freeze(["date", "query", "page", "country", "device", "searchAppearance"]);
 export const GSC_SEARCH_TYPES = Object.freeze(["web"]);
 
 export class GscProviderError extends Error {
@@ -71,6 +71,12 @@ function normalizeDimensions(value) {
   if (new Set(normalized).size !== normalized.length || normalized.some((item) => !GSC_DIMENSIONS.includes(item))) {
     throw new GscProviderError("Choose supported Search Analytics dimensions.", {
       code: "GSC_INVALID_DIMENSIONS",
+      httpStatus: 400,
+    });
+  }
+  if (normalized.includes("searchAppearance") && normalized.length !== 1) {
+    throw new GscProviderError("Search appearance must be queried as the only dimension before filtering by a discovered value.", {
+      code: "GSC_SEARCH_APPEARANCE_DIMENSION_EXCLUSIVE",
       httpStatus: 400,
     });
   }
@@ -196,5 +202,52 @@ export async function queryGscSearchAnalytics({
     has_more: rows.length === body.rowLimit,
     next_start_row: rows.length === body.rowLimit ? body.startRow + rows.length : null,
     disclaimer: "Search Analytics can return top rows rather than every row. SEO Pro V2 preserves this limitation in downstream analysis.",
+  };
+}
+
+
+export function isGenerativeAiAppearanceCandidate(value) {
+  const appearance = String(value ?? "").trim();
+  if (!appearance) return false;
+  return /(^|[_\s-])AI([_\s-]|$)|GENERATIVE/i.test(appearance);
+}
+
+export async function discoverGscSearchAppearances({
+  accessToken,
+  property,
+  startDate,
+  endDate,
+  rowLimit = 250,
+} = {}) {
+  const result = await queryGscSearchAnalytics({
+    accessToken,
+    property,
+    startDate,
+    endDate,
+    dimensions: ["searchAppearance"],
+    rowLimit,
+    startRow: 0,
+    searchType: "web",
+    dataState: "final",
+  });
+
+  const appearances = result.rows.map((row) => ({
+    appearance: row.searchAppearance,
+    clicks: row.clicks,
+    impressions: row.impressions,
+    ctr: row.ctr,
+    position: row.position,
+    generative_ai_candidate: isGenerativeAiAppearanceCandidate(row.searchAppearance),
+  }));
+
+  return {
+    property: result.property,
+    start_date: startDate,
+    end_date: endDate,
+    appearances,
+    candidate_count: appearances.filter((row) => row.generative_ai_candidate).length,
+    returned_count: appearances.length,
+    disclaimer:
+      "Search appearance values are discovered from this property at runtime. Candidate labels are conservative hints only; SEO Pro V2 never hard-codes or auto-selects an undocumented Generative AI appearance value.",
   };
 }
