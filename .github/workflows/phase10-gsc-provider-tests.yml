@@ -1,0 +1,25 @@
+name: Phase 10 GSC Provider Tests
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - src/v2/providers/google-search-console.js
+      - tests/google-search-console-provider.test.mjs
+      - .github/workflows/phase10-gsc-provider-tests.yml
+
+permissions:
+  contents: read
+
+jobs:
+  test-gsc-provider:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run Phase 10 GSC provider tests
+        run: node --test tests/google-search-console-provider.test.mjs
