@@ -1,0 +1,19 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import { organicOpportunityPanelMarkup, summarizeOpportunityCounts } from "../public/v2-organic-opportunity-ui.js";
+
+test("Opportunity Center UI keeps the decision layer explicitly cache-only", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/Opportunity Center/);
+  assert.match(markup,/固定 \$0/);
+  assert.match(markup,/Recalculate · \$0/);
+  assert.match(markup,/Organic Keywords/);
+  assert.match(markup,/Top Pages/);
+  assert.doesNotMatch(markup,/allow_live_request/);
+});
+
+test("Opportunity Center summary groups recovery and growth actions without hiding raw engine actions", () => {
+  const counts=summarizeOpportunityCounts({summary:{total_pages:8,action_counts:{optimize:3,recover:1,reclaim:1,scale:2,protect:1}}});
+  assert.deepEqual(counts,{total:8,optimize:3,recover:2,growth:3});
+});
