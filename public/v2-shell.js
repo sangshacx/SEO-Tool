@@ -26,6 +26,7 @@ import {
 } from "./v2-keyword-library.js";
 import { mountCompetitorIntelligence } from "./v2-competitor-intelligence-ui.js";
 import { createOrganicIntelligenceWorkspace, mountOrganicIntelligence } from "./v2-organic-intelligence.js";
+import { createGscSettingsWorkspace, mountGscSettings } from "./v2-gsc-settings.js";
 
 export const V2_VIEWS = Object.freeze([
   { id: "overview", label: "总览", group: "primary" },
@@ -1225,7 +1226,7 @@ function buildShell() {
   content.append(createKeywordLibrarySection());
   content.append(
     createPlaceholder("more", "更多工具", "Content Brief 已按项目决定暂停，现有代码和数据继续保留，但不占用主工作区。"),
-    createPlaceholder("settings", "费用与设置", "DataForSEO 费用仍由 Cost Guard、7 天缓存和 D1 用量记录共同控制。"),
+    createGscSettingsWorkspace(),
   );
   const sites = createElement("section", "panel v2-sites-workspace");
   sites.dataset.v2View = "sites";
@@ -1337,6 +1338,7 @@ function buildShell() {
   let competitorIntelligenceCleanup = () => {};
   let organicIntelligenceCleanup = () => {};
   let clusterSerpVerificationCleanup = () => {};
+  let gscSettingsCleanup = () => {};
   const marketInitialization = createMarketInitializationCoordinator({
     initialize: () => initializeSites(shell),
     onReady: ({ context, fetchImpl }) => {
@@ -1356,6 +1358,8 @@ function buildShell() {
         keywordResearchWorkspace,
         context,
       });
+      gscSettingsCleanup();
+      gscSettingsCleanup = mountGscSettings({ root: shell, context, fetchImpl });
       setResearchControlsReady(shell, true);
       marketInputs.forEach((input) => { input.disabled = false; });
       retryMarket.hidden = true;
