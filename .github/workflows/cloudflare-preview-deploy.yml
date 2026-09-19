@@ -1,0 +1,53 @@
+name: Deploy SEO Pro V2 Preview
+
+concurrency:
+  group: cloudflare-preview-deploy-seo-pro-v2
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - seo-pro-v2
+    paths:
+      - public/**
+      - functions/**
+      - src/**
+      - migrations/**
+      - wrangler.toml
+      - wrangler.json
+      - wrangler.jsonc
+      - .github/workflows/cloudflare-preview-deploy.yml
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check out seo-pro-v2
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Verify Cloudflare deployment secrets
+        shell: bash
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Deploy Preview with Pages Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          message="$(git log -1 --pretty=%s | cut -c1-120)"
+          npx --yes wrangler@4 pages deploy public             --project-name seo-tool             --branch seo-pro-v2             --commit-hash "$GITHUB_SHA"             --commit-message "$message"
+
+      - name: Show Preview deployment
+        shell: bash
+        run: |
+          npx --yes wrangler@4 pages deployment list             --project-name seo-tool             --environment preview
