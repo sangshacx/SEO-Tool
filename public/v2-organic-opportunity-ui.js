@@ -68,6 +68,19 @@ export function organicOpportunityPanelMarkup() {
         </div>
       </div>
 
+      <section class="v2-action-queue" data-v2-action-queue>
+        <div class="v2-action-queue-head">
+          <div><span>TOP ACTION QUEUE</span><b>接下来优先处理的页面</b></div>
+          <small><strong data-v2-action-queue-count>0</strong> actionable pages · Monitor 已排除</small>
+        </div>
+        <div class="v2-organic-table-shell">
+          <table class="v2-organic-table v2-action-queue-table">
+            <thead><tr><th>#</th><th>Workstream</th><th>Action</th><th>Page</th><th>Recommended Query</th><th>Priority</th><th>Confidence</th><th>Why Now</th><th>Next</th></tr></thead>
+            <tbody data-v2-action-queue-body><tr><td colspan="9" class="v2-organic-empty">Recalculate 后生成 Top 5 可执行任务。</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
       <div class="v2-organic-table-shell">
         <table class="v2-organic-table v2-organic-opportunity-table">
           <thead><tr><th>Priority</th><th>Page</th><th>Action</th><th>Traffic</th><th>Quick Wins</th><th>Down / Lost</th><th>Commercial QW</th><th>GSC Reality</th><th>Score Breakdown</th><th>Confidence</th><th>Next</th></tr></thead>
@@ -112,6 +125,8 @@ export function mountOrganicOpportunityTab({
   const nextBestSource = section.querySelector("[data-v2-next-best-action-source]");
   const nextBestOpenPage = section.querySelector("[data-v2-next-best-open-page]");
   const nextBestResearch = section.querySelector("[data-v2-next-best-research]");
+  const actionQueueBody = section.querySelector("[data-v2-action-queue-body]");
+  const actionQueueCount = section.querySelector("[data-v2-action-queue-count]");
   const sourceCards = {
     organic_keywords: section.querySelector('[data-v2-opportunity-source="organic_keywords"]'),
     top_pages: section.querySelector('[data-v2-opportunity-source="top_pages"]'),
@@ -176,6 +191,44 @@ export function mountOrganicOpportunityTab({
     nextBestOpenPage.dataset.v2OpportunityPage = next.page;
     nextBestResearch.dataset.v2OpportunityKeyword = next.query || "";
     nextBestResearch.disabled = !next.query;
+  };
+
+  const renderActionQueue = (data) => {
+    const queue = Array.isArray(data?.action_queue) ? data.action_queue : [];
+    actionQueueCount.textContent = String(queue.length);
+    actionQueueBody.replaceChildren();
+    if (!queue.length) {
+      const row=document.createElement("tr"),cell=document.createElement("td");
+      cell.colSpan=9;cell.className="v2-organic-empty";
+      cell.textContent=data?.ready
+        ? "当前没有需要立即执行的页面；Monitor-only 页面不会进入 Action Queue。"
+        : "证据不足，先加载 Organic Keywords / Top Pages 或同步 GSC。";
+      row.append(cell);actionQueueBody.append(row);return;
+    }
+
+    queue.forEach((item)=>{
+      const row=document.createElement("tr");
+      const rank=document.createElement("td");rank.textContent=String(item.rank??"—");
+      const workstream=document.createElement("td");workstream.className="v2-action-queue-workstream";workstream.dataset.workstream=item.workstream||"monitor";workstream.textContent=item.workstream||"monitor";
+      const actionCell=document.createElement("td"),action=document.createElement("span");
+      action.className="v2-organic-action";action.dataset.action=item.action||"monitor";action.textContent=item.action_label||item.action||"Review";actionCell.append(action);
+      const page=document.createElement("td"),link=document.createElement("a");
+      link.href=item.page;link.target="_blank";link.rel="noopener noreferrer";link.className="v2-organic-url v2-opportunity-page";link.textContent=item.page;page.append(link);
+      const query=document.createElement("td");query.className="v2-action-queue-query";query.textContent=item.query||"—";
+      if(item.query_source)query.title=item.query_source==="gsc_query_page"?"GSC Query+Page":"DataForSEO cache";
+      const score=document.createElement("td");score.textContent=num(item.priority_score);
+      const confidence=document.createElement("td");confidence.textContent=item.confidence||"—";
+      const why=document.createElement("td");why.className="v2-action-queue-why";why.textContent=item.why_now||"—";why.title=item.why_now||"";
+      const next=document.createElement("td"),actions=document.createElement("div");actions.className="v2-organic-competitor-actions";
+      const pageButton=document.createElement("button");pageButton.type="button";pageButton.dataset.v2OpportunityPage=item.page;pageButton.textContent="Page";
+      actions.append(pageButton);
+      if(item.query){
+        const research=document.createElement("button");research.type="button";research.dataset.v2OpportunityKeyword=item.query;research.textContent="Research";actions.append(research);
+      }
+      next.append(actions);
+      row.append(rank,workstream,actionCell,page,query,score,confidence,why,next);
+      actionQueueBody.append(row);
+    });
   };
 
   const renderRows = (data) => {
@@ -248,6 +301,7 @@ export function mountOrganicOpportunityTab({
     renderSources(data);
     renderCounts(data);
     renderNextBestAction(data);
+    renderActionQueue(data);
     renderRows(data);
     const missing=data?.missing_sources??[];
     meta.textContent=[
@@ -304,12 +358,14 @@ export function mountOrganicOpportunityTab({
     if(globalThis.location)globalThis.location.hash="keywords";
   };
 
-  body.addEventListener("click",(event)=>{
+  const handleOpportunityActionClick = (event) => {
     const pageButton=event.target.closest("[data-v2-opportunity-page]");
     if(pageButton){openPageKeywords(pageButton.dataset.v2OpportunityPage);return;}
     const keywordButton=event.target.closest("[data-v2-opportunity-keyword]");
     if(keywordButton)researchKeyword(keywordButton.dataset.v2OpportunityKeyword);
-  },{signal});
+  };
+  body.addEventListener("click",handleOpportunityActionClick,{signal});
+  actionQueueBody.addEventListener("click",handleOpportunityActionClick,{signal});
   nextBestOpenPage.addEventListener("click",()=>openPageKeywords(nextBestOpenPage.dataset.v2OpportunityPage),{signal});
   nextBestResearch.addEventListener("click",()=>researchKeyword(nextBestResearch.dataset.v2OpportunityKeyword),{signal});
 
