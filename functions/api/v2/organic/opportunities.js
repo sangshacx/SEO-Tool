@@ -9,6 +9,8 @@ import { applyDecisionWorkflow } from "../../../../src/v2/intelligence/decision-
 import { mergeCannibalizationActions } from "../../../../src/v2/intelligence/cannibalization-actions.js";
 import { buildAiVisibilityRecoveryAction, mergeAiVisibilityActions } from "../../../../src/v2/intelligence/ai-visibility-actions.js";
 import { readAiVisibilityHistorical, readAiVisibilityNewLost } from "../../../../src/v2/storage/ai-visibility.js";
+import { buildAiPromptRecoveryAction, mergeAiPromptRecoveryActions } from "../../../../src/v2/intelligence/ai-prompt-actions.js";
+import { listAiPromptTrackers } from "../../../../src/v2/storage/ai-prompt-tracker.js";
 import { getSeoActionWorkflowStats, listSeoActionWorkflow, listSeoActionWorkflowEvents, readSeoActionOutcomes } from "../../../../src/v2/storage/seo-action-workflow.js";
 
 const JSON_HEADERS = {
@@ -176,6 +178,26 @@ export async function onRequestPost({ request, env }) {
     aiVisibilityEvidence = [];
   }
 
+  let aiPromptTrackers = [];
+  try {
+    aiPromptTrackers = await listAiPromptTrackers(env.DB, {
+      siteDomain: domain,
+      locationCode,
+      languageCode,
+      includePaused: true,
+    });
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "Opportunity Center Prompt Tracker evidence read failed",
+      request_id: requestId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    aiPromptTrackers = [];
+  }
+  const aiPromptActions = aiPromptTrackers
+    .map((tracker) => buildAiPromptRecoveryAction({ target: domain, tracker }))
+    .filter(Boolean);
+
   const sources = {
     organic_keywords: keywords ? { available: true, depth: keywords.depth, cached_at: keywords.cached_at } : null,
     top_pages: pages ? { available: true, depth: pages.depth, cached_at: pages.cached_at } : null,
@@ -193,6 +215,12 @@ export async function onRequestPost({ request, env }) {
         .filter((item) => item.historical.length || item.new_lost.length)
         .map((item) => item.platform),
     } : null,
+    ai_prompt_tracker: aiPromptTrackers.some((item) => (item?.trend?.observation_count ?? 0) > 0) ? {
+      available: true,
+      source: "d1",
+      tracked_prompts: aiPromptTrackers.length,
+      observed_prompts: aiPromptTrackers.filter((item) => (item?.trend?.observation_count ?? 0) > 0).length,
+    } : null,
   };
   const baseData = buildOrganicOpportunities({
     target: domain,
@@ -202,13 +230,17 @@ export async function onRequestPost({ request, env }) {
     gscQueryPageRows,
     sources,
   });
-  const rawData = mergeAiVisibilityActions(
-    mergeCannibalizationActions(
-      baseData,
-      gscCannibalizationStored?.rows ?? [],
+  const rawData = mergeAiPromptRecoveryActions(
+    mergeAiVisibilityActions(
+      mergeCannibalizationActions(
+        baseData,
+        gscCannibalizationStored?.rows ?? [],
+        { limit: 25 },
+      ),
+      aiVisibilityEvidence.map((item) => item.action).filter(Boolean),
       { limit: 25 },
     ),
-    aiVisibilityEvidence.map((item) => item.action).filter(Boolean),
+    aiPromptActions,
     { limit: 25 },
   );
 
@@ -256,6 +288,16 @@ export async function onRequestPost({ request, env }) {
     source: "d1",
     actual_cost_usd: 0,
   };
+  data.ai_prompt_tracker_summary = {
+    tracked_prompts: aiPromptTrackers.length,
+    observed_prompts: aiPromptTrackers.filter((item) => (item?.trend?.observation_count ?? 0) > 0).length,
+    candidate_count: aiPromptActions.length,
+    total_observations: aiPromptTrackers.reduce((sum, item) => sum + (Number(item?.trend?.observation_count) || 0), 0),
+    total_actual_cost_usd: Math.round(aiPromptTrackers.reduce((sum, item) => sum + (Number(item?.trend?.total_actual_cost_usd) || 0), 0) * 1e8) / 1e8,
+    model: "ai-prompt-recovery-v0.1",
+    source: "d1",
+    actual_cost_usd: 0,
+  };
   data.workflow_stats = workflowStats;
   data.workflow_activity = workflowEvents;
   data.workflow_outcomes = workflowOutcomes;
@@ -271,6 +313,7 @@ export async function onRequestPost({ request, env }) {
       optional_missing_sources: [
         ...(!sources.gsc_pages ? ["gsc_pages"] : []),
         ...(!sources.ai_visibility ? ["ai_visibility_history"] : []),
+        ...(!sources.ai_prompt_tracker ? ["ai_prompt_tracker"] : []),
       ],
     },
     meta: {
