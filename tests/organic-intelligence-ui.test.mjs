@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { filterOrganicKeywordRows, filterOrganicPageRows, formatOrganicMovement, organicTargetMode } from "../public/v2-organic-intelligence.js";
+import { filterOrganicChangeRows, filterOrganicKeywordRows, filterOrganicPageRows, formatOrganicMovement, organicTargetMode } from "../public/v2-organic-intelligence.js";
 
 test("Organic Intelligence distinguishes own-site URLs from competitor targets", () => {
   assert.equal(organicTargetMode("great-ocean-waterproof.com", "great-ocean-waterproof.com"), "own");
@@ -31,4 +31,16 @@ test("Top Pages filters locally and respects own-site page actions", () => {
   ];
   assert.deepEqual(filterOrganicPageRows(rows,{query:"winner"},"own").map((row)=>row.relative_url),["/winner/"]);
   assert.deepEqual(filterOrganicPageRows(rows,{action:"at_risk"},"own").map((row)=>row.relative_url),["/risk/"]);
+});
+
+
+test("Position Changes filters by change type and action without another provider request", () => {
+  const rows = [
+    { keyword:"winner", position:8, movement:{is_up:true,absolute_delta:4}, change:{code:"improved",label:"Improved"} },
+    { keyword:"decliner", position:9, movement:{is_down:true,absolute_delta:-3}, change:{code:"declined",label:"Declined"} },
+    { keyword:"lost", movement:{is_lost:true}, change:{code:"lost",label:"Lost"} },
+  ];
+  assert.deepEqual(filterOrganicChangeRows(rows,{change:"declined"},"own").map((row)=>row.keyword),["decliner"]);
+  assert.deepEqual(filterOrganicChangeRows(rows,{action:"recover"},"own").map((row)=>row.keyword),["decliner"]);
+  assert.deepEqual(filterOrganicChangeRows(rows,{action:"reclaim"},"own").map((row)=>row.keyword),["lost"]);
 });
