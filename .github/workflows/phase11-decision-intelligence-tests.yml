@@ -16,6 +16,7 @@ on:
       - src/v2/storage/gsc-search-analytics.js
       - src/v2/storage/seo-action-workflow.js
       - src/v2/intelligence/decision-workflow.js
+      - src/v2/intelligence/seo-action-outcomes.js
       - functions/api/v2/organic/action-workflow.js
       - tests/organic-opportunities.test.mjs
       - tests/organic-opportunities-api.test.mjs
@@ -26,6 +27,7 @@ on:
       - tests/v2-shell-ui.test.mjs
       - tests/seo-action-workflow.test.mjs
       - tests/seo-action-workflow-api.test.mjs
+      - tests/seo-action-outcomes.test.mjs
       - tests/dashboard-test-helpers.mjs
       - migrations/0014_gsc_connections.sql
       - migrations/0015_gsc_search_analytics.sql
@@ -46,4 +48,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 11 decision intelligence tests
-        run: node --test tests/organic-opportunities.test.mjs tests/organic-opportunities-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/gsc-intelligence.test.mjs tests/gsc-intelligence-api.test.mjs tests/v2-dashboard-view.test.mjs tests/v2-shell-ui.test.mjs tests/seo-action-workflow.test.mjs tests/seo-action-workflow-api.test.mjs
+        run: node --test tests/organic-opportunities.test.mjs tests/organic-opportunities-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/gsc-intelligence.test.mjs tests/gsc-intelligence-api.test.mjs tests/v2-dashboard-view.test.mjs tests/v2-shell-ui.test.mjs tests/seo-action-workflow.test.mjs tests/seo-action-workflow-api.test.mjs tests/seo-action-outcomes.test.mjs
