@@ -7,7 +7,10 @@ on:
     paths:
       - src/v2/providers/dataforseo-ai-visibility.js
       - src/v2/ai/ai-visibility-cache.js
+      - src/v2/storage/ai-visibility.js
+      - migrations/0018_ai_visibility_history.sql
       - functions/api/v2/ai/visibility.js
+      - functions/api/v2/ai/history.js
       - functions/api/v2/ai/compare.js
       - functions/api/v2/ai/pages.js
       - public/v2-ai-visibility.js
@@ -17,6 +20,9 @@ on:
       - tests/dataforseo-ai-visibility.test.mjs
       - tests/ai-visibility-api.test.mjs
       - tests/ai-visibility-secondary-api.test.mjs
+      - tests/ai-visibility-storage.test.mjs
+      - tests/ai-visibility-history-api.test.mjs
+      - tests/dashboard-test-helpers.mjs
       - tests/ai-visibility-ui.test.mjs
       - tests/v2-shell-navigation.test.mjs
       - docs/phase12-ai-search-visibility.md
@@ -35,4 +41,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 12 AI visibility provider tests
-        run: node --test tests/dataforseo-ai-visibility.test.mjs tests/ai-visibility-api.test.mjs tests/ai-visibility-secondary-api.test.mjs tests/ai-visibility-ui.test.mjs tests/v2-shell-navigation.test.mjs
+        run: node --test tests/dataforseo-ai-visibility.test.mjs tests/ai-visibility-api.test.mjs tests/ai-visibility-secondary-api.test.mjs tests/ai-visibility-storage.test.mjs tests/ai-visibility-history-api.test.mjs tests/ai-visibility-ui.test.mjs tests/v2-shell-navigation.test.mjs
