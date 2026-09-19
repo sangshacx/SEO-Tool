@@ -16,7 +16,7 @@ import {
   siteProfileFormPayload,
   marketRequestFields,
 } from "./v2-market-context.js";
-import { createDashboardOverview, mountDashboard } from "./v2-dashboard.js";
+import { createDashboardOverview, mountDashboard, mountDashboardDecision } from "./v2-dashboard.js";
 import {
   clearClusterSerpVerificationContext,
   createKeywordLibrarySection,
@@ -1334,6 +1334,7 @@ function buildShell() {
   marketInputs.forEach((input) => { input.disabled = true; });
   const gate = window.__seoProV2ResearchGate;
   let dashboardCleanup = () => {};
+  let dashboardDecisionCleanup = () => {};
   let keywordLibraryCleanup = () => {};
   let competitorIntelligenceCleanup = () => {};
   let organicIntelligenceCleanup = () => {};
@@ -1346,6 +1347,8 @@ function buildShell() {
       gate.submit = (workflow, fields) => submitSeoResearchRequest(workflow, fields, { context, fetchImpl });
       dashboardCleanup();
       dashboardCleanup = mountDashboard({ root: shell, context, fetchImpl });
+      dashboardDecisionCleanup();
+      dashboardDecisionCleanup = mountDashboardDecision({ root: shell, context, fetchImpl });
       keywordLibraryCleanup();
       keywordLibraryCleanup = mountKeywordLibrary({ root: shell, context, fetchImpl });
       competitorIntelligenceCleanup();
