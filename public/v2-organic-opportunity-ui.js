@@ -250,20 +250,22 @@ export function mountOrganicOpportunityTab({
     nextBestPage.title = next.page;
     nextBestQuery.textContent = next.query || "No single query selected";
     nextBestQuery.title = next.query || "";
-    const aiHistory = next.query_source === "dataforseo_ai_history";
+    const aiWorkspace = ["dataforseo_ai_history", "ai_prompt_tracker_d1"].includes(next.query_source);
     nextBestSource.textContent = next.query_source === "gsc_query_page"
       ? "GSC Query+Page"
       : next.query_source === "dataforseo_cache"
         ? "DataForSEO cache"
-        : aiHistory
+        : next.query_source === "dataforseo_ai_history"
           ? "AI History · D1"
-          : "Page-level evidence";
+          : next.query_source === "ai_prompt_tracker_d1"
+            ? "Prompt Tracker · D1"
+            : "Page-level evidence";
     nextBestOpenPage.dataset.v2OpportunityPage = next.page;
-    nextBestOpenPage.hidden = aiHistory;
-    nextBestResearch.dataset.v2OpportunityKeyword = aiHistory ? "" : next.query || "";
-    nextBestResearch.dataset.v2OpportunityAiVisibility = aiHistory ? "true" : "";
-    nextBestResearch.textContent = aiHistory ? "Open AI Visibility" : "Research Recommended Query";
-    nextBestResearch.disabled = aiHistory ? false : !next.query;
+    nextBestOpenPage.hidden = aiWorkspace;
+    nextBestResearch.dataset.v2OpportunityKeyword = aiWorkspace ? "" : next.query || "";
+    nextBestResearch.dataset.v2OpportunityAiVisibility = aiWorkspace ? "true" : "";
+    nextBestResearch.textContent = aiWorkspace ? "Open AI Visibility" : "Research Recommended Query";
+    nextBestResearch.disabled = aiWorkspace ? false : !next.query;
   };
 
   const workflowBadge = (item) => {
@@ -368,7 +370,9 @@ export function mountOrganicOpportunityTab({
         ?"GSC Query+Page"
         :item.query_source==="dataforseo_ai_history"
           ?"AI History · D1"
-          :"DataForSEO cache";
+          :item.query_source==="ai_prompt_tracker_d1"
+            ?"Prompt Tracker · D1"
+            :"DataForSEO cache";
       const score=document.createElement("td");score.textContent=num(item.priority_score);
       const confidence=document.createElement("td");confidence.textContent=item.confidence||"—";
       const workflow=document.createElement("td");workflow.className="v2-workflow-cell";workflow.append(workflowBadge(item),workflowControls(item));
@@ -380,7 +384,7 @@ export function mountOrganicOpportunityTab({
         overlap.dataset.v2OpportunityGscOverlap=item.query||"";
         overlap.textContent="Open GSC Overlap";
         actions.append(overlap);
-      }else if(item.action==="ai_visibility_recovery"||item.query_source==="dataforseo_ai_history"){
+      }else if(["ai_visibility_recovery","ai_prompt_recovery"].includes(item.action)||["dataforseo_ai_history","ai_prompt_tracker_d1"].includes(item.query_source)){
         const ai=document.createElement("button");
         ai.type="button";
         ai.dataset.v2OpportunityAiVisibility="true";
@@ -390,7 +394,7 @@ export function mountOrganicOpportunityTab({
         const pageButton=document.createElement("button");pageButton.type="button";pageButton.dataset.v2OpportunityPage=item.page;pageButton.textContent="Page";
         actions.append(pageButton);
       }
-      if(item.query&&item.query_source!=="dataforseo_ai_history"){
+      if(item.query&&!["dataforseo_ai_history","ai_prompt_tracker_d1"].includes(item.query_source)){
         const research=document.createElement("button");research.type="button";research.dataset.v2OpportunityKeyword=item.query;research.textContent="Research";actions.append(research);
       }
       next.append(actions);
