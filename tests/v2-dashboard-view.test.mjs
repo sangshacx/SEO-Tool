@@ -290,15 +290,16 @@ function dashboardHarness() {
   const decisionPage = new FakeElement("b"); decisionPage.dataset.v2DashboardDecisionPage = "";
   const decisionQuery = new FakeElement("b"); decisionQuery.dataset.v2DashboardDecisionQuery = "";
   const decisionSource = new FakeElement("b"); decisionSource.dataset.v2DashboardDecisionSource = "";
+  const decisionWorkflow = new FakeElement("b"); decisionWorkflow.dataset.v2DashboardDecisionWorkflow = "";
   const decisionWhy = new FakeElement("p"); decisionWhy.dataset.v2DashboardDecisionWhy = "";
   const decisionOpen = new FakeElement("button"); decisionOpen.dataset.v2DashboardOpenOpportunity = "";
   const decisionResearch = new FakeElement("button"); decisionResearch.dataset.v2DashboardResearchQuery = "";
-  decision.append(decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWhy, decisionOpen, decisionResearch);
+  decision.append(decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionWhy, decisionOpen, decisionResearch);
   const body = new FakeElement("div");
   body.dataset.v2DashboardBody = "";
   dashboard.append(title, updated, status, warning, refresh, retry, decision, body);
   root.append(dashboard);
-  return { root, dashboard, title, updated, status, warning, refresh, retry, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWhy, decisionOpen, decisionResearch, body };
+  return { root, dashboard, title, updated, status, warning, refresh, retry, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionWhy, decisionOpen, decisionResearch, body };
 }
 
 test("distinguishes unavailable metrics from an explicitly sourced zero", () => {
@@ -703,7 +704,7 @@ test("mountDashboard cleanup suppresses late loader callbacks from the old mount
 
 test("Dashboard Decision Intelligence reads only the internal Opportunity API and supports Keyword Explorer handoff", async () => {
   await withFakeDocument(async () => {
-    const { root, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWhy, decisionResearch } = dashboardHarness();
+    const { root, decision, decisionState, decisionAction, decisionScore, decisionPage, decisionQuery, decisionSource, decisionWorkflow, decisionWhy, decisionResearch } = dashboardHarness();
     const keywordInput = new FakeElement("input");
     keywordInput.id = "keyword";
     root.append(keywordInput);
@@ -724,6 +725,7 @@ test("Dashboard Decision Intelligence reads only the internal Opportunity API an
               priority_score: 77.5,
               query: "waterproof membrane supplier",
               query_source: "gsc_query_page",
+              workflow: { status: "in_progress" },
               why_now: "Real GSC impressions show a striking-distance query.",
             },
           },
@@ -755,12 +757,42 @@ test("Dashboard Decision Intelligence reads only the internal Opportunity API an
     assert.equal(decisionPage.textContent, "https://example.com/page/");
     assert.equal(decisionQuery.textContent, "waterproof membrane supplier");
     assert.equal(decisionSource.textContent, "GSC Query+Page");
+    assert.equal(decisionWorkflow.textContent, "In Progress");
+    assert.equal(decisionWorkflow.dataset.status, "in_progress");
     assert.match(decisionWhy.textContent, /GSC impressions/);
     assert.equal(decisionResearch.disabled, false);
 
     decision.dispatchEvent({ type: "click", target: decisionResearch });
     assert.equal(keywordInput.value, "waterproof membrane supplier");
     assert.equal(locationLike.hash, "keywords");
+    cleanup();
+  });
+});
+
+
+test("Dashboard explains when workflow has hidden every actionable recommendation", async () => {
+  await withFakeDocument(async () => {
+    const { root, decisionState, decisionWhy } = dashboardHarness();
+    const context={
+      subscribe(handler){handler(dashboardScope());return()=>{};},
+    };
+    const fetchImpl=async()=>({
+      ok:true,
+      status:200,
+      json:async()=>({
+        ok:true,
+        data:{
+          ready:true,
+          action_queue:[],
+          next_best_action:null,
+          workflow_summary:{suppressed:3,active:0,source:"d1"},
+        },
+      }),
+    });
+    const cleanup=mountDashboardDecision({root,context,fetchImpl,locationLike:{hash:""}});
+    await new Promise((resolve)=>setTimeout(resolve,0));
+    assert.equal(decisionState.textContent,"NEEDS EVIDENCE");
+    assert.match(decisionWhy.textContent,/3 项已被 Done \/ Snoozed/);
     cleanup();
   });
 });
