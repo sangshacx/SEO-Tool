@@ -222,6 +222,46 @@ function actionFor({ lost, down, up, quickWinCount, top10, keywords, traffic, gs
   return { code: "monitor", label: "Monitor", reason: "No strong cached risk or upside signal is present." };
 }
 
+function nextBestActionFor({ url, action, gscQueries = [], quickWinKeywords = [], score }) {
+  const recoveryQuery = gscQueries.find((row) =>
+    (finite(row?.clicks_change_percent) ?? 0) <= -20 &&
+    (finite(row?.impressions) ?? 0) >= 50
+  );
+  const gscQuery = recoveryQuery ?? gscQueries[0] ?? null;
+  const providerQuery = quickWinKeywords[0] ?? null;
+  const selected = gscQuery ?? providerQuery ?? null;
+  const source = gscQuery ? "gsc_query_page" : providerQuery ? "dataforseo_cache" : null;
+
+  const evidence = selected ? {
+    position: finite(selected.position),
+    impressions: finite(selected.impressions),
+    clicks: finite(selected.clicks),
+    clicks_change_percent: finite(selected.clicks_change_percent),
+    search_volume: finite(selected.search_volume),
+    keyword_difficulty: finite(selected.keyword_difficulty),
+    intent: selected.intent ?? null,
+    provider_match: selected.provider_match ?? null,
+  } : null;
+
+  const evidenceParts = [];
+  if (evidence?.impressions !== null && evidence?.impressions !== undefined) evidenceParts.push("GSC impressions " + evidence.impressions);
+  if (evidence?.position !== null && evidence?.position !== undefined) evidenceParts.push("position " + evidence.position);
+  if (evidence?.clicks_change_percent !== null && evidence?.clicks_change_percent !== undefined) evidenceParts.push("clicks change " + evidence.clicks_change_percent + "%");
+  if (evidence?.search_volume !== null && evidence?.search_volume !== undefined) evidenceParts.push("volume " + evidence.search_volume);
+  if (evidence?.keyword_difficulty !== null && evidence?.keyword_difficulty !== undefined) evidenceParts.push("KD " + evidence.keyword_difficulty);
+
+  return {
+    page: url,
+    action: action?.code ?? "monitor",
+    action_label: action?.label ?? "Monitor",
+    priority_score: finite(score),
+    query: selected?.keyword ?? null,
+    query_source: source,
+    why_now: [action?.reason, evidenceParts.length ? evidenceParts.join(" · ") : null].filter(Boolean).join(" · "),
+    evidence,
+  };
+}
+
 export function buildOrganicOpportunities({
   keywordRows = [],
   pageRows = [],
@@ -302,12 +342,21 @@ export function buildOrganicOpportunities({
         ? "medium"
         : "low";
 
+    const nextBestAction = nextBestActionFor({
+      url,
+      action,
+      gscQueries,
+      quickWinKeywords: keyword.quick_win_keywords,
+      score,
+    });
+
     opportunities.push({
       url,
       relative_url: page.relative_url ?? null,
       action,
       priority_score: score,
       confidence,
+      next_best_action: nextBestAction,
       components: {
         risk_points: risk,
         quick_win_points: quickWin,
@@ -371,6 +420,7 @@ export function buildOrganicOpportunities({
       action_counts: counts,
       top_priority_score: opportunities[0]?.priority_score ?? null,
     },
+    next_best_action: opportunities[0]?.next_best_action ?? null,
     opportunities,
     generated_at: new Date().toISOString(),
     disclaimer: "Opportunity priority is a transparent rule-based workflow score from cached DataForSEO evidence plus stored GSC evidence when available. It is not a ranking probability or revenue forecast.",
