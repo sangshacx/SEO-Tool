@@ -19,7 +19,7 @@ export function requireGscAccess(request, options) {
 export function gscMappedError(error, fallbackCode = "GSC_OPERATION_FAILED") {
   const status = Number(error?.httpStatus);
   const code = typeof error?.code === "string" ? error.code : fallbackCode;
-  if (error instanceof GoogleOauthError || error instanceof GscProviderError || [400,401,403,404,409,429,503].includes(status)) {
+  if (error instanceof GoogleOauthError || error instanceof GscProviderError || [400,401,403,404,409,415,429,503].includes(status)) {
     return gscJson({ ok: false, error: { code, message: error?.message || code } }, status || 502);
   }
   console.error(JSON.stringify({ message: "GSC operation failed", code, error: error instanceof Error ? error.message : String(error) }));
