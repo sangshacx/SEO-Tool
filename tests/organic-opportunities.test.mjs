@@ -155,4 +155,45 @@ test("Query+Page GSC opportunities match same-page DataForSEO keyword evidence a
   assert.equal(crossPage.search_volume,null);
   assert.equal(page.evidence.gsc_pages,true);
   assert.ok(page.components.gsc_reality_points>0);
+  assert.equal(page.next_best_action.query,"waterproof membrane supplier");
+  assert.equal(page.next_best_action.query_source,"gsc_query_page");
+  assert.equal(data.next_best_action.page,"https://example.com/page/");
+  assert.match(page.next_best_action.why_now,/GSC impressions 420/);
+});
+
+
+test("Next Best Action falls back to the strongest DataForSEO quick win when no GSC Query+Page evidence exists", () => {
+  const data=buildOrganicOpportunities({
+    target:"example.com",
+    sources:{organic_keywords:{available:true},top_pages:{available:true}},
+    pageRows:[
+      {url:"https://example.com/page/",organic_traffic:90,organic_keywords:10,positions:{top_10:3},changes:{up:0,down:0,lost:0}},
+    ],
+    keywordRows:[
+      {
+        keyword:"strong quick win",
+        ranking_url:"https://example.com/page/",
+        position:7,
+        search_volume:1000,
+        keyword_difficulty:20,
+        estimated_traffic:20,
+        intent:{primary:"commercial"},
+      },
+      {
+        keyword:"weaker quick win",
+        ranking_url:"https://example.com/page/",
+        position:17,
+        search_volume:100,
+        keyword_difficulty:50,
+        estimated_traffic:4,
+        intent:{primary:"informational"},
+      },
+    ],
+  });
+  const page=data.opportunities[0];
+  assert.equal(page.next_best_action.query,"strong quick win");
+  assert.equal(page.next_best_action.query_source,"dataforseo_cache");
+  assert.equal(page.next_best_action.evidence.search_volume,1000);
+  assert.equal(page.next_best_action.evidence.keyword_difficulty,20);
+  assert.match(page.next_best_action.why_now,/volume 1000/);
 });
