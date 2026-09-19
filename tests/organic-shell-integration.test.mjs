@@ -4,6 +4,7 @@ import test from "node:test";
 
 const shell = await readFile(new URL("../public/v2-shell.js", import.meta.url), "utf8");
 const organic = await readFile(new URL("../public/v2-organic-intelligence.js", import.meta.url), "utf8");
+const historyUi = await readFile(new URL("../public/v2-organic-history-ui.js", import.meta.url), "utf8");
 
 test("V2 shell creates and mounts Organic Intelligence after market context is ready", () => {
   assert.match(shell, /createOrganicIntelligenceWorkspace/);
@@ -45,4 +46,17 @@ test("Organic Intelligence exposes competitor discovery and handoffs to Site Exp
   assert.match(organic, /data-v2-analyze-competitor/);
   assert.match(organic, /data-v2-competitor-gap/);
   assert.match(organic, /gapCompetitorDomain/);
+});
+
+
+test("Organic Intelligence mounts Project and Provider Organic History as one controlled workspace", () => {
+  assert.match(organic, /v2-organic-history-ui\.js/);
+  assert.match(organic, /data-v2-organic-tab="history"/);
+  assert.match(organic, /organicHistoryPanelMarkup/);
+  assert.match(organic, /mountOrganicHistoryTab/);
+  assert.match(historyUi, /\/api\/v2\/organic\/history/);
+  assert.match(historyUi, /Load Project History · \$0/);
+  assert.match(historyUi, /allow_live_request: allowPaid\.checked/);
+  assert.match(historyUi, /LIVE_REQUEST_CONFIRMATION_REQUIRED/);
+  assert.match(historyUi, /30 天缓存/);
 });
