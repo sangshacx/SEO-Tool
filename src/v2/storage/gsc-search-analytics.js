@@ -107,3 +107,137 @@ export async function latestGscSyncRun(db, siteDomain) {
     "WHERE sp.domain = ? ORDER BY sr.id DESC LIMIT 1",
   ).bind(siteDomain).first();
 }
+
+function gscWindow(latestDate, days) {
+  const end = new Date(latestDate + "T00:00:00Z");
+  const currentStart = new Date(end);
+  currentStart.setUTCDate(currentStart.getUTCDate() - days + 1);
+  const previousEnd = new Date(currentStart);
+  previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
+  const previousStart = new Date(previousEnd);
+  previousStart.setUTCDate(previousStart.getUTCDate() - days + 1);
+  return {
+    current_start: currentStart.toISOString().slice(0, 10),
+    current_end: latestDate,
+    previous_start: previousStart.toISOString().slice(0, 10),
+    previous_end: previousEnd.toISOString().slice(0, 10),
+  };
+}
+
+const GSC_VIEW_CONFIG = Object.freeze({
+  queries: { dimension_set: "query", primary: "query_text", secondary: null },
+  pages: { dimension_set: "page", primary: "page_url", secondary: null },
+  query_page: { dimension_set: "query_page", primary: "query_text", secondary: "page_url" },
+});
+
+export async function readGscIntelligence(db, {
+  siteDomain,
+  view = "queries",
+  days = 28,
+  limit = 100,
+  pageUrl = null,
+}) {
+  const config = GSC_VIEW_CONFIG[view];
+  if (!config) throw new TypeError("Unsupported GSC intelligence view.");
+  const requestedDays = Number(days);
+  if (![7, 28, 90].includes(requestedDays)) throw new TypeError("Choose a 7, 28, or 90 day GSC window.");
+  const rowLimit = Math.max(1, Math.min(200, Number(limit) || 100));
+
+  const site = await db.prepare("SELECT id FROM site_profiles WHERE domain = ? LIMIT 1").bind(siteDomain).first();
+  if (!site?.id) {
+    const error = new Error("SITE_PROFILE_NOT_FOUND");
+    error.code = "SITE_PROFILE_NOT_FOUND";
+    error.httpStatus = 404;
+    throw error;
+  }
+
+  const latest = await db.prepare(
+    "SELECT MAX(date) AS latest_date FROM gsc_search_analytics_daily WHERE site_profile_id = ? AND dimension_set = ?",
+  ).bind(site.id, config.dimension_set).first();
+  if (!latest?.latest_date) {
+    return {
+      site_profile_id: site.id,
+      latest_date: null,
+      window: null,
+      coverage: { current_days: 0, previous_days: 0, requested_days: requestedDays },
+      metrics: { clicks: 0, impressions: 0, ctr: 0, position: null },
+      rows: [],
+    };
+  }
+
+  const window = gscWindow(latest.latest_date, requestedDays);
+  const filterSql = view === "query_page" && pageUrl ? " AND page_url = ?" : "";
+  const filterValues = view === "query_page" && pageUrl ? [pageUrl] : [];
+
+  const primary = config.primary;
+  const secondarySelect = config.secondary ? ", " + config.secondary + " AS secondary_key" : ", '' AS secondary_key";
+  const secondaryGroup = config.secondary ? ", " + config.secondary : "";
+
+  const rowsSql =
+    "SELECT " + primary + " AS primary_key" + secondarySelect + ", " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN clicks ELSE 0 END) AS clicks, " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) AS impressions, " +
+    "CASE WHEN SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) > 0 " +
+    "THEN SUM(CASE WHEN date BETWEEN ? AND ? THEN position * impressions ELSE 0 END) / " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) ELSE NULL END AS position, " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN clicks ELSE 0 END) AS previous_clicks, " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) AS previous_impressions, " +
+    "CASE WHEN SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) > 0 " +
+    "THEN SUM(CASE WHEN date BETWEEN ? AND ? THEN position * impressions ELSE 0 END) / " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) ELSE NULL END AS previous_position " +
+    "FROM gsc_search_analytics_daily WHERE site_profile_id = ? AND dimension_set = ? " +
+    "AND date BETWEEN ? AND ?" + filterSql +
+    " GROUP BY " + primary + secondaryGroup +
+    " HAVING SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) > 0 " +
+    "ORDER BY impressions DESC, clicks DESC LIMIT ?";
+
+  const current = [window.current_start, window.current_end];
+  const previous = [window.previous_start, window.previous_end];
+  const range = [window.previous_start, window.current_end];
+  const rowValues = [
+    ...current, ...current,
+    ...current, ...current, ...current,
+    ...previous, ...previous,
+    ...previous, ...previous, ...previous,
+    site.id, config.dimension_set, ...range,
+    ...filterValues,
+    ...current,
+    rowLimit,
+  ];
+  const rowsResult = await db.prepare(rowsSql).bind(...rowValues).all();
+
+  const coverageSql =
+    "SELECT " +
+    "COUNT(DISTINCT CASE WHEN date BETWEEN ? AND ? THEN date END) AS current_days, " +
+    "COUNT(DISTINCT CASE WHEN date BETWEEN ? AND ? THEN date END) AS previous_days, " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN clicks ELSE 0 END) AS clicks, " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) AS impressions, " +
+    "CASE WHEN SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) > 0 " +
+    "THEN SUM(CASE WHEN date BETWEEN ? AND ? THEN position * impressions ELSE 0 END) / " +
+    "SUM(CASE WHEN date BETWEEN ? AND ? THEN impressions ELSE 0 END) ELSE NULL END AS position " +
+    "FROM gsc_search_analytics_daily WHERE site_profile_id = ? AND dimension_set = ? " +
+    "AND date BETWEEN ? AND ?" + filterSql;
+  const coverageValues = [
+    ...current, ...previous, ...current, ...current,
+    ...current, ...current, ...current,
+    site.id, config.dimension_set, ...range, ...filterValues,
+  ];
+  const coverage = await db.prepare(coverageSql).bind(...coverageValues).first();
+
+  return {
+    site_profile_id: site.id,
+    latest_date: latest.latest_date,
+    window,
+    coverage: {
+      current_days: Number(coverage?.current_days ?? 0),
+      previous_days: Number(coverage?.previous_days ?? 0),
+      requested_days: requestedDays,
+    },
+    metrics: {
+      clicks: Number(coverage?.clicks ?? 0),
+      impressions: Number(coverage?.impressions ?? 0),
+      position: coverage?.position == null ? null : Number(coverage.position),
+    },
+    rows: rowsResult.results ?? [],
+  };
+}
