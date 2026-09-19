@@ -3,6 +3,8 @@ import { organicPagesCacheCandidates } from "../../../../src/v2/organic/organic-
 import { buildOrganicOpportunities } from "../../../../src/v2/intelligence/organic-opportunities.js";
 import { normalizeMarketRequest } from "../../../../src/v2/markets/request-market.js";
 import { normalizeRelevantPagesDomain } from "../../../../src/v2/providers/dataforseo-relevant-pages.js";
+import { readGscIntelligence } from "../../../../src/v2/storage/gsc-search-analytics.js";
+import { enrichGscIntelligenceRows } from "../../../../src/v2/gsc/intelligence.js";
 
 const JSON_HEADERS = {
   "Content-Type": "application/json; charset=UTF-8",
@@ -78,14 +80,45 @@ export async function onRequestPost({ request, env }) {
     })),
   ]);
 
+  let gscStored = null;
+  let gscRows = [];
+  try {
+    gscStored = await readGscIntelligence(env.DB, {
+      siteDomain: domain,
+      view: "pages",
+      days: 28,
+      limit: 200,
+    });
+    const comparisonAvailable =
+      Number(gscStored?.coverage?.current_days ?? 0) > 0 &&
+      Number(gscStored?.coverage?.previous_days ?? 0) > 0;
+    gscRows = enrichGscIntelligenceRows(gscStored?.rows ?? [], {
+      view: "pages",
+      comparisonAvailable,
+    });
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "Opportunity Center GSC evidence read failed",
+      request_id: requestId,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+  }
+
   const sources = {
     organic_keywords: keywords ? { available: true, depth: keywords.depth, cached_at: keywords.cached_at } : null,
     top_pages: pages ? { available: true, depth: pages.depth, cached_at: pages.cached_at } : null,
+    gsc_pages: gscStored?.latest_date ? {
+      available: true,
+      latest_date: gscStored.latest_date,
+      coverage: gscStored.coverage,
+      stored_rows: gscRows.length,
+    } : null,
   };
   const data = buildOrganicOpportunities({
     target: domain,
     keywordRows: keywords?.data?.items ?? [],
     pageRows: pages?.data?.items ?? [],
+    gscPageRows: gscRows,
     sources,
   });
   const missing = [];
@@ -94,10 +127,14 @@ export async function onRequestPost({ request, env }) {
 
   return json({
     ok: true,
-    data: { ...data, missing_sources: missing },
+    data: {
+      ...data,
+      missing_sources: missing,
+      optional_missing_sources: sources.gsc_pages ? [] : ["gsc_pages"],
+    },
     meta: {
       request_id: requestId,
-      source: "cache_only",
+      source: "cache_d1_only",
       actual_cost_usd: 0,
       task_count: 0,
       provider_requests: 0,
