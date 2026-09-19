@@ -49,7 +49,7 @@ test("Opportunity Center reads the deepest compatible keyword and page caches wi
   assert.equal(payload.data.ready,true);
   assert.equal(payload.data.sources.organic_keywords.depth,1000);
   assert.equal(payload.data.sources.top_pages.depth,500);
-  assert.equal(payload.data.opportunities[0].action.code,"ctr_opportunity");
+  assert.equal(payload.data.opportunities[0].action.code,"optimize");
   assert.equal(payload.meta.actual_cost_usd,0);
   assert.equal(payload.meta.provider_requests,0);
 });
@@ -192,7 +192,7 @@ test("Opportunity API joins stored GSC Query+Page rows with same-page DataForSEO
 
   const page=payload.data.opportunities.find((row)=>row.url==="https://example.com/page/");
   assert.ok(page);
-  assert.equal(page.action.code,"optimize");
+  assert.equal(page.action.code,"ctr_opportunity");
   assert.equal(page.metrics.gsc_query_opportunities,1);
   assert.equal(page.gsc_query_opportunities[0].keyword,"waterproof membrane supplier");
   assert.equal(page.gsc_query_opportunities[0].provider_match,true);
