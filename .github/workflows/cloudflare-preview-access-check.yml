@@ -58,15 +58,18 @@ jobs:
           curl --fail --silent --show-error             --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"             "$project_url" |
           jq --exit-status '.success == true and .result.name == "seo-tool"'
 
-      - name: Verify this commit reached the seo-pro-v2 Preview
+      - name: Verify latest deployable code reached the seo-pro-v2 Preview
         shell: bash
         run: |
           set -euo pipefail
+          deploy_sha="$(git log -1 --format=%H -- public functions src)"
+          test -n "$deploy_sha"
+          echo "Latest deployable code SHA: $deploy_sha"
           deployments_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/seo-tool/deployments?env=preview"
           found="false"
           for attempt in {1..24}; do
             json="$(curl --fail --silent --show-error               --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"               "$deployments_url")"
-            if echo "$json" | jq --exit-status --arg sha "$GITHUB_SHA" '
+            if echo "$json" | jq --exit-status --arg sha "$deploy_sha" '
               .success == true
               and any(.result[]?;
                 .source.config.branch == "seo-pro-v2"
@@ -81,7 +84,7 @@ jobs:
             sleep 10
           done
           test "$found" = "true" || {
-            echo "Cloudflare Pages did not report a successful seo-pro-v2 deployment for $GITHUB_SHA."
+            echo "Cloudflare Pages did not report a successful seo-pro-v2 deployment for deployable code $deploy_sha."
             exit 1
           }
 
