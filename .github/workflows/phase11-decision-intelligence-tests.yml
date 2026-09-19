@@ -23,6 +23,9 @@ on:
       - src/v2/intelligence/ai-prompt-actions.js
       - src/v2/intelligence/ai-prompt-trends.js
       - src/v2/intelligence/ai-prompt-outcomes.js
+      - src/v2/intelligence/gsc-generative-ai-trends.js
+      - src/v2/intelligence/gsc-generative-ai-actions.js
+      - src/v2/storage/gsc-generative-ai.js
       - src/v2/storage/ai-visibility.js
       - src/v2/storage/ai-prompt-tracker.js
       - migrations/0018_ai_visibility_history.sql
@@ -43,6 +46,8 @@ on:
       - tests/ai-prompt-actions.test.mjs
       - tests/ai-prompt-trends.test.mjs
       - tests/ai-prompt-outcomes.test.mjs
+      - tests/gsc-generative-ai-trends.test.mjs
+      - tests/gsc-generative-ai-actions.test.mjs
       - tests/ai-prompt-tracker-storage.test.mjs
       - tests/dashboard-test-helpers.mjs
       - migrations/0014_gsc_connections.sql
@@ -66,4 +71,4 @@ jobs:
         with:
           node-version: 22
       - name: Run Phase 11 decision intelligence tests
-        run: node --test tests/organic-opportunities.test.mjs tests/organic-opportunities-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/gsc-intelligence.test.mjs tests/gsc-intelligence-api.test.mjs tests/v2-dashboard-view.test.mjs tests/v2-shell-ui.test.mjs tests/seo-action-workflow.test.mjs tests/seo-action-workflow-api.test.mjs tests/seo-action-outcomes.test.mjs tests/gsc-cannibalization.test.mjs tests/cannibalization-actions.test.mjs tests/ai-visibility-actions.test.mjs tests/ai-prompt-actions.test.mjs tests/ai-prompt-trends.test.mjs tests/ai-prompt-outcomes.test.mjs tests/ai-prompt-tracker-storage.test.mjs
+        run: node --test tests/organic-opportunities.test.mjs tests/organic-opportunities-api.test.mjs tests/organic-opportunity-ui.test.mjs tests/gsc-intelligence.test.mjs tests/gsc-intelligence-api.test.mjs tests/v2-dashboard-view.test.mjs tests/v2-shell-ui.test.mjs tests/seo-action-workflow.test.mjs tests/seo-action-workflow-api.test.mjs tests/seo-action-outcomes.test.mjs tests/gsc-cannibalization.test.mjs tests/cannibalization-actions.test.mjs tests/ai-visibility-actions.test.mjs tests/ai-prompt-actions.test.mjs tests/ai-prompt-trends.test.mjs tests/ai-prompt-outcomes.test.mjs tests/gsc-generative-ai-trends.test.mjs tests/gsc-generative-ai-actions.test.mjs tests/ai-prompt-tracker-storage.test.mjs
