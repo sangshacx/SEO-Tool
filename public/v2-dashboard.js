@@ -2,6 +2,8 @@ export const DASHBOARD_EMPTY_TREND_COPY = "需要至少两份快照才能显示�
 
 import { mountDashboardRefresh } from "./v2-dashboard-refresh.js";
 
+const DECISION_ENDPOINT = "/api/v2/organic/opportunities";
+
 const METRICS = Object.freeze([
   { id: "organic_keywords", label: "Organic Keywords", module: "organic", field: "organic_keywords", route: "#keywords" },
   { id: "organic_traffic", label: "Organic Traffic", module: "organic", field: "organic_traffic", route: "#website" },
@@ -135,6 +137,14 @@ export function buildDashboardRequestUrl(scope = {}) {
     language_code: String(scope.language_code || ""),
   });
   return `/api/v2/dashboard?${query.toString()}`;
+}
+
+export function buildDashboardDecisionRequest(scope = {}) {
+  return {
+    target: String(scope.domain || scope.site || ""),
+    location_code: Number(scope.location_code || 0),
+    language_code: String(scope.language_code || ""),
+  };
 }
 
 export function createDashboardLoader({ fetchImpl, onLoading = () => {}, onSuccess = () => {}, onError = () => {} } = {}) {
@@ -419,8 +429,124 @@ export function renderDashboard(root, payload, scope = {}, trendRange = 90) {
 
 export function createDashboardOverview() {
   const section = document.createElement("section"); section.className = "v2-dashboard panel"; section.dataset.v2View = "overview"; section.dataset.v2Dashboard = "";
-  section.innerHTML = '<div class="v2-dashboard-header"><div><div class="label">缓存数据总览</div><h1 id="v2DashboardSite">网站总览</h1><p class="lead" data-v2-dashboard-updated>正在准备总览…</p></div><div class="v2-dashboard-actions"><button type="button" data-v2-dashboard-refresh>更新总览数据</button><button type="button" data-v2-dashboard-retry hidden>重试读取总览</button></div></div><p class="v2-dashboard-status" data-v2-dashboard-status role="status"></p><p class="v2-dashboard-warning" data-v2-dashboard-warning role="alert" hidden></p><div data-v2-dashboard-body></div>';
+  section.innerHTML = '<div class="v2-dashboard-header"><div><div class="label">缓存数据总览</div><h1 id="v2DashboardSite">网站总览</h1><p class="lead" data-v2-dashboard-updated>正在准备总览…</p></div><div class="v2-dashboard-actions"><button type="button" data-v2-dashboard-refresh>更新总览数据</button><button type="button" data-v2-dashboard-retry hidden>重试读取总览</button></div></div><p class="v2-dashboard-status" data-v2-dashboard-status role="status"></p><p class="v2-dashboard-warning" data-v2-dashboard-warning role="alert" hidden></p><section class="v2-dashboard-decision" data-v2-dashboard-decision><div class="v2-dashboard-decision-head"><div><span>DECISION INTELLIGENCE · $0</span><h2>Next Best Action</h2></div><b data-v2-dashboard-decision-state>CHECKING</b></div><div class="v2-dashboard-decision-grid"><article><span>Action</span><b data-v2-dashboard-decision-action>—</b></article><article><span>Priority</span><b data-v2-dashboard-decision-score>—</b></article><article><span>Page</span><b data-v2-dashboard-decision-page>—</b></article><article><span>Recommended Query</span><b data-v2-dashboard-decision-query>—</b></article><article><span>Source</span><b data-v2-dashboard-decision-source>—</b></article></div><p data-v2-dashboard-decision-why>正在读取本地 Opportunity evidence…</p><div class="v2-dashboard-decision-actions"><button type="button" data-v2-dashboard-open-opportunity>Open Opportunity Center</button><button type="button" data-v2-dashboard-research-query disabled>Research Recommended Query</button></div></section><div data-v2-dashboard-body></div>';
   return section;
+}
+
+export function mountDashboardDecision({
+  root,
+  context,
+  fetchImpl = globalThis.fetch,
+  locationLike = globalThis.location,
+} = {}) {
+  const panel = root?.querySelector?.("[data-v2-dashboard-decision]");
+  if (!panel || !context || typeof fetchImpl !== "function") return () => {};
+
+  const state = panel.querySelector("[data-v2-dashboard-decision-state]");
+  const action = panel.querySelector("[data-v2-dashboard-decision-action]");
+  const score = panel.querySelector("[data-v2-dashboard-decision-score]");
+  const page = panel.querySelector("[data-v2-dashboard-decision-page]");
+  const query = panel.querySelector("[data-v2-dashboard-decision-query]");
+  const source = panel.querySelector("[data-v2-dashboard-decision-source]");
+  const why = panel.querySelector("[data-v2-dashboard-decision-why]");
+  const openOpportunity = panel.querySelector("[data-v2-dashboard-open-opportunity]");
+  const research = panel.querySelector("[data-v2-dashboard-research-query]");
+  let requestId = 0;
+  let destroyed = false;
+
+  const clear = (message, stateLabel = "NEEDS EVIDENCE") => {
+    if (destroyed) return;
+    text(state, stateLabel);
+    text(action, "—");
+    text(score, "—");
+    text(page, "—");
+    text(query, "—");
+    text(source, "—");
+    text(why, message);
+    research.disabled = true;
+    research.dataset.v2DashboardResearchQuery = "";
+  };
+
+  const render = (data) => {
+    const next = data?.next_best_action;
+    if (!next?.page) {
+      clear(
+        data?.ready
+          ? "当前本地证据没有形成明确的 Next Best Action。"
+          : "先在 Site Explorer 加载 Organic Keywords / Top Pages；如果已连接 GSC，也可同步真实搜索表现。"
+      );
+      return;
+    }
+    text(state, "READY");
+    state.dataset.state = "ready";
+    text(action, next.action_label || next.action || "Review");
+    action.dataset.action = next.action || "monitor";
+    text(score, next.priority_score);
+    text(page, next.page);
+    page.title = next.page;
+    text(query, next.query || "No single query selected");
+    query.title = next.query || "";
+    text(source, next.query_source === "gsc_query_page" ? "GSC Query+Page" : next.query_source === "dataforseo_cache" ? "DataForSEO cache" : "Page evidence");
+    text(why, next.why_now || "Top-ranked local decision evidence.");
+    research.disabled = !next.query;
+    research.dataset.v2DashboardResearchQuery = next.query || "";
+  };
+
+  const load = async (scope) => {
+    const body = buildDashboardDecisionRequest(scope);
+    if (!body.target || !body.location_code || !body.language_code) {
+      clear("当前网站或市场上下文不完整。");
+      return;
+    }
+    const current = ++requestId;
+    text(state, "CHECKING");
+    state.dataset.state = "loading";
+    text(why, "正在读取 KV/D1 Opportunity evidence；本次费用 $0。");
+    try {
+      const response = await fetchImpl(DECISION_ENDPOINT, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (destroyed || current !== requestId) return;
+      if (!response.ok || !payload.ok) throw new Error(payload?.error?.message || "Decision Intelligence 暂时不可用。");
+      render(payload.data);
+    } catch (error) {
+      if (destroyed || current !== requestId) return;
+      clear((error?.message || "Decision Intelligence 暂时不可用。") + " Dashboard 其他数据不受影响。", "UNAVAILABLE");
+    }
+  };
+
+  const handleClick = (event) => {
+    const researchButton = event.target.closest?.("[data-v2-dashboard-research-query]");
+    if (researchButton) {
+      const value = String(researchButton.dataset.v2DashboardResearchQuery || "").trim();
+      if (!value) return;
+      const input = root.querySelector("#keyword");
+      if (input) {
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      if (locationLike) locationLike.hash = "keywords";
+      return;
+    }
+    const opportunityButton = event.target.closest?.("[data-v2-dashboard-open-opportunity]");
+    if (opportunityButton) {
+      if (locationLike) locationLike.hash = "website";
+      root.querySelector('[data-v2-organic-tab="opportunities"]')?.click?.();
+    }
+  };
+
+  panel.addEventListener("click", handleClick);
+  const unsubscribe = context.subscribe((scope) => destroyed ? Promise.resolve() : load(scope));
+  return () => {
+    if (destroyed) return;
+    destroyed = true;
+    requestId += 1;
+    panel.removeEventListener("click", handleClick);
+    unsubscribe();
+  };
 }
 
 export function mountDashboard({ root, context, fetchImpl = globalThis.fetch } = {}) {
