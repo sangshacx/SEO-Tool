@@ -82,6 +82,19 @@ export function organicOpportunityPanelMarkup() {
         </div>
       </section>
 
+      <section class="v2-workflow-activity" data-v2-workflow-activity>
+        <div class="v2-workflow-activity-head">
+          <div><span>RECENT WORKFLOW ACTIVITY</span><b>最近的 SEO 执行记录</b></div>
+          <small><strong data-v2-workflow-activity-count>0</strong> recent events · D1 only · $0</small>
+        </div>
+        <div class="v2-organic-table-shell">
+          <table class="v2-organic-table v2-workflow-activity-table">
+            <thead><tr><th>Time</th><th>Transition</th><th>Action</th><th>Page</th><th>Query</th><th>Priority</th></tr></thead>
+            <tbody data-v2-workflow-activity-body><tr><td colspan="6" class="v2-organic-empty">Workflow 状态发生变化后会记录在这里。</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
       <div class="v2-organic-table-shell">
         <table class="v2-organic-table v2-organic-opportunity-table">
           <thead><tr><th>Priority</th><th>Page</th><th>Action</th><th>Traffic</th><th>Quick Wins</th><th>Down / Lost</th><th>Commercial QW</th><th>GSC Reality</th><th>Score Breakdown</th><th>Confidence</th><th>Workflow</th><th>Next</th></tr></thead>
@@ -130,6 +143,8 @@ export function mountOrganicOpportunityTab({
   const actionQueueCount = section.querySelector("[data-v2-action-queue-count]");
   const actionQueueCandidates = section.querySelector("[data-v2-action-queue-candidates]");
   const actionQueueHidden = section.querySelector("[data-v2-action-queue-hidden]");
+  const workflowActivityBody = section.querySelector("[data-v2-workflow-activity-body]");
+  const workflowActivityCount = section.querySelector("[data-v2-workflow-activity-count]");
   const sourceCards = {
     organic_keywords: section.querySelector('[data-v2-opportunity-source="organic_keywords"]'),
     top_pages: section.querySelector('[data-v2-opportunity-source="top_pages"]'),
@@ -276,6 +291,37 @@ export function mountOrganicOpportunityTab({
     });
   };
 
+  const renderWorkflowActivity = (data) => {
+    const events=Array.isArray(data?.workflow_activity)?data.workflow_activity:[];
+    workflowActivityCount.textContent=String(events.length);
+    workflowActivityBody.replaceChildren();
+    if(!events.length){
+      const row=document.createElement("tr"),cell=document.createElement("td");
+      cell.colSpan=6;cell.className="v2-organic-empty";
+      cell.textContent="还没有 Workflow Activity。点击 Start / Done / Snooze 后会自动记录。";
+      row.append(cell);workflowActivityBody.append(row);return;
+    }
+    events.slice(0,10).forEach((event)=>{
+      const row=document.createElement("tr");
+      const time=document.createElement("td");
+      const parsed=new Date(event.created_at);
+      time.textContent=Number.isNaN(parsed.getTime())?(event.created_at||"—"):parsed.toLocaleString();
+      time.title=event.created_at||"";
+      const transition=document.createElement("td"),badge=document.createElement("span");
+      badge.className="v2-workflow-transition";
+      badge.dataset.toStatus=event.to_status||"new";
+      const from=event.from_status?event.from_status.replace("_"," "):"created";
+      const to=(event.to_status||"new").replace("_"," ");
+      badge.textContent=from+" → "+to;transition.append(badge);
+      const action=document.createElement("td");action.textContent=(event.action_code||"—").replaceAll("_"," ");
+      const page=document.createElement("td"),link=document.createElement("a");
+      link.href=event.page_url||"#";link.target="_blank";link.rel="noopener noreferrer";link.className="v2-organic-url";link.textContent=event.page_url||"—";page.append(link);
+      const query=document.createElement("td");query.className="v2-workflow-activity-query";query.textContent=event.query||"—";query.title=event.query||"";
+      const score=document.createElement("td");score.textContent=num(event.priority_score);
+      row.append(time,transition,action,page,query,score);workflowActivityBody.append(row);
+    });
+  };
+
   const renderRows = (data) => {
     const rows = Array.isArray(data?.opportunities) ? data.opportunities : [];
     body.replaceChildren();
@@ -349,6 +395,7 @@ export function mountOrganicOpportunityTab({
     renderCounts(data);
     renderNextBestAction(data);
     renderActionQueue(data);
+    renderWorkflowActivity(data);
     renderRows(data);
     const missing=data?.missing_sources??[];
     meta.textContent=[
