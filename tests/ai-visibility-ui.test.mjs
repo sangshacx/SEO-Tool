@@ -207,7 +207,7 @@ test("Saved Prompt trend UI shows descriptive D1 rates, latest change and cumula
   assert.match(ui,/Citation Rate/);
   assert.match(ui,/Latest Change/);
   assert.match(ui,/Total Spend/);
-  assert.match(ui,/trend\.change/);
+  assert.match(ui,/trend\?\.change|trend\.change/);
   assert.match(ui,/data\.kind|dataset\.kind/);
   assert.doesNotMatch(ui,/AI Prompt Score|Prompt Score/);
 });
