@@ -55,7 +55,7 @@ function normalizePlatform(value) {
   return platform;
 }
 
-function normalizeMarket({ platform, locationCode, languageCode }) {
+export function normalizeAiVisibilityMarket({ platform, locationCode, languageCode }) {
   const normalizedPlatform = normalizePlatform(platform);
   const location = Number(locationCode);
   const language = String(languageCode ?? "").trim().toLowerCase();
@@ -171,7 +171,7 @@ export async function fetchAiVisibilityTargetMetrics({
       httpStatus: 400,
     });
   }
-  const market = normalizeMarket({ platform, locationCode, languageCode });
+  const market = normalizeAiVisibilityMarket({ platform, locationCode, languageCode });
   const task = {
     target: [{
       domain,
@@ -244,7 +244,7 @@ export async function fetchAiVisibilityMultiTargetMetrics({
   languageCode,
 }) {
   const domains = normalizeComparisonDomains(targets);
-  const market = normalizeMarket({ platform, locationCode, languageCode });
+  const market = normalizeAiVisibilityMarket({ platform, locationCode, languageCode });
   const task = {
     targets: domains.map((domain) => ({
       key: domain,
@@ -339,7 +339,7 @@ export async function fetchAiVisibilityTopMentionedPages({
       httpStatus: 400,
     });
   }
-  const market = normalizeMarket({ platform, locationCode, languageCode });
+  const market = normalizeAiVisibilityMarket({ platform, locationCode, languageCode });
   const task = {
     target: [{
       domain,
