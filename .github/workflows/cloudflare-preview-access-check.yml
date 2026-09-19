@@ -1,5 +1,9 @@
 name: Cloudflare Preview Access Check
 
+concurrency:
+  group: cloudflare-preview-access-seo-pro-v2
+  cancel-in-progress: true
+
 on:
   push:
     branches:
@@ -17,6 +21,7 @@ on:
       - public/v2-shell.js
       - src/v2/dashboard/**
       - src/v2/organic/**
+      - src/v2/intelligence/organic-opportunities.js
       - src/v2/providers/dataforseo-organic-*.js
       - src/v2/storage/site-dashboard.js
       - src/v2/storage/organic-history.js
