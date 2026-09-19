@@ -96,6 +96,7 @@ test("workflow suppression backfills Top 5 from deeper actionable candidates", (
   assert.equal(data.workflow_summary.suppressed,2);
   assert.equal(data.workflow_summary.active,5);
   assert.equal(data.workflow_summary.active_candidates,5);
+  assert.equal(data.action_queue.length,5);
 });
 
 test("expired snooze returns to the active queue without rewriting D1", () => {
