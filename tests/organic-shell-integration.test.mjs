@@ -5,6 +5,7 @@ import test from "node:test";
 const shell = await readFile(new URL("../public/v2-shell.js", import.meta.url), "utf8");
 const organic = await readFile(new URL("../public/v2-organic-intelligence.js", import.meta.url), "utf8");
 const historyUi = await readFile(new URL("../public/v2-organic-history-ui.js", import.meta.url), "utf8");
+const opportunityUi = await readFile(new URL("../public/v2-organic-opportunity-ui.js", import.meta.url), "utf8");
 
 test("V2 shell creates and mounts Organic Intelligence after market context is ready", () => {
   assert.match(shell, /createOrganicIntelligenceWorkspace/);
@@ -59,4 +60,17 @@ test("Organic Intelligence mounts Project and Provider Organic History as one co
   assert.match(historyUi, /allow_live_request: allowPaid\.checked/);
   assert.match(historyUi, /LIVE_REQUEST_CONFIRMATION_REQUIRED/);
   assert.match(historyUi, /30 天缓存/);
+});
+
+
+test("Organic Intelligence mounts a cache-only Opportunity Center with page and keyword handoffs", () => {
+  assert.match(organic, /v2-organic-opportunity-ui\.js/);
+  assert.match(organic, /data-v2-organic-tab="opportunities"/);
+  assert.match(organic, /organicOpportunityPanelMarkup/);
+  assert.match(organic, /mountOrganicOpportunityTab/);
+  assert.match(opportunityUi, /\/api\/v2\/organic\/opportunities/);
+  assert.match(opportunityUi, /Cache-only decision layer · \$0/);
+  assert.doesNotMatch(opportunityUi, /allow_live_request/);
+  assert.match(opportunityUi, /data-v2-opportunity-page/);
+  assert.match(opportunityUi, /data-v2-opportunity-keyword/);
 });
