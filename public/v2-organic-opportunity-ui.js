@@ -103,6 +103,20 @@ export function organicOpportunityPanelMarkup() {
         </div>
       </section>
 
+      <section class="v2-workflow-outcomes" data-v2-workflow-outcomes>
+        <div class="v2-workflow-outcomes-head">
+          <div><span>OUTCOME VALIDATION</span><b>完成后的 GSC 表现变化</b></div>
+          <small><strong data-v2-workflow-outcome-ready>0</strong> ready / <strong data-v2-workflow-outcome-total>0</strong> completed actions · observational only</small>
+        </div>
+        <div class="v2-organic-table-shell">
+          <table class="v2-organic-table v2-workflow-outcomes-table">
+            <thead><tr><th>Completed</th><th>Observed Change</th><th>Coverage</th><th>Action</th><th>Page</th><th>Query</th><th>Clicks</th><th>Impressions</th><th>Position</th><th>Scope</th></tr></thead>
+            <tbody data-v2-workflow-outcomes-body><tr><td colspan="10" class="v2-organic-empty">Done 动作有足够前后 GSC 数据后会在这里验证结果。</td></tr></tbody>
+          </table>
+        </div>
+        <p class="v2-workflow-outcomes-note">Outcome 只表示完成前后观察到的 GSC 变化，不证明这些变化由该 SEO 动作造成。</p>
+      </section>
+
       <div class="v2-organic-table-shell">
         <table class="v2-organic-table v2-organic-opportunity-table">
           <thead><tr><th>Priority</th><th>Page</th><th>Action</th><th>Traffic</th><th>Quick Wins</th><th>Down / Lost</th><th>Commercial QW</th><th>GSC Reality</th><th>Score Breakdown</th><th>Confidence</th><th>Workflow</th><th>Next</th></tr></thead>
@@ -153,6 +167,9 @@ export function mountOrganicOpportunityTab({
   const actionQueueHidden = section.querySelector("[data-v2-action-queue-hidden]");
   const workflowActivityBody = section.querySelector("[data-v2-workflow-activity-body]");
   const workflowActivityCount = section.querySelector("[data-v2-workflow-activity-count]");
+  const workflowOutcomesBody = section.querySelector("[data-v2-workflow-outcomes-body]");
+  const workflowOutcomeReady = section.querySelector("[data-v2-workflow-outcome-ready]");
+  const workflowOutcomeTotal = section.querySelector("[data-v2-workflow-outcome-total]");
   const sourceCards = {
     organic_keywords: section.querySelector('[data-v2-opportunity-source="organic_keywords"]'),
     top_pages: section.querySelector('[data-v2-opportunity-source="top_pages"]'),
@@ -381,6 +398,70 @@ export function mountOrganicOpportunityTab({
     });
   };
 
+  const renderWorkflowOutcomes = (data) => {
+    const outcomes=Array.isArray(data?.workflow_outcomes)?data.workflow_outcomes:[];
+    workflowOutcomeTotal.textContent=String(outcomes.length);
+    workflowOutcomeReady.textContent=String(outcomes.filter((item)=>item.status==="ready").length);
+    workflowOutcomesBody.replaceChildren();
+
+    if(!outcomes.length){
+      const row=document.createElement("tr"),cell=document.createElement("td");
+      cell.colSpan=10;cell.className="v2-organic-empty";
+      cell.textContent="还没有可验证的 Done 动作。完成任务并持续同步 GSC 后，这里会自动出现前后对比。";
+      row.append(cell);workflowOutcomesBody.append(row);return;
+    }
+
+    const percent=(value)=>finite(value)===null?"—":(value>0?"+":"")+num(value)+"%";
+    const positionChange=(value)=>finite(value)===null?"—":(value>0?"+":"")+num(value)+" positions";
+    const metric=(before,after,change,suffix="")=>{
+      const left=finite(before)===null?"—":num(before)+suffix;
+      const right=finite(after)===null?"—":num(after)+suffix;
+      return left+" → "+right+" · "+change;
+    };
+
+    outcomes.forEach((item)=>{
+      const row=document.createElement("tr");
+      const completed=document.createElement("td");
+      const completedDate=new Date(item.completed_at);
+      completed.textContent=Number.isNaN(completedDate.getTime())?(item.completed_at||"—"):completedDate.toLocaleDateString();
+      completed.title=item.completed_at||"";
+
+      const observed=document.createElement("td"),badge=document.createElement("span");
+      badge.className="v2-outcome-badge";
+      badge.dataset.outcome=item.status==="ready"?(item.observed?.code||"stable"):item.status;
+      if(item.status==="ready"){
+        badge.textContent=item.observed?.label||"Ready";
+      }else if(item.status==="waiting_for_post_data"){
+        badge.textContent="Waiting for post data";
+      }else if(item.status==="collecting_post_data"){
+        badge.textContent="Collecting post data";
+      }else{
+        badge.textContent="Need baseline";
+      }
+      observed.append(badge);
+
+      const coverage=document.createElement("td");
+      coverage.textContent=(item.coverage?.before_days??0)+"/"+(item.coverage?.target_days??7)+" before · "+(item.coverage?.after_days??0)+"/"+(item.coverage?.target_days??7)+" after";
+
+      const action=document.createElement("td");action.textContent=(item.action_code||"—").replaceAll("_"," ");
+      const page=document.createElement("td"),link=document.createElement("a");
+      link.href=item.page_url||"#";link.target="_blank";link.rel="noopener noreferrer";link.className="v2-organic-url";link.textContent=item.page_url||"—";page.append(link);
+      const query=document.createElement("td");query.className="v2-outcome-query";query.textContent=item.query||"—";query.title=item.query||"";
+
+      const clicks=document.createElement("td");
+      clicks.textContent=metric(item.before?.clicks,item.after?.clicks,percent(item.change?.clicks_percent));
+      const impressions=document.createElement("td");
+      impressions.textContent=metric(item.before?.impressions,item.after?.impressions,percent(item.change?.impressions_percent));
+      const position=document.createElement("td");
+      position.textContent=metric(item.before?.position,item.after?.position,positionChange(item.change?.position_improvement));
+      const scope=document.createElement("td");scope.textContent=item.scope==="page_fallback"?"Page fallback":item.scope==="query_page"?"Query+Page":"Page";
+      scope.title=item.scope==="page_fallback"?"Query+Page history was unavailable, so this comparison uses page-level GSC data.":"";
+
+      row.append(completed,observed,coverage,action,page,query,clicks,impressions,position,scope);
+      workflowOutcomesBody.append(row);
+    });
+  };
+
   const renderRows = (data) => {
     const rows = Array.isArray(data?.opportunities) ? data.opportunities : [];
     body.replaceChildren();
@@ -456,6 +537,7 @@ export function mountOrganicOpportunityTab({
     renderNextBestAction(data);
     renderActionQueue(data);
     renderWorkflowActivity(data);
+    renderWorkflowOutcomes(data);
     renderRows(data);
     const missing=data?.missing_sources??[];
     meta.textContent=[
