@@ -38,6 +38,7 @@ export function projectOrganicHistoryMonths(data, months) {
   return {
     ...data,
     months: requested,
+    date_from: points[0]?.period ? points[0].period + "-01" : data?.date_from ?? null,
     returned_count: points.length,
     points,
   };
