@@ -143,6 +143,20 @@ jobs:
           node scripts/assert-d1-query-names.mjs \
           id site_profile_id property appearance_value clicks impressions ctr position generative_ai_candidate selected_for_generative_ai start_date end_date discovered_at created_at updated_at
 
+      - name: Verify Preview GSC Generative AI tables
+        shell: bash
+        run: |
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
+          --json \
+          --command "SELECT name FROM pragma_table_info('gsc_generative_ai_daily') ORDER BY cid;" |
+          node scripts/assert-d1-query-names.mjs \
+          id site_profile_id property appearance_value date dimension_set page_url country device clicks impressions ctr position synced_at
+          npx --yes wrangler@4 d1 execute seo-pro-v2-preview --remote \
+          --json \
+          --command "SELECT name FROM pragma_table_info('gsc_generative_ai_sync_runs') ORDER BY cid;" |
+          node scripts/assert-d1-query-names.mjs \
+          id site_profile_id property appearance_value target_date dimension_sets_json row_limit_per_set provider_requests rows_received rows_written truncated_sets_json status error_code started_at completed_at created_at
+
       - name: Verify Preview outreach intelligence columns
         shell: bash
         run: |
