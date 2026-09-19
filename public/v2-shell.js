@@ -27,11 +27,13 @@ import {
 import { mountCompetitorIntelligence } from "./v2-competitor-intelligence-ui.js";
 import { createOrganicIntelligenceWorkspace, mountOrganicIntelligence } from "./v2-organic-intelligence.js";
 import { createGscSettingsWorkspace, mountGscSettings } from "./v2-gsc-settings.js";
+import { createAiVisibilityWorkspace, mountAiVisibility } from "./v2-ai-visibility.js";
 
 export const V2_VIEWS = Object.freeze([
   { id: "overview", label: "总览", group: "primary" },
   { id: "website", label: "Site Explorer", group: "research" },
   { id: "competitors", label: "竞争对手", group: "research" },
+  { id: "ai-visibility", label: "AI 可见度", group: "research" },
   { id: "keywords", label: "关键词研究", group: "research" },
   { id: "keyword-library", label: "关键词库", group: "research" },
   { id: "backlinks", label: "外链", group: "research" },
@@ -1224,6 +1226,7 @@ function buildShell() {
   content.querySelector("h1 + .lead")?.classList.add("v2-legacy-heading");
   content.prepend(createOverview());
   content.append(createKeywordLibrarySection());
+  content.append(createAiVisibilityWorkspace());
   content.append(
     createPlaceholder("more", "更多工具", "Content Brief 已按项目决定暂停，现有代码和数据继续保留，但不占用主工作区。"),
     createGscSettingsWorkspace(),
@@ -1338,6 +1341,7 @@ function buildShell() {
   let keywordLibraryCleanup = () => {};
   let competitorIntelligenceCleanup = () => {};
   let organicIntelligenceCleanup = () => {};
+  let aiVisibilityCleanup = () => {};
   let clusterSerpVerificationCleanup = () => {};
   let gscSettingsCleanup = () => {};
   const marketInitialization = createMarketInitializationCoordinator({
@@ -1355,6 +1359,8 @@ function buildShell() {
       competitorIntelligenceCleanup = mountCompetitorIntelligence({ root: shell, competitorWorkspace });
       organicIntelligenceCleanup();
       organicIntelligenceCleanup = mountOrganicIntelligence({ root: shell, context, fetchImpl });
+      aiVisibilityCleanup();
+      aiVisibilityCleanup = mountAiVisibility({ root: shell, context, fetchImpl });
       clusterSerpVerificationCleanup();
       clusterSerpVerificationCleanup = mountClusterSerpVerificationFlow({
         root: shell,
