@@ -44,7 +44,7 @@ test("Opportunity Center can synthesize page opportunities from Organic Keywords
   });
   assert.equal(data.opportunities.length,1);
   assert.equal(data.opportunities[0].action.code,"optimize");
-  assert.equal(data.opportunities[0].confidence,"medium");
+  assert.equal(data.opportunities[0].confidence,"low");
   assert.equal(data.opportunities[0].metrics.organic_keywords,null);
   assert.equal(data.opportunities[0].metrics.sampled_keywords,1);
 });
