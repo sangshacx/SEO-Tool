@@ -40,3 +40,18 @@ test("Opportunity Center distinguishes DataForSEO and real GSC query quick wins"
   assert.match(opportunityUiSource,/provider_match/);
   assert.match(opportunityUiSource,/Research QW/);
 });
+
+
+test("Opportunity Center exposes a unified transparent Next Best Action card", () => {
+  const markup=organicOpportunityPanelMarkup();
+  assert.match(markup,/#1 NEXT BEST ACTION/);
+  assert.match(markup,/data-v2-next-best-action-score/);
+  assert.match(markup,/data-v2-next-best-action-page/);
+  assert.match(markup,/data-v2-next-best-action-query/);
+  assert.match(markup,/data-v2-next-best-action-source/);
+  assert.match(markup,/Open Page Keywords/);
+  assert.match(markup,/Research Recommended Query/);
+  assert.match(opportunityUiSource,/next_best_action/);
+  assert.match(opportunityUiSource,/gsc_query_page/);
+  assert.match(opportunityUiSource,/dataforseo_cache/);
+});
