@@ -6,6 +6,7 @@ const shell = await readFile(new URL("../public/v2-shell.js", import.meta.url), 
 const organic = await readFile(new URL("../public/v2-organic-intelligence.js", import.meta.url), "utf8");
 const historyUi = await readFile(new URL("../public/v2-organic-history-ui.js", import.meta.url), "utf8");
 const opportunityUi = await readFile(new URL("../public/v2-organic-opportunity-ui.js", import.meta.url), "utf8");
+const gscUi = await readFile(new URL("../public/v2-gsc-intelligence-ui.js", import.meta.url), "utf8");
 
 test("V2 shell creates and mounts Organic Intelligence after market context is ready", () => {
   assert.match(shell, /createOrganicIntelligenceWorkspace/);
@@ -73,4 +74,17 @@ test("Organic Intelligence mounts a cache-only Opportunity Center with page and 
   assert.doesNotMatch(opportunityUi, /allow_live_request/);
   assert.match(opportunityUi, /data-v2-opportunity-page/);
   assert.match(opportunityUi, /data-v2-opportunity-keyword/);
+});
+
+
+test("Site Explorer mounts D1-first GSC Performance with explicit Google sync", () => {
+  assert.match(organic, /v2-gsc-intelligence-ui\.js/);
+  assert.match(organic, /data-v2-organic-tab="gsc"/);
+  assert.match(organic, /gscPerformancePanelMarkup/);
+  assert.match(organic, /mountGscPerformanceTab/);
+  assert.match(gscUi, /\/api\/v2\/gsc\/intelligence/);
+  assert.match(gscUi, /\/api\/v2\/gsc\/sync/);
+  assert.match(gscUi, /D1 only · automatic reads \$0/);
+  assert.match(gscUi, /Sync latest finalized day · \$0/);
+  assert.match(gscUi, /GSC 不用于竞争对手域名/);
 });
