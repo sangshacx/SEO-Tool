@@ -102,3 +102,29 @@ test("workflow API rejects external pages and invalid snooze requests", async ()
   assert.equal(snooze.status,400);
   assert.equal((await snooze.json()).error.field,"snooze_until");
 });
+
+
+test("workflow API accepts Potential Cannibalization architecture reviews", async () => {
+  const {d1}=await dashboardDatabase();
+  await seedProfile(d1,{domain:"example.com"});
+
+  const response=await onRequestPost({
+    request:post({
+      site_domain:"example.com",
+      page_url:"https://example.com/a/",
+      action_code:"review_cannibalization",
+      query:"waterproof membrane",
+      status:"in_progress",
+      priority_score:82,
+      note:"Review intent and internal links before consolidation.",
+    }),
+    env:{DB:d1},
+  });
+  const payload=await response.json();
+  assert.equal(response.status,200);
+  assert.equal(payload.data.action_code,"review_cannibalization");
+  assert.equal(payload.data.status,"in_progress");
+  assert.equal(payload.data.query,"waterproof membrane");
+  assert.equal(payload.meta.actual_cost_usd,0);
+  assert.equal(payload.meta.provider_requests,0);
+});
